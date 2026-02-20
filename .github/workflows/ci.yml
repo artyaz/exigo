@@ -30,6 +30,8 @@ jobs:
 
       - name: Code Quality & Type Check
         # Runs `next lint` and `tsc --noEmit` defined in package.json
+        env:
+          SKIP_ENV_VALIDATION: "1"
         run: npm run check
 
       - name: SonarQube Analysis
