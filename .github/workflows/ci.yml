@@ -47,3 +47,4 @@ jobs:
             -Dsonar.organization=artyaz
             -Dsonar.projectKey=artyaz_exigo
             -Dsonar.sources=.
+            -Dsonar.coverage.exclusions="**/*"
