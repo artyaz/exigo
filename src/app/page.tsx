@@ -45,6 +45,12 @@ export default async function Home() {
             </p>
           </div>
 
+          <div className="mt-8 border-t border-white/20 pt-8 w-full max-w-xl flex justify-center">
+            <Link href="/spaces" className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-neutral-950 font-bold px-8 py-4 rounded-2xl text-xl hover:scale-105 transition-transform">
+              Open Knowledge App ✨
+            </Link>
+          </div>
+
           <LatestPost />
         </div>
       </main>
