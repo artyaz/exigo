@@ -16,13 +16,17 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
+import ConvexClientProvider from "./ConvexClientProvider";
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geist.variable}`}>
       <body>
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <ConvexClientProvider>
+          <TRPCReactProvider>{children}</TRPCReactProvider>
+        </ConvexClientProvider>
       </body>
     </html>
   );
