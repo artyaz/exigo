@@ -30,16 +30,25 @@ export const getForTest = query({
     },
 });
 
+export const get = query({
+    args: { questionId: v.id("questions") },
+    handler: async (ctx, args) => {
+        return await ctx.db.get(args.questionId);
+    },
+});
+
 export const updateFeedback = mutation({
     args: {
         questionId: v.id("questions"),
         isCorrect: v.boolean(),
         aiFeedback: v.string(),
+        userAnswer: v.string(),
     },
     handler: async (ctx, args) => {
         await ctx.db.patch(args.questionId, {
             isCorrect: args.isCorrect,
             aiFeedback: args.aiFeedback,
+            answer: args.userAnswer,
         });
     },
 });
