@@ -35,8 +35,8 @@ jobs:
         run: npm run check
 
       - name: SonarQube Analysis
-        # You can use SonarSource/sonarcloud-github-action or sonarqube action
-        uses: SonarSource/sonarcloud-github-action@master
+        # You can use SonarSource/sonarcloud-github-action or sonarqube action (Pinned to v5.0.0 per review)
+        uses: SonarSource/sonarcloud-github-action@v5.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

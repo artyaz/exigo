@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, BookOpen, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { USER_BUTTON_APPEARANCE } from "~/lib/clerk-shared";
 
 export default function SpacesPage() {
     const spaces = useQuery(api.spaces.list);
@@ -36,11 +37,7 @@ export default function SpacesPage() {
                             <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Your Spaces</h1>
                             <div className="bg-neutral-900/50 backdrop-blur border border-neutral-800 p-2 rounded-full shadow-xl">
                                 <UserButton
-                                    appearance={{
-                                        elements: {
-                                            userButtonAvatarBox: "w-10 h-10 border-2 border-emerald-500/50"
-                                        }
-                                    }}
+                                    appearance={USER_BUTTON_APPEARANCE}
                                 />
                             </div>
                         </div>

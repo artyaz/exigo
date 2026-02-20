@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { USER_BUTTON_APPEARANCE } from "~/lib/clerk-shared";
 
 import { LatestPost } from "~/app/_components/post";
 import { api, HydrateClient } from "~/trpc/server";
@@ -23,11 +24,7 @@ export default async function Home() {
           <SignedIn>
             <div className="bg-neutral-900/50 backdrop-blur border border-neutral-800 p-2 rounded-full shadow-xl">
               <UserButton
-                appearance={{
-                  elements: {
-                    userButtonAvatarBox: "w-10 h-10 border-2 border-emerald-500/50"
-                  }
-                }}
+                appearance={USER_BUTTON_APPEARANCE}
               />
             </div>
           </SignedIn>
