@@ -6,6 +6,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, BookOpen, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
 
 export default function SpacesPage() {
     const spaces = useQuery(api.spaces.list);
@@ -27,9 +28,20 @@ export default function SpacesPage() {
     return (
         <div className="min-h-screen bg-neutral-950 text-neutral-50 p-6 md:p-12">
             <div className="max-w-4xl mx-auto space-y-12">
-                <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                    <div className="space-y-2">
-                        <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Your Spaces</h1>
+                <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-2 flex-1">
+                        <div className="flex justify-between items-center w-full mt-2">
+                            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Your Spaces</h1>
+                            <div className="bg-neutral-900/50 backdrop-blur border border-neutral-800 p-2 rounded-full shadow-xl">
+                                <UserButton
+                                    appearance={{
+                                        elements: {
+                                            userButtonAvatarBox: "w-10 h-10 border-2 border-emerald-500/50"
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </div>
                         <p className="text-neutral-400 text-lg">Create a dedicated space to manage knowledge and test yourself.</p>
                     </div>
                 </header>

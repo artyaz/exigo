@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 
 import { LatestPost } from "~/app/_components/post";
 import { api, HydrateClient } from "~/trpc/server";
@@ -11,6 +12,27 @@ export default async function Home() {
   return (
     <HydrateClient>
       <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
+
+        {/* Auth Header */}
+        <div className="absolute top-6 right-8 flex items-center gap-4">
+          <SignedOut>
+            <div className="bg-white/10 hover:bg-white/20 transition-colors px-4 py-2 rounded-xl font-medium">
+              <SignInButton forceRedirectUrl="/spaces" />
+            </div>
+          </SignedOut>
+          <SignedIn>
+            <div className="bg-neutral-900/50 backdrop-blur border border-neutral-800 p-2 rounded-full shadow-xl">
+              <UserButton
+                appearance={{
+                  elements: {
+                    userButtonAvatarBox: "w-10 h-10 border-2 border-emerald-500/50"
+                  }
+                }}
+              />
+            </div>
+          </SignedIn>
+        </div>
+
         <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
           <h1 className="text-5xl font-extrabold tracking-tight sm:text-[5rem]">
             Create <span className="text-[hsl(280,100%,70%)]">T3</span> App
