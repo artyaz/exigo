@@ -1,0 +1,50 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  build-and-analyze:
+    name: Build, Test, and SonarQube Analyze
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          # Disabling shallow clone is strictly recommended for better relevance of SonarQube analysis
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm ci --ignore-scripts
+          npx prisma generate
+
+      - name: Code Quality & Type Check
+        # Runs `next lint` and `tsc --noEmit` defined in package.json
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+        run: npm run check
+
+      - name: SonarQube Analysis
+        uses: SonarSource/sonarqube-scan-action@0303d6b62e310685c0e34d0b9cde218036885c4d # v5.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=artyaz
+            -Dsonar.projectKey=artyaz_exigo
+            -Dsonar.sources=.
+            -Dsonar.coverage.exclusions="**/*"

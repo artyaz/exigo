@@ -24,6 +24,31 @@ To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the fo
 
 You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
 
-## How do I deploy this?
+## CI/CD and Quality Gates
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+This project uses [GitHub Actions](https://github.com/features/actions) for continuous integration and [SonarQube/SonarCloud](https://sonarcloud.io/) for code quality analysis.
+
+Our CI workflow (`.github/workflows/ci.yml`) automatically runs on pushes to `main` and on pull requests. It performs:
+1. **Dependency Installation**
+2. **Type Checking & Linting** (`npm run check`)
+3. **SonarQube Code Analysis**
+
+### Setting up SonarQube
+In order for the SonarQube GitHub action to work, you must add a secret to your GitHub repository:
+1. Go to your repository **Settings > Secrets and variables > Actions**.
+2. Add a new repository secret named `SONAR_TOKEN`.
+3. Set the value to the token provided by your SonarQube/SonarCloud project dashboard.
+*(Note: Additionally, you may need a `sonar-project.properties` file in the root if you aren't configuring the project settings directly via the SonarCloud UI).*
+
+---
+
+## Deployment (Vercel)
+
+This project is optimized and configured to be hosted natively on [Vercel](https://vercel.com). Deploying is seamless:
+
+1. Create a Vercel project and link it to your GitHub repository.
+2. Vercel will automatically configure the build commands for a Next.js application.
+3. Every push to `main` will automatically trigger a **Production Deployment**.
+4. Every Pull Request will automatically generate a unique **Preview Deployment** link so you can preview changes before merging them.
+
+> **Environment Variables**: Make sure to copy all the required keys from `.env.example` into your Vercel Project's Settings -> Environment Variables. This includes your database connection URLs (`DATABASE_URL`), `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`, and `GOOGLE_GEMINI_API_KEY`.

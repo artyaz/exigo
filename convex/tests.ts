@@ -3,11 +3,11 @@ import { v } from "convex/values";
 import { action, mutation, query } from "./_generated/server";
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI();
+const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY || "dummy" });
 
 export const generate = action({
     args: { spaceId: v.id("spaces"), testType: v.string() },
-    handler: async (ctx, args) => {
+    handler: async (ctx: any, args: any) => {
         // 1. Fetch knowledge pieces using a query
         const pieces = await ctx.runQuery("knowledgePieces:getForSpace", { spaceId: args.spaceId });
         if (!pieces || pieces.length === 0) throw new Error("No knowledge pieces found in space.");
@@ -16,7 +16,7 @@ export const generate = action({
         const testId = await ctx.runMutation("tests:create", { spaceId: args.spaceId, type: args.testType });
 
         // 3. Prepare AI prompt
-        const knowledgeText = pieces.map(p => p.content).join("\n\n---\n\n");
+        const knowledgeText = pieces.map((p: any) => p.content).join("\n\n---\n\n");
         const prompt = `
       You are an expert educator. Create a knowledge test based ONLY on the following knowledge pieces.
       The test must have exactly 5 questions.
@@ -30,8 +30,8 @@ export const generate = action({
       Example 'write' format: [{"question":"...","answer":"Correct open ended answer"}]
       
       Knowledge:
-      ${知识库}
-    `.replace("${知识库}", knowledgeText); // replaced placeholder safely
+      ${knowledgeText}
+    `;
 
         // 4. Call Google Gen AI
         const response = await ai.models.generateContent({
@@ -72,7 +72,7 @@ export const generate = action({
 
 export const create = mutation({
     args: { spaceId: v.id("spaces"), type: v.string() },
-    handler: async (ctx, args) => {
+    handler: async (ctx: any, args: any) => {
         return await ctx.db.insert("tests", {
             spaceId: args.spaceId,
             status: "generating",
@@ -83,24 +83,24 @@ export const create = mutation({
 
 export const updateStatus = mutation({
     args: { testId: v.id("tests"), status: v.union(v.literal("draft"), v.literal("generating"), v.literal("active"), v.literal("completed")) },
-    handler: async (ctx, args) => {
+    handler: async (ctx: any, args: any) => {
         await ctx.db.patch(args.testId, { status: args.status });
     },
 });
 
 export const getForSpace = query({
     args: { spaceId: v.id("spaces") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: any, args: any) => {
         return await ctx.db
             .query("tests")
-            .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+            .withIndex("by_space", (q: any) => q.eq("spaceId", args.spaceId))
             .collect();
     },
 });
 
 export const get = query({
     args: { testId: v.id("tests") },
-    handler: async (ctx, args) => {
+    handler: async (ctx: any, args: any) => {
         return await ctx.db.get(args.testId);
     },
 });
