@@ -11,7 +11,7 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
-    GOOGLE_GEMINI_API_KEY: z.string(),
+    GOOGLE_GEMINI_API_KEY: z.string().optional(),
     CONVEX_DEPLOYMENT: z.string().optional(),
   },
 
@@ -21,7 +21,7 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    NEXT_PUBLIC_CONVEX_URL: z.string().url(),
+    NEXT_PUBLIC_CONVEX_URL: z.string().url().optional(),
   },
 
   /**
