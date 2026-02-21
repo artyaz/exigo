@@ -1,5 +1,5 @@
-
 import type { ReactNode } from "react";
+import { Loader2 } from "lucide-react";
 
 /**
  * Extracts and formats error messages consistently from caught API Exceptions.
@@ -80,5 +80,78 @@ export function AuthDivider({ text }: { text: string }) {
                 <span className="bg-neutral-900 px-4 text-neutral-500">{text}</span>
             </div>
         </div>
+    );
+}
+
+/**
+ * Unified error alert display for authentication forms.
+ *
+ * @param props Contains the error message to display
+ * @returns JSX Element alert
+ */
+export function AuthErrorAlert({ error }: { error: string }) {
+    if (!error) return null;
+    return (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-sm text-center">
+            {error}
+        </div>
+    );
+}
+
+/**
+ * Standardized input field with embedded icon for authentication forms.
+ *
+ * @param props Standard input properties including icon and optional extra classes
+ * @returns Stylized JSX Input Element
+ */
+export function AuthInput({
+    type,
+    placeholder,
+    value,
+    onChange,
+    icon: Icon,
+    className = ""
+}: {
+    type: string;
+    placeholder: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    icon: React.ElementType;
+    className?: string;
+}) {
+    return (
+        <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-neutral-500">
+                <Icon className="h-5 w-5" />
+            </div>
+            <input
+                type={type}
+                placeholder={placeholder}
+                value={value}
+                onChange={onChange}
+                required
+                className={`w-full bg-neutral-950 border border-neutral-800 text-white rounded-2xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-neutral-600 ${className}`}
+            />
+        </div>
+    );
+}
+
+/**
+ * Primary submission button for auth forms with loading state.
+ *
+ * @param props Component properties including loading flag and dynamic children
+ * @returns Enhanced animated submit button 
+ */
+export function AuthSubmitButton({ isLoading, children }: { isLoading: boolean, children: ReactNode }) {
+    return (
+        <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-black px-4 py-3.5 rounded-2xl font-bold hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-emerald-500/20"
+        >
+            {isLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+            ) : children}
+        </button>
     );
 }
