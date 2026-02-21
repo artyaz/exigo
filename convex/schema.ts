@@ -21,6 +21,7 @@ export default defineSchema({
         ),
         config: v.object({
             type: v.string(), // "select" or "write"
+            questionCount: v.optional(v.number()),
         }),
     }).index("by_space", ["spaceId"]),
     questions: defineTable({
@@ -28,8 +29,15 @@ export default defineSchema({
         type: v.union(v.literal("select"), v.literal("write")),
         question: v.string(),
         options: v.optional(v.array(v.string())), // For select type
-        answer: v.optional(v.string()), // User's answer
+        answer: v.optional(v.string()), // Perfect/Correct answer
+        userAnswer: v.optional(v.string()), // User's answer
         isCorrect: v.optional(v.boolean()),
         aiFeedback: v.optional(v.string()),
     }).index("by_test", ["testId"]),
+    testMessages: defineTable({
+        testId: v.id("tests"),
+        questionId: v.id("questions"),
+        role: v.union(v.literal("user"), v.literal("ai")),
+        content: v.string(),
+    }).index("by_question", ["questionId"]),
 });

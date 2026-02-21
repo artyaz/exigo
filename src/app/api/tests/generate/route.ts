@@ -1,92 +1,148 @@
-import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
+const selectQuestionSchema = z.object({
+    question: z.string().describe("The question text"),
+    options: z.array(z.string()).length(4).describe("Exactly 4 answer options"),
+    answer: z.string().describe("The correct answer, must match one of the options exactly"),
+});
+
+const writeQuestionSchema = z.object({
+    question: z.string().describe("The question text"),
+    answer: z.string().describe("A sample correct answer"),
+});
+
 export async function POST(req: NextRequest) {
-    try {
-        const rawBody = await req.json() as Record<string, unknown>;
-        const spaceId = rawBody.spaceId as string;
-        const testType = rawBody.testType as string;
+    const rawBody = await req.json() as Record<string, unknown>;
+    const spaceId = rawBody.spaceId as string;
+    const testType = rawBody.testType as string;
+    const testId = rawBody.testId as string | undefined;
 
-        if (!spaceId || !testType) {
-            return NextResponse.json({ error: "Missing spaceId or testType" }, { status: 400 });
-        }
-
-        if (!process.env.GOOGLE_GEMINI_API_KEY) {
-            return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
-        }
-
-        const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
-
-        // Fetch pieces
-        const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
-
-        if (!pieces || pieces.length === 0) {
-            return NextResponse.json({ error: "No knowledge pieces to test on." }, { status: 400 });
-        }
-
-        // Prepare prompt
-        const knowledgeText = pieces.map(p => p.content).join("\n\n---\n\n");
-        const prompt = `
-      You are an expert educator. Create a knowledge test based ONLY on the following knowledge pieces.
-      The test must have exactly 5 questions.
-      The question type requested is: ${testType} ('select' means multiple choice, 'write' means open-ended).
-      
-      If 'select', provide exactly 4 options per question, and indicate the exactly complete answer string.
-      If 'write', do not provide options, just provide a sample correct answer.
-      
-      Respond STRICTLY with a JSON array of objects, with no markdown formatting.
-      Example 'select' format: [{"question":"...","options":["A","B","C","D"],"answer":"A"}]
-      Example 'write' format: [{"question":"...","answer":"Correct open ended answer"}]
-      
-      Knowledge:
-      ${knowledgeText}
-    `;
-
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-            }
-        });
-
-        try {
-            const resultText = response.text;
-            if (!resultText) throw new Error("No response from AI");
-            const parsedJson = JSON.parse(resultText) as unknown;
-            if (!Array.isArray(parsedJson)) throw new Error("AI returned non-array");
-
-            // Save test and questions transactionally
-            const testId = await convex.mutation(api.tests.createWithQuestions, {
-                spaceId: spaceId as Id<"spaces">,
-                type: testType,
-                questions: parsedJson.map((q: unknown) => {
-                    const qObj = q as { question: string, options?: string[], answer?: string };
-                    return {
-                        type: testType,
-                        question: qObj.question,
-                        options: qObj.options ?? undefined,
-                        answer: qObj.answer ?? undefined,
-                    };
-                }),
-            });
-
-            return NextResponse.json({ testId });
-
-        } catch (parseError) {
-            console.error(parseError);
-            return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
-        }
-
-    } catch (err: unknown) {
-        console.error(err);
-        const errorMessage = err instanceof Error ? err.message : undefined;
-        return NextResponse.json({ error: errorMessage ?? "Unknown error" }, { status: 500 });
+    if (!spaceId || !testType || !process.env.GOOGLE_GEMINI_API_KEY) {
+        return new Response(JSON.stringify({ error: "Missing params or API key" }), { status: 400 });
     }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
+    const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
+
+    if (!pieces || pieces.length === 0) {
+        return new Response(JSON.stringify({ error: "No knowledge pieces" }), { status: 400 });
+    }
+
+    let existingQuestions: { question: string }[] = [];
+    let activeTestId: Id<"tests">;
+
+    if (testId) {
+        activeTestId = testId as Id<"tests">;
+        existingQuestions = await convex.query(api.questions.getForTest, { testId: activeTestId });
+    } else {
+        activeTestId = await convex.mutation(api.tests.createEmptyTest, {
+            spaceId: spaceId as Id<"spaces">,
+            type: testType,
+            questionCount: 5,
+        });
+    }
+
+    const knowledgeText = pieces.map(p => p.content).join("\n\n---\n\n");
+    let contextPrompt = "";
+    if (existingQuestions.length > 0) {
+        contextPrompt = "\n\nCRITICAL: Do NOT ask questions similar to the following previously generated questions:\n" +
+            existingQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n");
+    }
+
+    const prompt = `You are an expert educator. Generate EXACTLY ONE tricky, conceptual question (no simple definitions; focus on "why" and edge cases) based ONLY on the following knowledge pieces.
+
+IMPORTANT: If the knowledge pieces contain examples of existing questions, tests, or chat histories with grades, DO NOT copy them. You must create a NEW, original question that tests the underlying concepts.${contextPrompt}
+
+The question type requested is: ${testType} ('select' means multiple choice, 'write' means open-ended).
+
+If 'select', provide exactly 4 options per question, and indicate the exactly complete answer string.
+If 'write', do not provide options, just provide a sample correct answer.
+
+Knowledge:
+${knowledgeText}`;
+
+    const schema = testType === "select" ? selectQuestionSchema : writeQuestionSchema;
+
+    // Create a streaming response back to the client
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+        async start(controller) {
+            try {
+                // Retry loop for rate limits
+                let stream;
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        stream = await ai.models.generateContentStream({
+                            model: "gemini-2.0-flash",
+                            contents: prompt,
+                            config: {
+                                responseMimeType: "application/json",
+                                responseJsonSchema: zodToJsonSchema(schema),
+                            }
+                        });
+                        break; // success
+                    } catch (retryErr: unknown) {
+                        const apiErr = retryErr as { status?: number };
+                        if (apiErr.status === 429 && attempt < 2) {
+                            // Wait with exponential backoff: 2s, 4s
+                            await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+                            continue;
+                        }
+                        throw retryErr;
+                    }
+                }
+                if (!stream) throw new Error("Failed to get stream after retries");
+
+                let fullText = "";
+
+                for await (const chunk of stream) {
+                    const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (part) {
+                        fullText += part;
+                        // Send the delta to the client as SSE
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: part })}\n\n`));
+                    }
+                }
+
+                // Parse the completed JSON
+                const parsed = schema.parse(JSON.parse(fullText));
+
+                // Save to Convex
+                const questionId = await convex.mutation(api.questions.create, {
+                    testId: activeTestId,
+                    type: testType,
+                    question: parsed.question,
+                    options: "options" in parsed ? (parsed as { options: string[] }).options : undefined,
+                    answer: parsed.answer,
+                });
+
+                // Send the final event
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", testId: activeTestId, questionId })}\n\n`));
+                controller.close();
+
+            } catch (err) {
+                console.error("Stream error:", err);
+                const msg = err instanceof Error ? err.message : "Unknown error";
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: msg })}\n\n`));
+                controller.close();
+            }
+        }
+    });
+
+    return new Response(readable, {
+        headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    });
 }

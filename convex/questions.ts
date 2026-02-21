@@ -48,7 +48,27 @@ export const updateFeedback = mutation({
         await ctx.db.patch(args.questionId, {
             isCorrect: args.isCorrect,
             aiFeedback: args.aiFeedback,
-            answer: args.userAnswer,
+            userAnswer: args.userAnswer,
         });
+    },
+});
+
+export const getForSpace = query({
+    args: { spaceId: v.id("spaces") },
+    handler: async (ctx, args) => {
+        // Get all tests for this space
+        const tests = await ctx.db
+            .query("tests")
+            .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+            .collect();
+        // Get all questions for those tests
+        const allQuestions = await Promise.all(
+            tests.map((test) =>
+                ctx.db.query("questions")
+                    .withIndex("by_test", (q) => q.eq("testId", test._id))
+                    .collect()
+            )
+        );
+        return allQuestions.flat();
     },
 });
