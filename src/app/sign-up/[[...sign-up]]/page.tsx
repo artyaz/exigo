@@ -135,6 +135,8 @@ export default function SignUpPage() {
                         onChange={(e) => setCode(e.target.value)}
                         icon={KeyRound}
                         className="tracking-widest"
+                        maxLength={6}
+                        inputMode="numeric"
                     />
 
                     <AuthSubmitButton isLoading={isLoading}>

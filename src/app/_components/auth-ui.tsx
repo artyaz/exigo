@@ -77,7 +77,7 @@ export function AuthDivider({ text }: { text: string }) {
                 <div className="w-full border-t border-neutral-800"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-                <span className="bg-neutral-900 px-4 text-neutral-500">{text}</span>
+                <span className="bg-transparent px-4 text-neutral-500">{text}</span>
             </div>
         </div>
     );
@@ -110,7 +110,9 @@ export function AuthInput({
     value,
     onChange,
     icon: Icon,
-    className = ""
+    className = "",
+    maxLength,
+    inputMode
 }: {
     type: string;
     placeholder: string;
@@ -118,6 +120,8 @@ export function AuthInput({
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     icon: React.ElementType;
     className?: string;
+    maxLength?: number;
+    inputMode?: "text" | "numeric" | "tel" | "search" | "email" | "url" | "none" | "decimal";
 }) {
     return (
         <div className="relative">
@@ -130,6 +134,8 @@ export function AuthInput({
                 value={value}
                 onChange={onChange}
                 required
+                maxLength={maxLength}
+                inputMode={inputMode}
                 className={`w-full bg-neutral-950 border border-neutral-800 text-white rounded-2xl pl-12 pr-4 py-3.5 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all placeholder:text-neutral-600 ${className}`}
             />
         </div>

@@ -1,16 +1,17 @@
-/* eslint-disable */
-// @ts-nocheck
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
-import { Id } from "../../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export async function POST(req: NextRequest) {
     try {
-        const { spaceId, testType } = await req.json();
+        const rawBody = await req.json() as Record<string, unknown>;
+        const spaceId = rawBody.spaceId as string;
+        const testType = rawBody.testType as string;
 
         if (!spaceId || !testType) {
             return NextResponse.json({ error: "Missing spaceId or testType" }, { status: 400 });
@@ -28,9 +29,6 @@ export async function POST(req: NextRequest) {
         if (!pieces || pieces.length === 0) {
             return NextResponse.json({ error: "No knowledge pieces to test on." }, { status: 400 });
         }
-
-        // Create a generating test record
-        const testId = await convex.mutation(api.tests.create, { spaceId: spaceId as Id<"spaces">, type: testType });
 
         // Prepare prompt
         const knowledgeText = pieces.map(p => p.content).join("\n\n---\n\n");
@@ -61,28 +59,28 @@ export async function POST(req: NextRequest) {
         try {
             const resultText = response.text;
             if (!resultText) throw new Error("No response from AI");
-            const questionsData = JSON.parse(resultText);
+            const parsedJson = JSON.parse(resultText) as unknown;
+            if (!Array.isArray(parsedJson)) throw new Error("AI returned non-array");
 
-            // Save each question to convex
-            for (const q of questionsData) {
-                await convex.mutation(api.questions.create, {
-                    testId: testId,
-                    type: testType,
-                    question: q.question,
-                    options: q.options || undefined,
-                    answer: q.answer || undefined,
-                });
-            }
-
-            // Mark the test as active
-            await convex.mutation(api.tests.updateStatus, { testId, status: "active" });
+            // Save test and questions transactionally
+            const testId = await convex.mutation(api.tests.createWithQuestions, {
+                spaceId: spaceId as Id<"spaces">,
+                type: testType,
+                questions: parsedJson.map((q: unknown) => {
+                    const qObj = q as { question: string, options?: string[], answer?: string };
+                    return {
+                        type: testType,
+                        question: qObj.question,
+                        options: qObj.options ?? undefined,
+                        answer: qObj.answer ?? undefined,
+                    };
+                }),
+            });
 
             return NextResponse.json({ testId });
 
         } catch (parseError) {
-            // Fallback
             console.error(parseError);
-            await convex.mutation(api.tests.updateStatus, { testId, status: "draft" });
             return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
         }
 

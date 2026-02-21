@@ -10,6 +10,16 @@ import { mutation, query } from "./_generated/server";
 export const create = mutation({
     args: { spaceId: v.id("spaces"), type: v.string() },
     handler: async (ctx, args) => {
+        const space = await ctx.db.get(args.spaceId);
+        if (!space) {
+            throw new Error("Space not found");
+        }
+
+        const userId = "default_user"; // MVP mock
+        if (space.userId !== userId) {
+            throw new Error("Unauthorized access to this space");
+        }
+
         return await ctx.db.insert("tests", {
             spaceId: args.spaceId,
             status: "generating",
@@ -54,5 +64,53 @@ export const get = query({
     args: { testId: v.id("tests") },
     handler: async (ctx, args) => {
         return await ctx.db.get(args.testId);
+    },
+});
+
+/**
+ * Transactionally provisions a new test along with its complete set of verified questions.
+ * Ensures tests are never left in a partially created state if inserting a question errors.
+ *
+ * @returns ID reference of the newly committed active test
+ */
+export const createWithQuestions = mutation({
+    args: {
+        spaceId: v.id("spaces"),
+        type: v.string(),
+        questions: v.array(v.object({
+            type: v.string(),
+            question: v.string(),
+            options: v.optional(v.array(v.string())),
+            answer: v.optional(v.string()),
+        })),
+    },
+    handler: async (ctx, args) => {
+        const space = await ctx.db.get(args.spaceId);
+        if (!space) {
+            throw new Error("Space not found");
+        }
+
+        const userId = "default_user"; // MVP mock
+        if (space.userId !== userId) {
+            throw new Error("Unauthorized access to this space");
+        }
+
+        const testId = await ctx.db.insert("tests", {
+            spaceId: args.spaceId,
+            status: "active",
+            config: { type: args.type },
+        });
+
+        for (const q of args.questions) {
+            await ctx.db.insert("questions", {
+                testId: testId,
+                type: q.type as "select" | "write",
+                question: q.question,
+                options: q.options,
+                answer: q.answer,
+            });
+        }
+
+        return testId;
     },
 });
