@@ -48,3 +48,4 @@ jobs:
             -Dsonar.projectKey=artyaz_exigo
             -Dsonar.sources=.
             -Dsonar.coverage.exclusions="**/*"
+            -Dsonar.exclusions="generated/**"
