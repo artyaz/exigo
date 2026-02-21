@@ -26,8 +26,9 @@ export default function SignUpPage() {
                 redirectUrl: "/sso-callback",
                 redirectUrlComplete: "/spaces",
             });
-        } catch (err: any) {
-            setError(err.errors?.[0]?.message || "An error occurred during Google Sign Up");
+        } catch (err) {
+            const e = err as { errors?: { message: string }[] };
+            setError(e.errors?.[0]?.message ?? "An error occurred during Google Sign Up");
         }
     };
 
@@ -46,8 +47,9 @@ export default function SignUpPage() {
 
             await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
             setPendingVerification(true);
-        } catch (err: any) {
-            setError(err.errors?.[0]?.message || "Invalid input");
+        } catch (err) {
+            const e = err as { errors?: { message: string }[] };
+            setError(e.errors?.[0]?.message ?? "Invalid input");
         } finally {
             setIsLoading(false);
         }
@@ -69,8 +71,9 @@ export default function SignUpPage() {
             } else {
                 setError("Verification incomplete. Please try again.");
             }
-        } catch (err: any) {
-            setError(err.errors?.[0]?.message || "Invalid verification code");
+        } catch (err) {
+            const e = err as { errors?: { message: string }[] };
+            setError(e.errors?.[0]?.message ?? "Invalid verification code");
         } finally {
             setIsLoading(false);
         }

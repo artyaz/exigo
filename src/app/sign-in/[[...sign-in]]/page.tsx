@@ -23,8 +23,9 @@ export default function SignInPage() {
                 redirectUrl: "/sso-callback",
                 redirectUrlComplete: "/spaces",
             });
-        } catch (err: any) {
-            setError(err.errors?.[0]?.message || "An error occurred during Google Sign In");
+        } catch (err) {
+            const e = err as { errors?: { message: string }[] };
+            setError(e.errors?.[0]?.message ?? "An error occurred during Google Sign In");
         }
     };
 
@@ -47,8 +48,9 @@ export default function SignInPage() {
             } else {
                 setError("Additional verification required. This MVP only supports standard sign in.");
             }
-        } catch (err: any) {
-            setError(err.errors?.[0]?.message || "Invalid credentials");
+        } catch (err) {
+            const e = err as { errors?: { message: string }[] };
+            setError(e.errors?.[0]?.message ?? "Invalid credentials");
         } finally {
             setIsLoading(false);
         }
@@ -161,7 +163,7 @@ export default function SignInPage() {
                     </div>
 
                     <div className="mt-8 text-center text-sm text-neutral-400">
-                        Don't have an account?{" "}
+                        Don&apos;t have an account?{" "}
                         <Link href="/sign-up" className="text-emerald-400 font-semibold hover:text-emerald-300 transition-colors">
                             Sign up
                         </Link>
