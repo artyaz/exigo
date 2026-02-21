@@ -40,7 +40,7 @@ export const getForSpace = query({
     handler: async (ctx, args) => {
         return await ctx.db
             .query("tests")
-            .withIndex("by_space", (q: any) => q.eq("spaceId", args.spaceId))
+            .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
             .collect();
     },
 });

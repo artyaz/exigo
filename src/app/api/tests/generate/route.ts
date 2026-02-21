@@ -86,8 +86,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
         }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error(err);
-        return NextResponse.json({ error: err.message }, { status: 500 });
+        const errorMessage = err instanceof Error ? err.message : undefined;
+        return NextResponse.json({ error: errorMessage ?? "Unknown error" }, { status: 500 });
     }
 }

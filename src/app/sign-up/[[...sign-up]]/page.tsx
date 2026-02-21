@@ -187,7 +187,11 @@ export default function SignUpPage() {
 
                     <button
                         type="button"
-                        onClick={() => setPendingVerification(false)}
+                        onClick={() => {
+                            setPendingVerification(false);
+                            setCode("");
+                            setError("");
+                        }}
                         className="w-full text-neutral-400 text-sm hover:text-white transition-colors py-2"
                     >
                         Back to sign up
