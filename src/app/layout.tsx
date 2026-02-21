@@ -26,8 +26,8 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider appearance={{ baseTheme: dark }}>
-      <html lang="en" className={`${geist.variable}`}>
-        <body>
+      <html lang="en" className={`${geist.variable} dark antialiased tracking-tight`}>
+        <body className="bg-black text-white min-h-screen">
           <ConvexClientProvider>
             <TRPCReactProvider>{children}</TRPCReactProvider>
           </ConvexClientProvider>
