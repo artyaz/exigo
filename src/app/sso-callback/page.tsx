@@ -10,7 +10,7 @@ export default function SSOCallback() {
                 <Loader2 className="w-12 h-12 text-emerald-400 animate-spin" />
                 <p className="text-neutral-400 font-medium animate-pulse">Completing authentication...</p>
                 <div className="hidden">
-                    <AuthenticateWithRedirectCallback forceRedirectUrl="/spaces" />
+                    <AuthenticateWithRedirectCallback redirectUrl="/spaces" />
                 </div>
             </div>
         </div>
