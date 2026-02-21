@@ -9,6 +9,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, ChevronRight, Loader2, CheckCircle2, Clock, Zap, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
+/**
+ * Produces a deterministic 32-bit integer hash for the given string.
+ *
+ * @param str - Input string to hash
+ * @returns A signed 32-bit integer derived from `str`, suitable for stable pseudo-randomization of visuals
+ */
 function hashCode(str: string) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -18,6 +24,15 @@ function hashCode(str: string) {
     return hash;
 }
 
+/**
+ * Renders the Tests page: loads and displays a responsive grid of test cards with interactive visuals and controls.
+ *
+ * The component fetches all tests, shows a loader while loading, an empty-state when no tests exist, and a grid of
+ * animated, stacked cards when tests are available. Cards show status, progress, metadata, a mouse-follow spotlight,
+ * and per-card hover/press animations. Pressing the Escape key navigates back in history.
+ *
+ * @returns The React element for the Tests page.
+ */
 export default function TestsPage() {
     const tests = useQuery(api.tests.listAll);
     const [hoveredId, setHoveredId] = useState<string | null>(null);

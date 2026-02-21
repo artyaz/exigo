@@ -7,6 +7,11 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
+/**
+ * Handle a POST chat request: validate inputs, persist the user's message, generate an AI tutor reply using Google Gemini, persist the AI reply, and return the AI response.
+ *
+ * @returns A NextResponse containing `{ success: true, aiResponseText }` on success, or `{ error: string }` with an appropriate HTTP status (`400` for bad input, `404` if the question is missing, `500` for server errors) on failure.
+ */
 export async function POST(req: NextRequest) {
     try {
         const rawBody = await req.json() as Record<string, unknown>;

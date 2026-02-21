@@ -11,6 +11,12 @@ import { Loader2, ArrowLeft, CheckCircle2, XCircle, ChevronRight, BrainCircuit, 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+/**
+ * Render the interactive test-taking page that handles question progression, background question generation, review mode with stacked question cards, and a tutor chat sidebar.
+ *
+ * @param params - A promise resolving to route parameters; must include `testId` identifying the test to load.
+ * @returns The rendered React element tree for the test page.
+ */
 export default function TestPage({ params }: { params: Promise<{ testId: string }> }) {
     const router = useRouter();
     const { testId } = use(params);

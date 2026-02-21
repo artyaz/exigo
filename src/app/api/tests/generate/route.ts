@@ -19,6 +19,24 @@ const writeQuestionSchema = z.object({
     answer: z.string().describe("A sample correct answer"),
 });
 
+/**
+ * Generates a single original question from knowledge pieces for a space and streams progress to the client via Server-Sent Events (SSE), then saves the created question to Convex.
+ *
+ * The request body must be JSON with `spaceId`, `testType` ("select" or "write"), and optional `testId`. The endpoint:
+ * - Retrieves knowledge pieces for the given space.
+ * - Optionally uses an existing test (when `testId` is provided`) or creates an empty test.
+ * - Prompts an AI model to produce exactly one question in a strict JSON schema (multiple-choice or open-ended).
+ * - Streams incremental text deltas to the client as SSE events of type `"delta"`.
+ * - On success persists the question and emits a final SSE `"done"` event containing `testId` and `questionId`.
+ * - Emits an SSE `"error"` event on failure.
+ *
+ * @param req - Incoming NextRequest whose JSON body contains `{ spaceId: string, testType: "select" | "write", testId?: string }`.
+ * @returns A Response whose body is an SSE stream (Content-Type: text/event-stream). The stream emits JSON events:
+ * - `{"type":"delta","text":string}` for incremental model output,
+ * - `{"type":"done","testId":string,"questionId":string}` when the question is saved,
+ * - `{"type":"error","error":string}` on error.
+ * The endpoint also returns 400 responses (JSON error body) when required parameters or knowledge pieces are missing.
+ */
 export async function POST(req: NextRequest) {
     const rawBody = await req.json() as Record<string, unknown>;
     const spaceId = rawBody.spaceId as string;

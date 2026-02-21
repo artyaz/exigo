@@ -14,6 +14,12 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+/**
+ * Computes a 32-bit integer hash for the given string.
+ *
+ * @param str - Input string to hash.
+ * @returns A 32-bit signed integer hash derived from `str`.
+ */
 function hashCode(str: string) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -23,6 +29,14 @@ function hashCode(str: string) {
     return hash;
 }
 
+/**
+ * Renders the detail view for a space, providing tabs to manage and generate tests and to add or import knowledge pieces.
+ *
+ * Persists the selected test type to localStorage and navigates to a newly created test when generation completes.
+ *
+ * @param params - A Promise that resolves to route parameters; must include `spaceId` identifying the space to display.
+ * @returns The React element for the Space detail page.
+ */
 export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId: string }> }) {
     const router = useRouter();
     const { spaceId } = use(params);
