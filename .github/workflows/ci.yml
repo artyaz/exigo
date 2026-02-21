@@ -11,6 +11,9 @@ jobs:
   build-and-analyze:
     name: Build, Test, and SonarQube Analyze
     runs-on: ubuntu-latest
+    env:
+      SKIP_ENV_VALIDATION: "1"
+      DATABASE_URL: "file:./dummy.db"
     
     steps:
       - name: Checkout Repository
@@ -32,9 +35,6 @@ jobs:
 
       - name: Code Quality & Type Check
         # Runs `next lint` and `tsc --noEmit` defined in package.json
-        env:
-          SKIP_ENV_VALIDATION: "1"
-          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: npm run check
 
       - name: SonarQube Analysis
@@ -47,4 +47,5 @@ jobs:
             -Dsonar.organization=artyaz
             -Dsonar.projectKey=artyaz_exigo
             -Dsonar.sources=.
-            -Dsonar.coverage.exclusions="**/*"
+            -Dsonar.coverage.exclusions="**/generated/**"
+            -Dsonar.exclusions="**/generated/**"

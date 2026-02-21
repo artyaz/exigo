@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.38.1",
+    "@clerk/themes": "^2.4.55",
     "@google/genai": "^1.42.0",
     "@prisma/client": "^6.6.0",
     "@t3-oss/env-nextjs": "^0.12.0",
@@ -45,6 +46,7 @@
     "@types/node": "^20.14.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9.23.0",
     "eslint-config-next": "^15.2.3",
     "postcss": "^8.5.3",
