@@ -36,17 +36,17 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
     if (space === undefined || pieces === undefined) {
         return (
-            <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
-                <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
+            <div className="min-h-screen bg-black flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-white animate-spin" />
             </div>
         );
     }
 
     if (space === null) {
         return (
-            <div className="min-h-screen bg-neutral-950 text-neutral-50 flex items-center justify-center flex-col gap-4">
-                <h1 className="text-3xl font-bold">Space not found</h1>
-                <Link href="/spaces" className="text-emerald-500 hover:text-emerald-400">
+            <div className="min-h-screen bg-black text-white flex items-center justify-center flex-col gap-4">
+                <h1 className="text-2xl font-medium tracking-tight">Space not found</h1>
+                <Link href="/spaces" className="text-secondary hover:text-primary text-sm transition-colors">
                     Return to Spaces
                 </Link>
             </div>
@@ -104,31 +104,31 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     };
 
     return (
-        <div className="min-h-screen bg-neutral-950 text-neutral-50 p-4 md:p-8">
+        <div className="min-h-screen bg-black text-white p-4 md:p-8">
             <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
 
                 {/* Left Column: Management */}
                 <div className="lg:col-span-8 flex flex-col gap-8">
                     <header className="flex items-center gap-6">
-                        <Link href="/spaces" className="p-3 bg-neutral-900 hover:bg-neutral-800 rounded-2xl transition-colors border border-neutral-800">
-                            <ArrowLeft className="w-6 h-6" />
+                        <Link href="/spaces" className="p-2 glass-card rounded-xl hover:bg-white/5 spring-interact text-secondary hover:text-primary">
+                            <ArrowLeft className="w-5 h-5" />
                         </Link>
-                        <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-emerald-600">
+                        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-primary">
                             {space.name}
                         </h1>
                     </header>
 
-                    <section className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 space-y-6">
-                        <div className="flex gap-4 border-b border-neutral-800 pb-4">
+                    <section className="glass-card rounded-2xl p-6 md:p-8 space-y-6">
+                        <div className="flex gap-6 border-b border-white/10 pb-4">
                             <button
                                 onClick={() => setActiveTab("add")}
-                                className={`px-4 py-2 font-semibold text-lg transition-colors border-b-2 ${activeTab === "add" ? "border-emerald-500 text-emerald-500" : "border-transparent text-neutral-500 hover:text-neutral-300"}`}
+                                className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[17px] ${activeTab === "add" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
                             >
                                 Add Piece
                             </button>
                             <button
                                 onClick={() => setActiveTab("bulk")}
-                                className={`px-4 py-2 font-semibold text-lg transition-colors border-b-2 ${activeTab === "bulk" ? "border-emerald-500 text-emerald-500" : "border-transparent text-neutral-500 hover:text-neutral-300"}`}
+                                className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[17px] ${activeTab === "bulk" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
                             >
                                 Bulk Import
                             </button>
@@ -146,7 +146,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 >
                                     <textarea
                                         placeholder="Type or paste a piece of knowledge here..."
-                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 min-h-[150px] resize-y text-lg"
+                                        className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl p-4 focus-ring spring-interact min-h-[150px] resize-y text-sm placeholder:text-neutral-600"
                                         value={content}
                                         onChange={e => setContent(e.target.value)}
                                     />
@@ -154,16 +154,16 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                         <input
                                             type="text"
                                             placeholder="Source (Optional URL or tag)"
-                                            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            className="flex-1 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
                                             value={source}
                                             onChange={e => setSource(e.target.value)}
                                         />
                                         <button
                                             disabled={isAdding || !content.trim()}
                                             type="submit"
-                                            className="bg-emerald-500 text-neutral-950 font-semibold px-8 py-3 rounded-xl hover:bg-emerald-400 focus:outline-none transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                            className="bg-white text-black font-medium px-6 py-2.5 rounded-xl spring-interact flex items-center justify-center gap-2 disabled:opacity-50 text-sm hover:opacity-90"
                                         >
-                                            {isAdding ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                                            {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                                             Adding
                                         </button>
                                     </div>
@@ -177,35 +177,35 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                     onSubmit={handleBulkImport}
                                     className="space-y-4"
                                 >
-                                    <p className="text-neutral-400 text-sm">Paste huge text blocks and separate them by your chosen delimiter.</p>
+                                    <p className="text-secondary text-xs">Paste huge text blocks and separate them by your chosen delimiter.</p>
                                     <div className="flex gap-4">
                                         <input
                                             type="text"
                                             placeholder="Delimiter (e.g., \\n\\n, ###)"
-                                            className="w-1/3 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            className="w-1/3 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
                                             value={delimiter}
                                             onChange={e => setDelimiter(e.target.value)}
                                         />
                                         <input
                                             type="text"
                                             placeholder="Global Source (Optional)"
-                                            className="w-2/3 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            className="w-2/3 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
                                             value={source}
                                             onChange={e => setSource(e.target.value)}
                                         />
                                     </div>
                                     <textarea
                                         placeholder="Paste massive piece of text here..."
-                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 min-h-[250px] resize-y"
+                                        className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl p-4 focus-ring spring-interact min-h-[250px] resize-y text-sm placeholder:text-neutral-600"
                                         value={bulkContent}
                                         onChange={e => setBulkContent(e.target.value)}
                                     />
                                     <button
                                         disabled={isAdding || !bulkContent.trim()}
                                         type="submit"
-                                        className="w-full bg-emerald-500 text-neutral-950 font-semibold px-8 py-4 rounded-xl hover:bg-emerald-400 focus:outline-none transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-lg"
+                                        className="w-full bg-white text-black font-medium px-8 py-3 rounded-xl spring-interact flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90 text-sm"
                                     >
-                                        {isAdding ? <Loader2 className="w-6 h-6 animate-spin" /> : <Upload className="w-6 h-6" />}
+                                        {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                                         Process & Import Bulk
                                     </button>
                                 </motion.form>
@@ -214,20 +214,20 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                     </section>
 
                     <section className="space-y-4 flex-1">
-                        <h2 className="text-2xl font-bold flex items-center gap-2">
-                            <BookOpen className="text-emerald-500 w-6 h-6" /> Knowledge Base <span className="text-sm font-normal text-neutral-500 bg-neutral-900 px-3 py-1 rounded-full">{pieces.length} items</span>
+                        <h2 className="text-lg font-medium flex items-center gap-2 text-primary">
+                            <BookOpen className="text-secondary w-5 h-5" /> Knowledge Base <span className="text-xs font-mono text-tertiary bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">{pieces.length} items</span>
                         </h2>
                         {pieces.length === 0 ? (
-                            <div className="bg-neutral-900/50 border border-neutral-800 border-dashed rounded-3xl p-12 text-center text-neutral-500 flex flex-col items-center gap-4">
-                                <BrainCircuit className="w-12 h-12 opacity-50" />
-                                <p className="text-lg">This space is empty. Add some knowledge pieces above to start generating tests.</p>
+                            <div className="glass-card border-dashed rounded-2xl p-12 text-center text-secondary flex flex-col items-center gap-4">
+                                <BrainCircuit className="w-10 h-10 opacity-50" />
+                                <p className="text-sm">This space is empty. Add some knowledge pieces above.</p>
                             </div>
                         ) : (
                             <div className="grid gap-4">
                                 {pieces.slice().reverse().map((piece) => (
-                                    <div key={piece._id} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 hover:border-neutral-700 transition-colors">
-                                        <p className="text-neutral-300 leading-relaxed whitespace-pre-wrap line-clamp-4">{piece.content}</p>
-                                        {piece.source && <p className="text-sm text-neutral-500 mt-4 font-mono truncate bg-neutral-950 inline-block px-3 py-1 rounded-lg">Src: {piece.source}</p>}
+                                    <div key={piece._id} className="glass-card rounded-xl p-5 hover:bg-white/5 transition-colors">
+                                        <p className="text-secondary text-sm leading-relaxed whitespace-pre-wrap line-clamp-4">{piece.content}</p>
+                                        {piece.source && <p className="text-xs text-tertiary mt-3 font-mono truncate inline-block">Src: <span className="text-secondary">{piece.source}</span></p>}
                                     </div>
                                 ))}
                             </div>
@@ -237,28 +237,26 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
                 {/* Right Column: AI Action Panel */}
                 <div className="lg:col-span-4 relative">
-                    <div className="sticky top-8 bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 space-y-8 shadow-2xl overflow-hidden">
-                        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-emerald-400 to-cyan-500" />
-
+                    <div className="sticky top-8 glass-card rounded-2xl p-6 md:p-8 space-y-8">
                         <div>
-                            <h2 className="text-2xl font-bold flex items-center gap-2 text-white">
-                                <Sparkles className="w-6 h-6 text-emerald-400" /> Test Me
+                            <h2 className="text-lg font-medium flex items-center gap-2 text-primary">
+                                <Sparkles className="w-5 h-5 text-secondary" /> Test Me
                             </h2>
-                            <p className="text-neutral-400 mt-2 text-sm leading-relaxed">Turn your knowledge base into an interactive test and check how much you remember.</p>
+                            <p className="text-secondary mt-2 text-xs leading-relaxed">Turn your knowledge base into an interactive test and check how much you remember.</p>
                         </div>
 
                         <div className="space-y-4">
-                            <p className="font-semibold text-neutral-300">Format:</p>
+                            <p className="text-sm font-medium text-primary">Format:</p>
                             <div className="grid grid-cols-2 gap-3">
                                 <button
                                     onClick={() => setTestType("select")}
-                                    className={`border rounded-xl px-4 py-3 font-medium transition-all ${testType === "select" ? "border-emerald-500 bg-emerald-500/10 text-emerald-400" : "border-neutral-800 text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/50"}`}
+                                    className={`border rounded-xl px-4 py-2 font-medium transition-all text-sm spring-interact ${testType === "select" ? "border-white text-primary bg-white/5" : "border-white/10 text-tertiary hover:text-secondary hover:bg-white/5"}`}
                                 >
                                     Select Ans
                                 </button>
                                 <button
                                     onClick={() => setTestType("write")}
-                                    className={`border rounded-xl px-4 py-3 font-medium transition-all ${testType === "write" ? "border-emerald-500 bg-emerald-500/10 text-emerald-400" : "border-neutral-800 text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800/50"}`}
+                                    className={`border rounded-xl px-4 py-2 font-medium transition-all text-sm spring-interact ${testType === "write" ? "border-white text-primary bg-white/5" : "border-white/10 text-tertiary hover:text-secondary hover:bg-white/5"}`}
                                 >
                                     Write Ans
                                 </button>
@@ -268,22 +266,20 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                         <button
                             disabled={pieces.length === 0 || isGenerating}
                             onClick={handleTestMe}
-                            className="w-full group relative overflow-hidden rounded-2xl p-[1px] disabled:opacity-50"
+                            className="w-full bg-white text-black font-medium flex items-center justify-center gap-2 rounded-xl py-3 spring-interact disabled:opacity-50 hover:opacity-90 text-sm"
                         >
-                            <span className="absolute inset-0 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-2xl opacity-80 group-hover:opacity-100 transition-opacity" />
-                            <div className="relative bg-neutral-950 rounded-[15px] px-8 py-4 flex items-center justify-center gap-3">
-                                {isGenerating ? (
-                                    <>
-                                        <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
-                                        <span className="text-emerald-400 font-bold text-lg">Generating DB...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <BrainCircuit className="w-6 h-6 text-white" />
-                                        <span className="text-white font-bold text-lg">Generate Test</span>
-                                    </>
-                                )}
-                            </div>
+                            {isGenerating ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>Generating...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <BrainCircuit className="w-4 h-4" />
+                                    <span>Generate Test</span>
+                                    <span className="hidden sm:inline bg-black/10 px-1.5 py-0.5 rounded-md text-[10px] ml-1 opacity-60">⌘ Enter</span>
+                                </>
+                            )}
                         </button>
                         {pieces.length === 0 && (
                             <p className="text-xs text-center text-red-500">Need at least 1 piece of knowledge first.</p>

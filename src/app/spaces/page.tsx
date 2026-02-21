@@ -29,37 +29,42 @@ export default function SpacesPage() {
     };
 
     return (
-        <div className="min-h-screen bg-neutral-950 text-neutral-50 p-6 md:p-12">
+        <div className="min-h-screen bg-black text-white p-6 md:p-12">
             <div className="max-w-4xl mx-auto space-y-12">
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                     <div className="space-y-2 flex-1">
                         <div className="flex justify-between items-center w-full mt-2">
-                            <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Your Spaces</h1>
-                            <div className="bg-neutral-900/50 backdrop-blur border border-neutral-800 p-2 rounded-full shadow-xl">
+                            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-primary">Your Spaces</h1>
+                            <div className="glass-card p-1.5 rounded-full">
                                 <UserButton
                                     appearance={USER_BUTTON_APPEARANCE}
                                 />
                             </div>
                         </div>
-                        <p className="text-neutral-400 text-lg">Create a dedicated space to manage knowledge and test yourself.</p>
+                        <p className="text-secondary text-sm">Create a dedicated space to manage knowledge and test yourself.</p>
                     </div>
                 </header>
 
-                <section className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8">
+                <section className="glass-card rounded-2xl p-6 md:p-8">
                     <form onSubmit={handleCreate} className="flex gap-4">
-                        <input
-                            type="text"
-                            placeholder="E.g., Biology 101, JavaScript Basics..."
-                            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-2xl px-6 py-4 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all text-lg"
-                            value={newSpaceName}
-                            onChange={(e) => setNewSpaceName(e.target.value)}
-                        />
+                        <div className="relative flex-1 group">
+                            <input
+                                type="text"
+                                placeholder="E.g., Biology 101, JavaScript Basics..."
+                                className="w-full bg-neutral-950 border border-white/10 rounded-xl px-4 py-3 focus-ring spring-interact text-sm text-primary placeholder:text-neutral-600"
+                                value={newSpaceName}
+                                onChange={(e) => setNewSpaceName(e.target.value)}
+                            />
+                            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-neutral-600 text-xs font-mono">
+                                ⌘K
+                            </div>
+                        </div>
                         <button
                             disabled={isCreating || !newSpaceName.trim()}
                             type="submit"
-                            className="bg-emerald-500 text-neutral-950 font-semibold px-8 rounded-2xl hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 disabled:opacity-50 transition-all flex items-center gap-2"
+                            className="bg-white text-black font-medium px-6 py-3 rounded-xl spring-interact flex items-center gap-2 disabled:opacity-50 text-sm hover:opacity-90"
                         >
-                            {isCreating ? <Loader2 className="animate-spin w-5 h-5" /> : <Plus className="w-5 h-5" />}
+                            {isCreating ? <Loader2 className="animate-spin w-4 h-4" /> : <Plus className="w-4 h-4" />}
                             <span className="hidden md:inline">Create Space</span>
                         </button>
                     </form>
@@ -81,21 +86,23 @@ export default function SpacesPage() {
                                 {spaces.map((space) => (
                                     <Link href={`/spaces/${space._id}`} key={space._id}>
                                         <motion.div
-                                            initial={{ opacity: 0, y: 20 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.95 }}
-                                            whileHover={{ scale: 1.02, y: -4 }}
-                                            className="group bg-neutral-900/50 hover:bg-neutral-900 border border-neutral-800 hover:border-emerald-500/30 rounded-3xl p-6 transition-all cursor-pointer h-full flex flex-col justify-between"
+                                            initial={{ opacity: 0, scale: 0.98 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.98 }}
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                                            className="group glass-card rounded-2xl p-6 cursor-pointer h-full flex flex-col justify-between"
                                         >
                                             <div className="space-y-4 text-left">
-                                                <div className="w-12 h-12 rounded-2xl bg-neutral-800 group-hover:bg-emerald-500/10 flex items-center justify-center transition-colors">
-                                                    <BookOpen className="w-6 h-6 text-neutral-400 group-hover:text-emerald-500 transition-colors" />
+                                                <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-white/5 group-hover:bg-neutral-800 flex items-center justify-center transition-colors">
+                                                    <BookOpen className="w-5 h-5 text-neutral-400 group-hover:text-white transition-colors" />
                                                 </div>
-                                                <h2 className="text-2xl font-bold line-clamp-2">{space.name}</h2>
+                                                <h2 className="text-lg font-medium line-clamp-2 text-primary">{space.name}</h2>
                                             </div>
-                                            <div className="mt-8 flex items-center justify-between text-neutral-500 group-hover:text-emerald-500 transition-colors">
-                                                <span className="text-sm font-medium">Enter Space</span>
-                                                <ChevronRight className="w-5 h-5" />
+                                            <div className="mt-8 flex items-center justify-between text-tertiary group-hover:text-primary transition-colors">
+                                                <span className="text-xs font-medium uppercase tracking-widest">Enter Space</span>
+                                                <ChevronRight className="w-4 h-4" />
                                             </div>
                                         </motion.div>
                                     </Link>
