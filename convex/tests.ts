@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+/**
+ * Initializes a new test generation request for a given space.
+ * The test is linked to the space and marks itself as generating status.
+ *
+ * @returns ID reference of the newly provisioned test
+ */
 export const create = mutation({
     args: { spaceId: v.id("spaces"), type: v.string() },
     handler: async (ctx, args) => {
@@ -12,6 +18,10 @@ export const create = mutation({
     },
 });
 
+/**
+ * Performs a strict status override on the specified active test.
+ * Allowed states: "draft", "generating", "active", or "completed".
+ */
 export const updateStatus = mutation({
     args: { testId: v.id("tests"), status: v.union(v.literal("draft"), v.literal("generating"), v.literal("active"), v.literal("completed")) },
     handler: async (ctx, args) => {
@@ -19,6 +29,12 @@ export const updateStatus = mutation({
     },
 });
 
+/**
+ * Retrieves all tests mapped to a unique space context.
+ * Utilizes the internal by_space DB index for performance.
+ *
+ * @returns Array collection of available tests
+ */
 export const getForSpace = query({
     args: { spaceId: v.id("spaces") },
     handler: async (ctx, args) => {
@@ -29,6 +45,11 @@ export const getForSpace = query({
     },
 });
 
+/**
+ * Fetches the document entry of an individual granular test directly by its ID.
+ *
+ * @returns Serialized test data or null
+ */
 export const get = query({
     args: { testId: v.id("tests") },
     handler: async (ctx, args) => {

@@ -1,6 +1,12 @@
 
 import type { ReactNode } from "react";
 
+/**
+ * Extracts and formats error messages consistently from caught API Exceptions.
+ *
+ * @param err The unknown error object caught in a try/catch block
+ * @returns A formatted string message or undefined if parsing falls back
+ */
 export function formatErrorMessage(err: unknown): string | undefined {
     if (typeof err === "object" && err !== null) {
         const e = err as { errors?: { message?: string }[] };
@@ -9,6 +15,12 @@ export function formatErrorMessage(err: unknown): string | undefined {
     return err instanceof Error ? err.message : undefined;
 }
 
+/**
+ * Shared layout component wrapper for Auth pages featuring dynamic ambient backgrounds.
+ *
+ * @param props Contains child elements, layout title, and generic subtitle
+ * @returns JSX Element container with styles
+ */
 export function AuthLayout({ children, title, subtitle }: { children: ReactNode, title: ReactNode, subtitle: ReactNode }) {
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] p-6 relative overflow-hidden">
@@ -28,6 +40,12 @@ export function AuthLayout({ children, title, subtitle }: { children: ReactNode,
     );
 }
 
+/**
+ * Unified styled Google Single Sign-on OAuth button component.
+ *
+ * @param props Includes lambda onClick handler and optional label text
+ * @returns JSX Button element styled as Google OAuth Action
+ */
 export function GoogleAuthButton({ onClick, text = "Continue with Google" }: { onClick: () => void, text?: string }) {
     return (
         <button
@@ -46,6 +64,12 @@ export function GoogleAuthButton({ onClick, text = "Continue with Google" }: { o
     );
 }
 
+/**
+ * Semantic divider for auth methods explicitly separating OAuth and email paths.
+ *
+ * @param props Contains string text injected over the visual horizontal break.
+ * @returns Extracted visual divider markup.
+ */
 export function AuthDivider({ text }: { text: string }) {
     return (
         <div className="relative">

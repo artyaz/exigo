@@ -1,6 +1,13 @@
 import { AuthenticateWithRedirectCallback } from "@clerk/nextjs";
 import { Loader2 } from "lucide-react";
 
+/**
+ * Dedicated callback page invoked by Clerk after completing external OAuth.
+ * Intercepts the hash payload and performs active session assignment behind
+ * a customized processing UI.
+ *
+ * @returns RedirectCallback component injected in hidden wrapper
+ */
 export default function SSOCallback() {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#0a0a0a] relative overflow-hidden">

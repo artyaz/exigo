@@ -7,6 +7,13 @@ import Link from "next/link";
 import { Loader2, Mail, Lock, ArrowRight } from "lucide-react";
 import { AuthLayout, AuthDivider, GoogleAuthButton, formatErrorMessage } from "~/app/_components/auth-ui";
 
+/**
+ * Complete replacement for Clerk's standard SignIn UI.
+ * Connects directly to `@clerk/nextjs` headless hooks to perform
+ * Email password checking or Google OAuth redirection.
+ *
+ * @returns Custom React Sign In Component
+ */
 export default function SignInPage() {
     const { isLoaded, signIn, setActive } = useSignIn();
     const router = useRouter();

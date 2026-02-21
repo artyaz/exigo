@@ -7,6 +7,13 @@ import Link from "next/link";
 import { Loader2, Mail, Lock, ArrowRight, KeyRound } from "lucide-react";
 import { AuthLayout, AuthDivider, GoogleAuthButton, formatErrorMessage } from "~/app/_components/auth-ui";
 
+/**
+ * Complete replacement for Clerk's standard SignUp UI.
+ * Handles the two-state authentication flow involving password creation
+ * and a 6-digit email verification token system.
+ *
+ * @returns Custom React Sign Up Component
+ */
 export default function SignUpPage() {
     const { isLoaded, signUp, setActive } = useSignUp();
     const router = useRouter();
