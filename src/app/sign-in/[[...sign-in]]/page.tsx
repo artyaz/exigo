@@ -6,6 +6,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { Loader2, Mail, Lock, ArrowRight } from "lucide-react";
 
+function formatErrorMessage(err: unknown): string | undefined {
+    if (typeof err === "object" && err !== null) {
+        const e = err as { errors?: { message?: string }[] };
+        if (e.errors?.[0]?.message) return e.errors[0].message;
+    }
+    return err instanceof Error ? err.message : undefined;
+}
+
 export default function SignInPage() {
     const { isLoaded, signIn, setActive } = useSignIn();
     const router = useRouter();
@@ -23,9 +31,8 @@ export default function SignInPage() {
                 redirectUrl: "/sso-callback",
                 redirectUrlComplete: "/spaces",
             });
-        } catch (err) {
-            const e = err as { errors?: { message: string }[] };
-            setError(e.errors?.[0]?.message ?? "An error occurred during Google Sign In");
+        } catch (err: unknown) {
+            setError(formatErrorMessage(err) ?? "An error occurred during Google Sign In");
         }
     };
 
@@ -48,9 +55,8 @@ export default function SignInPage() {
             } else {
                 setError("Additional verification required. This MVP only supports standard sign in.");
             }
-        } catch (err) {
-            const e = err as { errors?: { message: string }[] };
-            setError(e.errors?.[0]?.message ?? "Invalid credentials");
+        } catch (err: unknown) {
+            setError(formatErrorMessage(err) ?? "Invalid credentials");
         } finally {
             setIsLoading(false);
         }

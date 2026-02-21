@@ -6,6 +6,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { Loader2, Mail, Lock, ArrowRight, KeyRound } from "lucide-react";
 
+function formatErrorMessage(err: unknown): string | undefined {
+    if (typeof err === "object" && err !== null) {
+        const e = err as { errors?: { message?: string }[] };
+        if (e.errors?.[0]?.message) return e.errors[0].message;
+    }
+    return err instanceof Error ? err.message : undefined;
+}
+
 export default function SignUpPage() {
     const { isLoaded, signUp, setActive } = useSignUp();
     const router = useRouter();
@@ -26,9 +34,8 @@ export default function SignUpPage() {
                 redirectUrl: "/sso-callback",
                 redirectUrlComplete: "/spaces",
             });
-        } catch (err) {
-            const e = err as { errors?: { message: string }[] };
-            setError(e.errors?.[0]?.message ?? "An error occurred during Google Sign Up");
+        } catch (err: unknown) {
+            setError(formatErrorMessage(err) ?? "An error occurred during Google Sign Up");
         }
     };
 
@@ -47,9 +54,8 @@ export default function SignUpPage() {
 
             await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
             setPendingVerification(true);
-        } catch (err) {
-            const e = err as { errors?: { message: string }[] };
-            setError(e.errors?.[0]?.message ?? "Invalid input");
+        } catch (err: unknown) {
+            setError(formatErrorMessage(err) ?? "Invalid input");
         } finally {
             setIsLoading(false);
         }
@@ -71,9 +77,8 @@ export default function SignUpPage() {
             } else {
                 setError("Verification incomplete. Please try again.");
             }
-        } catch (err) {
-            const e = err as { errors?: { message: string }[] };
-            setError(e.errors?.[0]?.message ?? "Invalid verification code");
+        } catch (err: unknown) {
+            setError(formatErrorMessage(err) ?? "Invalid verification code");
         } finally {
             setIsLoading(false);
         }
