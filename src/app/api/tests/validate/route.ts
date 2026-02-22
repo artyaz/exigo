@@ -49,6 +49,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
+        if (testType !== "select" && testType !== "write") {
+            return NextResponse.json({ error: "Invalid testType — must be 'select' or 'write'" }, { status: 400 });
+        }
+
         // Validate active question directly
 
         const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });

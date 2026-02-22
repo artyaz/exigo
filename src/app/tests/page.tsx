@@ -107,7 +107,7 @@ export default function TestsPage() {
                                 const StatusIcon = status.icon;
                                 const isHovered = hoveredId === test._id;
                                 const target = test.config?.questionCount ?? 5;
-                                const progress = target > 0 ? (test.answeredCount / target) * 100 : 0;
+                                const progress = Math.min(100, Math.max(0, target > 0 ? (test.answeredCount / target) * 100 : 0));
                                 // Number of visible "cards" in the stack — based on generated questions
                                 const stackDepth = Math.min(test.questionCount, 5);
 

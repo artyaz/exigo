@@ -31,6 +31,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const [isGeneratingNext, setIsGeneratingNext] = useState(false);
     const [streamingText, setStreamingText] = useState("");
     const [genError, setGenError] = useState<string | null>(null);
+    const [retryNonce, setRetryNonce] = useState(0);
 
     // Review Mode State
     const [activeReviewIndex, setActiveReviewIndex] = useState(0);
@@ -118,6 +119,14 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     signal: abortController.signal,
                 });
 
+                if (!res.ok) {
+                    const errBody = await res.text().catch(() => "");
+                    const msg = errBody || `Server error (${res.status})`;
+                    setGenError(msg.includes("429") || msg.includes("quota") ? "API rate limit reached. Please wait a moment and retry." : msg);
+                    lastGeneratedForCount.current = -1;
+                    return;
+                }
+
                 if (!res.body) throw new Error("No stream body");
 
                 const reader = res.body.getReader();
@@ -171,7 +180,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         })();
 
         return () => abortController.abort();
-    }, [questions?.length, test, tId, targetQuestionCount]);
+    }, [questions?.length, test, tId, targetQuestionCount, retryNonce]);
 
     if (test === undefined || questions === undefined) {
         return (
@@ -221,7 +230,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         setChatInput("");
 
         try {
-            await fetch("/api/tests/chat", {
+            const response = await fetch("/api/tests/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -230,6 +239,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     message: currentMessage
                 })
             });
+
+            if (!response.ok) {
+                const errText = await response.text().catch(() => "");
+                throw new Error(errText || `Chat failed (${response.status})`);
+            }
         } catch (e) {
             console.error("Chat failed", e);
             setChatInput(currentMessage); // restore on fail
@@ -451,8 +465,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                         onClick={() => {
                                             setGenError(null);
                                             lastGeneratedForCount.current = -1;
-                                            // Force re-trigger by toggling a dummy state
-                                            setIsGeneratingNext(false);
+                                            setRetryNonce(n => n + 1);
                                         }}
                                         className="px-6 py-3 bg-white/10 border border-white/10 rounded-xl text-white text-sm font-medium hover:bg-white/20 transition-colors"
                                     >

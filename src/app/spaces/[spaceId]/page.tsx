@@ -64,7 +64,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     // Test generation
     const [testType, setTestType] = useState<"select" | "write">(() => {
         if (typeof window !== "undefined") {
-            return (localStorage.getItem("exigo_test_type") as "select" | "write") || "select";
+            const stored = localStorage.getItem("exigo_test_type");
+            if (stored === "select" || stored === "write") return stored;
         }
         return "select";
     });
@@ -125,15 +126,21 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         e.preventDefault();
         if (!bulkContent.trim()) return;
         setIsAdding(true);
-        const splitRegex = new RegExp(delimiter.replace(/\\n/g, '\n'));
-        const parts = bulkContent.split(splitRegex).filter(p => p.trim().length > 0);
-        const structuredPieces = parts.map(p => ({
-            content: p.trim(),
-            source: source.trim() || undefined
-        }));
-        await bulkImport({ spaceId: sId, pieces: structuredPieces });
-        setBulkContent("");
-        setIsAdding(false);
+        try {
+            const escaped = delimiter.replace(/\\n/g, '\n').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const splitRegex = new RegExp(escaped);
+            const parts = bulkContent.split(splitRegex).filter(p => p.trim().length > 0);
+            const structuredPieces = parts.map(p => ({
+                content: p.trim(),
+                source: source.trim() || undefined
+            }));
+            await bulkImport({ spaceId: sId, pieces: structuredPieces });
+            setBulkContent("");
+        } catch (err) {
+            console.error("Bulk import failed", err);
+        } finally {
+            setIsAdding(false);
+        }
     };
 
     const handleTestMe = async () => {
@@ -172,8 +179,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                     <button
                         onClick={() => setMainTab("tests")}
                         className={`px-4 py-2.5 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${mainTab === "tests"
-                                ? "border-white text-primary"
-                                : "border-transparent text-secondary hover:text-primary"
+                            ? "border-white text-primary"
+                            : "border-transparent text-secondary hover:text-primary"
                             }`}
                     >
                         <FileText className="w-3.5 h-3.5" />
@@ -185,8 +192,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                     <button
                         onClick={() => setMainTab("knowledge")}
                         className={`px-4 py-2.5 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${mainTab === "knowledge"
-                                ? "border-white text-primary"
-                                : "border-transparent text-secondary hover:text-primary"
+                            ? "border-white text-primary"
+                            : "border-transparent text-secondary hover:text-primary"
                             }`}
                     >
                         <BookOpen className="w-3.5 h-3.5" />
@@ -297,7 +304,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                         const testQuestions = spaceQuestions?.filter(q => q.testId === test._id) ?? [];
                                         const answeredCount = testQuestions.filter(q => q.userAnswer).length;
                                         const target = test.config?.questionCount ?? 5;
-                                        const progress = target > 0 ? (answeredCount / target) * 100 : 0;
+                                        const progress = Math.min(100, Math.max(0, target > 0 ? (answeredCount / target) * 100 : 0));
                                         const stackDepth = Math.min(Math.max(testQuestions.length, 1), 5);
                                         const isHovered = hoveredTestId === test._id;
 

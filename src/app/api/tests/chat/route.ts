@@ -33,6 +33,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Question not found" }, { status: 404 });
         }
 
+        // Verify question belongs to the specified test
+        if (String(question.testId) !== testId) {
+            return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
+        }
+
         // 2. Fetch past messages for this question to maintain conversation history
         const pastMessages = await convex.query(api.testMessages.getForQuestion, { questionId: questionId as Id<"questions"> });
 

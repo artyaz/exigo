@@ -12,6 +12,14 @@ const selectQuestionSchema = z.object({
     question: z.string().describe("The question text"),
     options: z.array(z.string()).length(4).describe("Exactly 4 answer options"),
     answer: z.string().describe("The correct answer, must match one of the options exactly"),
+}).superRefine((data, ctx) => {
+    if (!data.options.includes(data.answer)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "answer must be one of the provided options",
+            path: ["answer"],
+        });
+    }
 });
 
 const writeQuestionSchema = z.object({
@@ -47,6 +55,11 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: "Missing params or API key" }), { status: 400 });
     }
 
+    const ALLOWED_TYPES = ["select", "write"] as const;
+    if (!ALLOWED_TYPES.includes(testType as typeof ALLOWED_TYPES[number])) {
+        return new Response(JSON.stringify({ error: "Invalid testType — must be 'select' or 'write'" }), { status: 400 });
+    }
+
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
     const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
 
@@ -58,6 +71,17 @@ export async function POST(req: NextRequest) {
     let activeTestId: Id<"tests">;
 
     if (testId) {
+        // Verify test belongs to this space and matches requested type
+        const existingTest = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
+        if (!existingTest) {
+            return new Response(JSON.stringify({ error: "Test not found" }), { status: 404 });
+        }
+        if (String(existingTest.spaceId) !== spaceId) {
+            return new Response(JSON.stringify({ error: "Test does not belong to this space" }), { status: 400 });
+        }
+        if (existingTest.config.type !== testType) {
+            return new Response(JSON.stringify({ error: "Test type mismatch" }), { status: 400 });
+        }
         activeTestId = testId as Id<"tests">;
         existingQuestions = await convex.query(api.questions.getForTest, { testId: activeTestId });
     } else {
