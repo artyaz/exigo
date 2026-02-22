@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
                 maxOutputTokens: 20,
             },
         });
-        const title = result.text?.trim().replace(/^["']|["']$/g, '') || "Untitled";
+        const title = result.text?.trim().replace(/^["']|["']$/g, '') ?? "Untitled";
         return new Response(JSON.stringify({ title }));
     } catch (err) {
         console.error("Title generation error:", err);

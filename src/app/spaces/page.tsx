@@ -2,30 +2,38 @@
 // @ts-nocheck
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, BookOpen, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, useAuth } from "@clerk/nextjs";
 import { USER_BUTTON_APPEARANCE } from "~/lib/clerk-shared";
+import { createSpaceServerAction } from "~/app/actions/spaces";
 
 export default function SpacesPage() {
-    const spaces = useQuery(api.spaces.list);
-    const createSpace = useMutation(api.spaces.create);
+    const { userId } = useAuth();
+    const spaces = useQuery(api.spaces.list, userId ? { userId } : "skip");
 
     const [isCreating, setIsCreating] = useState(false);
     const [newSpaceName, setNewSpaceName] = useState("");
+    const [error, setError] = useState<string | null>(null);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newSpaceName.trim()) return;
 
         setIsCreating(true);
-        await createSpace({ name: newSpaceName });
-        setNewSpaceName("");
-        setIsCreating(false);
+        setError(null);
+        try {
+            await createSpaceServerAction(newSpaceName);
+            setNewSpaceName("");
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to create space");
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     return (
@@ -35,10 +43,18 @@ export default function SpacesPage() {
                     <div className="space-y-2 flex-1">
                         <div className="flex justify-between items-center w-full mt-2">
                             <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-primary">Your Spaces</h1>
-                            <div className="glass-card p-1.5 rounded-full">
-                                <UserButton
-                                    appearance={USER_BUTTON_APPEARANCE}
-                                />
+                            <div className="flex items-center gap-4">
+                                <Link
+                                    href="/pricing"
+                                    className="text-sm font-medium text-white/50 hover:text-white transition-colors"
+                                >
+                                    Pricing
+                                </Link>
+                                <div className="glass-card p-1.5 rounded-full">
+                                    <UserButton
+                                        appearance={USER_BUTTON_APPEARANCE}
+                                    />
+                                </div>
                             </div>
                         </div>
                         <p className="text-secondary text-sm">Create a dedicated space to manage knowledge and test yourself.</p>
@@ -68,6 +84,11 @@ export default function SpacesPage() {
                             <span className="hidden md:inline">Create Space</span>
                         </button>
                     </form>
+                    {error && (
+                        <p className="mt-4 text-sm text-red-500 font-medium">
+                            {error} <Link href="/pricing" className="underline hover:text-red-400">Upgrade</Link>
+                        </p>
+                    )}
                 </section>
 
                 <section>

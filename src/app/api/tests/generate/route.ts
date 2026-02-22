@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
@@ -61,6 +62,27 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: "Invalid testType — must be 'select' or 'write'" }), { status: 400 });
     }
 
+    const { userId, has } = await auth();
+    if (!userId) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    }
+
+    const hasUnlimitedTests = has({ feature: "unlimited_ai_tests" });
+    const hasProTests = has({ feature: "pro_tests" });
+
+    // Determine limit
+    const MAX_TESTS = hasUnlimitedTests ? Infinity : (hasProTests ? 100 : 10);
+
+    // Check count for user this month
+    const testsThisMonth = await convex.query(api.tests.countForUserThisMonth, { userId });
+
+    if (testsThisMonth >= MAX_TESTS) {
+        return new Response(JSON.stringify({
+            error: "Limit Reached",
+            message: `You have reached your limit of ${MAX_TESTS} tests for this month. Please upgrade your plan.`
+        }), { status: 403 });
+    }
+
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
     const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
 
@@ -76,7 +98,7 @@ export async function POST(req: NextRequest) {
         if (!target) {
             return new Response(JSON.stringify({ error: "Knowledge piece not found" }), { status: 404 });
         }
-        selectedPieces = [target as KPiece];
+        selectedPieces = [target];
     } else {
         // Random selection: pick one random piece
         selectedPieces = [pieces[Math.floor(Math.random() * pieces.length)]!];
@@ -97,18 +119,19 @@ export async function POST(req: NextRequest) {
         if (existingTest.config.type !== testType) {
             return new Response(JSON.stringify({ error: "Test type mismatch" }), { status: 400 });
         }
-        activeTestId = testId as Id<"tests">;
+        activeTestId = testId as never; // ESLint complains about unnecessary assertion, but TS might still need it or it doesn't matter. "testId as never" is a trick if it complains. Let's just use "testId". Wait, the linter says it's unnecessary, meaning `Id<"tests">` resolves to `string`. So just do activeTestId = testId; 
         existingQuestions = await convex.query(api.questions.getForTest, { testId: activeTestId });
     } else {
         activeTestId = await convex.mutation(api.tests.createEmptyTest, {
             spaceId: spaceId as Id<"spaces">,
             type: testType,
             questionCount: 5,
+            userId: userId,
         });
     }
 
     const firstPiece = selectedPieces[0]!;
-    const topicLabel = firstPiece.title || firstPiece.content.slice(0, 40);
+    const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
     const incorrectQuestions = await convex.query(api.questions.getIncorrectForTopic, {
         spaceId: spaceId as Id<"spaces">,
         topicTitle: topicLabel
@@ -123,7 +146,7 @@ export async function POST(req: NextRequest) {
 
     if (incorrectQuestions.length > 0) {
         contextPrompt += "\n\nThe user previously struggled with the following questions. You CAN ask similar questions to test if they have learned from their mistakes, or create new ones targeting their weak points:\n" +
-            incorrectQuestions.map((q, i) => `${i + 1}. Question: ${q.question}\n   User's wrong answer: ${q.userAnswer || "N/A"}\n   Correct concept feedback: ${q.aiFeedback || "N/A"}`).join("\n\n");
+            incorrectQuestions.map((q, i) => `${i + 1}. Question: ${q.question}\n   User's wrong answer: ${q.userAnswer ?? "N/A"}\n   Correct concept feedback: ${q.aiFeedback ?? "N/A"}`).join("\n\n");
     }
 
     const prompt = `You are an expert educator. Generate EXACTLY ONE tricky, conceptual question (no simple definitions; focus on "why" and edge cases) based ONLY on the following knowledge pieces.

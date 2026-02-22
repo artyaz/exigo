@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
@@ -21,6 +22,16 @@ export async function POST(req: NextRequest) {
 
         if (!testId || !questionId || !message) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        }
+
+        const { userId, has } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const hasConversationalAI = has({ feature: "conversational_ai" });
+        if (!hasConversationalAI) {
+            return NextResponse.json({ error: "Upgrade to Pro to chat further about answers!" }, { status: 403 });
         }
 
         if (!process.env.GOOGLE_GEMINI_API_KEY) {
