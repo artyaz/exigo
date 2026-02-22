@@ -68,6 +68,11 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const [hoveredTestId, setHoveredTestId] = useState<string | null>(null);
     const [testMousePos, setTestMousePos] = useState({ x: 0, y: 0 });
 
+    // Sort & filter
+    const [sortBy, setSortBy] = useState<"date" | "status" | "questions" | "performance">("date");
+    const [filterStatus, setFilterStatus] = useState<"all" | "done" | "in_progress" | "new">("all");
+    const [filterTopic, setFilterTopic] = useState<string>("all");
+
     // Persist test type
     useEffect(() => {
         localStorage.setItem("exigo_test_type", testType);
@@ -181,7 +186,15 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         if (pieces.length === 0) return;
         setIsGenerating(true);
         try {
-            const testId = await createEmptyTest({ spaceId: sId, type: testType, questionCount: 5 });
+            const topicLabel = selectedTopic
+                ? (selectedTopic.title || selectedTopic.content.slice(0, 40))
+                : "Random";
+            const testId = await createEmptyTest({
+                spaceId: sId,
+                type: testType,
+                questionCount: 5,
+                topicTitle: topicLabel,
+            });
             // Store selected topic for test page to use
             if (selectedTopicId) {
                 sessionStorage.setItem(`exigo_test_topic_${testId}`, selectedTopicId);
@@ -377,134 +390,313 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 )}
                             </div>
 
-                            {/* Tests grid */}
+                            {/* Filter / Sort bar */}
+                            {spaceTests && spaceTests.length > 0 && (() => {
+                                // Enrich tests with computed data
+                                const enriched = spaceTests.map(test => {
+                                    const testQuestions = spaceQuestions?.filter(q => q.testId === test._id) ?? [];
+                                    const answeredCount = testQuestions.filter(q => q.userAnswer).length;
+                                    const target = test.config?.questionCount ?? 5;
+                                    const correctCount = testQuestions.filter(q => q.isCorrect === true).length;
+                                    const wrongCount = testQuestions.filter(q => q.isCorrect === false).length;
+                                    const status = answeredCount >= target ? "done" as const
+                                        : answeredCount > 0 ? "in_progress" as const
+                                            : "new" as const;
+                                    const performance = answeredCount > 0
+                                        ? correctCount / answeredCount
+                                        : -1;
+                                    return {
+                                        ...test, testQuestions, answeredCount, target, correctCount, wrongCount, status, performance,
+                                        topicLabel: test.topicTitle || "—",
+                                    };
+                                });
+
+                                // Unique topics for filter
+                                const uniqueTopics = [...new Set(enriched.map(t => t.topicLabel))].sort();
+
+                                // Apply filters
+                                let filtered = enriched;
+                                if (filterStatus !== "all") {
+                                    filtered = filtered.filter(t => t.status === filterStatus);
+                                }
+                                if (filterTopic !== "all") {
+                                    filtered = filtered.filter(t => t.topicLabel === filterTopic);
+                                }
+
+                                // Sort
+                                const sorted = [...filtered];
+                                if (sortBy === "date") sorted.sort((a, b) => b._creationTime - a._creationTime);
+                                else if (sortBy === "status") {
+                                    const order = { done: 0, in_progress: 1, new: 2 };
+                                    sorted.sort((a, b) => order[a.status] - order[b.status]);
+                                } else if (sortBy === "questions") {
+                                    sorted.sort((a, b) => b.testQuestions.length - a.testQuestions.length);
+                                } else if (sortBy === "performance") {
+                                    sorted.sort((a, b) => b.performance - a.performance);
+                                }
+
+                                // Grouping logic
+                                const now = new Date();
+                                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+                                const yesterdayStart = todayStart - 86400000;
+                                const weekStart = todayStart - 7 * 86400000;
+                                const twoWeeksStart = todayStart - 14 * 86400000;
+
+                                const getDateGroup = (ts: number) => {
+                                    if (ts >= todayStart) return "Today";
+                                    if (ts >= yesterdayStart) return "Yesterday";
+                                    if (ts >= weekStart) return "Past Week";
+                                    if (ts >= twoWeeksStart) return "Past 2 Weeks";
+                                    return "Older";
+                                };
+                                const getStatusGroup = (s: string) => {
+                                    if (s === "done") return "Completed";
+                                    if (s === "in_progress") return "In Progress";
+                                    return "Not Started";
+                                };
+                                const getPerformanceGroup = (p: number) => {
+                                    if (p < 0) return "Not Started";
+                                    if (p >= 0.7) return "Mostly Good";
+                                    if (p >= 0.4) return "Mixed";
+                                    return "Needs Work";
+                                };
+
+                                const getGroup = (t: typeof sorted[0]) => {
+                                    if (sortBy === "date") return getDateGroup(t._creationTime);
+                                    if (sortBy === "status") return getStatusGroup(t.status);
+                                    if (sortBy === "performance") return getPerformanceGroup(t.performance);
+                                    if (sortBy === "questions") return `${t.testQuestions.length} questions`;
+                                    return "";
+                                };
+
+                                // Build grouped entries
+                                const groups: { label: string; items: typeof sorted }[] = [];
+                                let currentGroup = "";
+                                for (const item of sorted) {
+                                    const g = getGroup(item);
+                                    if (g !== currentGroup) {
+                                        currentGroup = g;
+                                        groups.push({ label: g, items: [] });
+                                    }
+                                    groups[groups.length - 1].items.push(item);
+                                }
+
+                                return (
+                                    <>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {/* Sort dropdown */}
+                                            <div className="flex items-center gap-1 text-[10px] text-white/30 mr-1">
+                                                <span className="font-semibold uppercase tracking-widest">Sort</span>
+                                            </div>
+                                            {(["date", "status", "questions", "performance"] as const).map(s => (
+                                                <button
+                                                    key={s}
+                                                    onClick={() => setSortBy(s)}
+                                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium spring-interact transition-colors ${sortBy === s
+                                                        ? "bg-white/10 text-white border border-white/15"
+                                                        : "text-white/30 hover:text-white/60 hover:bg-white/5 border border-transparent"
+                                                        }`}
+                                                >
+                                                    {s === "date" ? "Date" : s === "status" ? "Status" : s === "questions" ? "Questions" : "Performance"}
+                                                </button>
+                                            ))}
+
+                                            <div className="w-px h-4 bg-white/10 mx-1" />
+
+                                            {/* Status filter */}
+                                            <div className="flex items-center gap-1 text-[10px] text-white/30 mr-1">
+                                                <span className="font-semibold uppercase tracking-widest">Filter</span>
+                                            </div>
+                                            <select
+                                                value={filterStatus}
+                                                onChange={e => setFilterStatus(e.target.value as typeof filterStatus)}
+                                                className="bg-transparent border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white/50 spring-interact hover:border-white/20 focus:outline-none cursor-pointer"
+                                            >
+                                                <option value="all">All Status</option>
+                                                <option value="done">Completed</option>
+                                                <option value="in_progress">In Progress</option>
+                                                <option value="new">Not Started</option>
+                                            </select>
+
+                                            {uniqueTopics.length > 1 && (
+                                                <select
+                                                    value={filterTopic}
+                                                    onChange={e => setFilterTopic(e.target.value)}
+                                                    className="bg-transparent border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white/50 spring-interact hover:border-white/20 focus:outline-none cursor-pointer max-w-[150px] truncate"
+                                                >
+                                                    <option value="all">All Topics</option>
+                                                    {uniqueTopics.map(t => (
+                                                        <option key={t} value={t}>{t}</option>
+                                                    ))}
+                                                </select>
+                                            )}
+
+                                            <span className="text-[10px] font-mono text-white/15 ml-auto">{filtered.length} test{filtered.length !== 1 ? 's' : ''}</span>
+                                        </div>
+
+                                        {/* Grouped grid */}
+                                        {filtered.length === 0 ? (
+                                            <div className="glass-card border-dashed rounded-2xl p-12 text-center flex flex-col items-center gap-3">
+                                                <FileText className="w-8 h-8 text-white/10" />
+                                                <p className="text-secondary text-sm">No tests match your filters.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-6">
+                                                {groups.map((group, gi) => (
+                                                    <div key={group.label}>
+                                                        {/* Group separator */}
+                                                        <div className="flex items-center gap-3 mb-4">
+                                                            <span className="text-[10px] font-semibold uppercase tracking-widest text-white/25 shrink-0">{group.label}</span>
+                                                            <div className="flex-1 h-px bg-white/[0.06]" />
+                                                            <span className="text-[10px] font-mono text-white/15 shrink-0">{group.items.length}</span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                            {group.items.map((test, index) => {
+                                                                const progress = Math.min(100, Math.max(0, test.target > 0 ? (test.answeredCount / test.target) * 100 : 0));
+                                                                const stackDepth = Math.min(Math.max(test.testQuestions.length, 1), 5);
+                                                                const isHovered = hoveredTestId === test._id;
+
+                                                                const statusInfo = test.status === "done"
+                                                                    ? { label: "Done", icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" }
+                                                                    : test.status === "in_progress"
+                                                                        ? { label: "In Progress", icon: Zap, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" }
+                                                                        : { label: "New", icon: Clock, color: "text-white/40", bg: "bg-white/5", border: "border-white/10" };
+                                                                const StatusIcon = statusInfo.icon;
+
+                                                                return (
+                                                                    <Link href={`/tests/${test._id}`} key={test._id}>
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, y: 12 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            transition={{ delay: (gi * 3 + index) * 0.02, type: "spring", stiffness: 400, damping: 25 }}
+                                                                            className="group relative cursor-pointer"
+                                                                            style={{
+                                                                                paddingTop: `${Math.max(0, (stackDepth - 1) * 4)}px`,
+                                                                                paddingLeft: `${Math.max(0, (stackDepth - 1) * 2)}px`,
+                                                                            }}
+                                                                            onMouseEnter={() => setHoveredTestId(test._id)}
+                                                                            onMouseLeave={() => setHoveredTestId(null)}
+                                                                        >
+                                                                            {/* Stack background cards */}
+                                                                            {Array.from({ length: stackDepth }).map((_, i) => {
+                                                                                if (i === stackDepth - 1) return null;
+                                                                                const depth = stackDepth - 1 - i;
+                                                                                const h = hashCode(test._id + i);
+                                                                                const rot = ((h % 5) - 2) * 0.6;
+                                                                                return (
+                                                                                    <motion.div
+                                                                                        key={`bg-${i}`}
+                                                                                        className="absolute inset-0 rounded-xl border border-white/[0.05] bg-neutral-950/50"
+                                                                                        animate={{
+                                                                                            rotate: isHovered ? rot * 1.5 : rot,
+                                                                                            x: isHovered ? -depth * 3 : -depth * 2,
+                                                                                            y: isHovered ? -depth * 5 : -depth * 4,
+                                                                                        }}
+                                                                                        transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                                                                                        style={{ zIndex: i }}
+                                                                                    />
+                                                                                );
+                                                                            })}
+
+                                                                            {/* Top card */}
+                                                                            <motion.div
+                                                                                className="relative glass-card rounded-xl overflow-hidden"
+                                                                                animate={{ scale: isHovered ? 1.02 : 1, y: isHovered ? -3 : 0 }}
+                                                                                whileTap={{ scale: 0.98 }}
+                                                                                transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                                                                                style={{ zIndex: stackDepth }}
+                                                                            >
+                                                                                <div
+                                                                                    className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                                                    style={{
+                                                                                        background: isHovered
+                                                                                            ? `radial-gradient(250px circle at ${testMousePos.x}% ${testMousePos.y}%, rgba(255,255,255,0.04), transparent 60%)`
+                                                                                            : 'none'
+                                                                                    }}
+                                                                                />
+                                                                                <div
+                                                                                    className="relative z-10 p-4 flex flex-col gap-2.5"
+                                                                                    onMouseMove={(e) => {
+                                                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                                                        setTestMousePos({
+                                                                                            x: ((e.clientX - rect.left) / rect.width) * 100,
+                                                                                            y: ((e.clientY - rect.top) / rect.height) * 100,
+                                                                                        });
+                                                                                    }}
+                                                                                >
+                                                                                    {/* Status + type row */}
+                                                                                    <div className="flex items-center justify-between">
+                                                                                        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold uppercase tracking-wider ${statusInfo.color} ${statusInfo.bg} border ${statusInfo.border}`}>
+                                                                                            <StatusIcon className="w-2.5 h-2.5" />
+                                                                                            {statusInfo.label}
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-1.5 text-[9px] font-mono text-white/15">
+                                                                                            {test.config?.type === "select" ? <ListChecks className="w-2.5 h-2.5" /> : <PenLine className="w-2.5 h-2.5" />}
+                                                                                            {test.config?.type ?? "write"}
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* Topic + number */}
+                                                                                    <div>
+                                                                                        <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold truncate">{test.topicLabel}</p>
+                                                                                        <div className="flex items-center justify-between mt-0.5">
+                                                                                            <span className="text-sm font-medium text-primary"># {spaceTests.length - spaceTests.indexOf(test)}</span>
+                                                                                            <span className="text-[9px] font-mono text-white/15">
+                                                                                                {new Date(test._creationTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* Progress */}
+                                                                                    <div className="space-y-1">
+                                                                                        <div className="flex justify-between text-[9px] font-mono text-white/25">
+                                                                                            <span>{test.answeredCount}/{test.target}</span>
+                                                                                            <span>
+                                                                                                {test.correctCount > 0 && <span className="text-emerald-500/60">{test.correctCount}✓ </span>}
+                                                                                                {test.wrongCount > 0 && <span className="text-red-400/60">{test.wrongCount}✗ </span>}
+                                                                                                {test.testQuestions.length} q
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <div className="w-full h-0.5 rounded-full bg-white/5 overflow-hidden">
+                                                                                            <motion.div
+                                                                                                className="h-full rounded-full bg-white/20"
+                                                                                                initial={{ width: 0 }}
+                                                                                                animate={{ width: `${progress}%` }}
+                                                                                                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    {/* Footer */}
+                                                                                    <div className="flex items-center justify-end gap-1 text-white/20 group-hover:text-white/60 transition-colors">
+                                                                                        <span className="text-[9px] font-semibold uppercase tracking-widest">Open</span>
+                                                                                        <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        </motion.div>
+                                                                    </Link>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
+
+                            {/* Tests - loading or empty state */}
                             {!spaceTests ? (
                                 <div className="flex justify-center p-12">
                                     <Loader2 className="w-6 h-6 animate-spin text-white/20" />
                                 </div>
-                            ) : spaceTests.length === 0 ? (
+                            ) : spaceTests.length === 0 && (
                                 <div className="glass-card border-dashed rounded-2xl p-16 text-center flex flex-col items-center gap-4">
                                     <FileText className="w-10 h-10 text-white/10" />
                                     <p className="text-secondary text-sm">No tests yet. Hit generate to create your first one.</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {spaceTests.slice().reverse().map((test, index) => {
-                                        const testQuestions = spaceQuestions?.filter(q => q.testId === test._id) ?? [];
-                                        const answeredCount = testQuestions.filter(q => q.userAnswer).length;
-                                        const target = test.config?.questionCount ?? 5;
-                                        const progress = Math.min(100, Math.max(0, target > 0 ? (answeredCount / target) * 100 : 0));
-                                        const stackDepth = Math.min(Math.max(testQuestions.length, 1), 5);
-                                        const isHovered = hoveredTestId === test._id;
-
-                                        const statusInfo = answeredCount >= target
-                                            ? { label: "Done", icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" }
-                                            : answeredCount > 0
-                                                ? { label: "In Progress", icon: Zap, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" }
-                                                : { label: "New", icon: Clock, color: "text-white/40", bg: "bg-white/5", border: "border-white/10" };
-                                        const StatusIcon = statusInfo.icon;
-
-                                        return (
-                                            <Link href={`/tests/${test._id}`} key={test._id}>
-                                                <motion.div
-                                                    initial={{ opacity: 0, y: 12 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    transition={{ delay: index * 0.03, type: "spring", stiffness: 400, damping: 25 }}
-                                                    className="group relative cursor-pointer"
-                                                    style={{
-                                                        paddingTop: `${Math.max(0, (stackDepth - 1) * 4)}px`,
-                                                        paddingLeft: `${Math.max(0, (stackDepth - 1) * 2)}px`,
-                                                    }}
-                                                    onMouseEnter={() => setHoveredTestId(test._id)}
-                                                    onMouseLeave={() => setHoveredTestId(null)}
-                                                >
-                                                    {/* Stack background cards */}
-                                                    {Array.from({ length: stackDepth }).map((_, i) => {
-                                                        if (i === stackDepth - 1) return null;
-                                                        const depth = stackDepth - 1 - i;
-                                                        const h = hashCode(test._id + i);
-                                                        const rot = ((h % 5) - 2) * 0.6;
-                                                        return (
-                                                            <motion.div
-                                                                key={`bg-${i}`}
-                                                                className="absolute inset-0 rounded-xl border border-white/[0.05] bg-neutral-950/50"
-                                                                animate={{
-                                                                    rotate: isHovered ? rot * 1.5 : rot,
-                                                                    x: isHovered ? -depth * 3 : -depth * 2,
-                                                                    y: isHovered ? -depth * 5 : -depth * 4,
-                                                                }}
-                                                                transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                                                                style={{ zIndex: i }}
-                                                            />
-                                                        );
-                                                    })}
-
-                                                    {/* Top card */}
-                                                    <motion.div
-                                                        className="relative glass-card rounded-xl overflow-hidden"
-                                                        animate={{ scale: isHovered ? 1.02 : 1, y: isHovered ? -3 : 0 }}
-                                                        whileTap={{ scale: 0.98 }}
-                                                        transition={{ type: "spring", stiffness: 500, damping: 28 }}
-                                                        style={{ zIndex: stackDepth }}
-                                                    >
-                                                        <div
-                                                            className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                                                            style={{
-                                                                background: isHovered
-                                                                    ? `radial-gradient(250px circle at ${testMousePos.x}% ${testMousePos.y}%, rgba(255,255,255,0.04), transparent 60%)`
-                                                                    : 'none'
-                                                            }}
-                                                        />
-                                                        <div
-                                                            className="relative z-10 p-4 flex flex-col gap-3"
-                                                            onMouseMove={(e) => {
-                                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                                setTestMousePos({
-                                                                    x: ((e.clientX - rect.left) / rect.width) * 100,
-                                                                    y: ((e.clientY - rect.top) / rect.height) * 100,
-                                                                });
-                                                            }}
-                                                        >
-                                                            <div className="flex items-center justify-between">
-                                                                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold uppercase tracking-wider ${statusInfo.color} ${statusInfo.bg} border ${statusInfo.border}`}>
-                                                                    <StatusIcon className="w-2.5 h-2.5" />
-                                                                    {statusInfo.label}
-                                                                </div>
-                                                                <div className="flex items-center gap-1.5 text-[9px] font-mono text-white/15">
-                                                                    {test.config?.type === "select" ? <ListChecks className="w-2.5 h-2.5" /> : <PenLine className="w-2.5 h-2.5" />}
-                                                                    {test.config?.type ?? "write"}
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center justify-between">
-                                                                <span className="text-sm font-medium text-primary"># {spaceTests.length - index}</span>
-                                                                <span className="text-[9px] font-mono text-white/15">
-                                                                    {new Date(test._creationTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                                                </span>
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                <div className="flex justify-between text-[9px] font-mono text-white/25">
-                                                                    <span>{answeredCount}/{target}</span>
-                                                                    <span>{testQuestions.length} q</span>
-                                                                </div>
-                                                                <div className="w-full h-0.5 rounded-full bg-white/5 overflow-hidden">
-                                                                    <motion.div
-                                                                        className="h-full rounded-full bg-white/20"
-                                                                        initial={{ width: 0 }}
-                                                                        animate={{ width: `${progress}%` }}
-                                                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center justify-end gap-1 text-white/20 group-hover:text-white/60 transition-colors">
-                                                                <span className="text-[9px] font-semibold uppercase tracking-widest">Open</span>
-                                                                <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                                                            </div>
-                                                        </div>
-                                                    </motion.div>
-                                                </motion.div>
-                                            </Link>
-                                        );
-                                    })}
                                 </div>
                             )}
                         </motion.div>

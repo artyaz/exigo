@@ -10,7 +10,7 @@ import { mutation, query } from "./_generated/server";
 // Status "active": the test is immediately usable — questions are generated
 // asynchronously one-by-one via the /api/tests/generate streaming endpoint.
 export const createEmptyTest = mutation({
-    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number() },
+    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), topicTitle: v.optional(v.string()) },
     handler: async (ctx, args) => {
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
@@ -24,6 +24,7 @@ export const createEmptyTest = mutation({
 
         return await ctx.db.insert("tests", {
             spaceId: args.spaceId,
+            topicTitle: args.topicTitle,
             status: "active",
             config: {
                 type: args.type,

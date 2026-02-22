@@ -14,6 +14,7 @@ export default defineSchema({
     }).index("by_space", ["spaceId"]),
     tests: defineTable({
         spaceId: v.id("spaces"),
+        topicTitle: v.optional(v.string()),
         status: v.union(
             v.literal("draft"),
             v.literal("generating"),
