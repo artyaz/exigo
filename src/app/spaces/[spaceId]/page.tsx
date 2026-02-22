@@ -9,17 +9,12 @@ import { useState, use, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ArrowLeft, Plus, Upload, BrainCircuit, Loader2, BookOpen,
-    CheckCircle2, Clock, Zap, ChevronRight, ChevronDown, FileText, ListChecks, PenLine
+    CheckCircle2, Clock, Zap, ChevronRight, ChevronDown, FileText, ListChecks, PenLine,
+    X, Shuffle, Target
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-/**
- * Computes a 32-bit integer hash for the given string.
- *
- * @param str - Input string to hash.
- * @returns A 32-bit signed integer hash derived from `str`.
- */
 function hashCode(str: string) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -29,14 +24,6 @@ function hashCode(str: string) {
     return hash;
 }
 
-/**
- * Renders the detail view for a space, providing tabs to manage and generate tests and to add or import knowledge pieces.
- *
- * Persists the selected test type to localStorage and navigates to a newly created test when generation completes.
- *
- * @param params - A Promise that resolves to route parameters; must include `spaceId` identifying the space to display.
- * @returns The React element for the Space detail page.
- */
 export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId: string }> }) {
     const router = useRouter();
     const { spaceId } = use(params);
@@ -45,6 +32,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const space = useQuery(api.spaces.get, { spaceId: sId });
     const pieces = useQuery(api.knowledgePieces.getForSpace, { spaceId: sId });
     const addPiece = useMutation(api.knowledgePieces.add);
+    const updateTitle = useMutation(api.knowledgePieces.updateTitle);
     const bulkImport = useMutation(api.knowledgePieces.bulkImport);
     const createEmptyTest = useMutation(api.tests.createEmptyTest);
     const spaceTests = useQuery(api.tests.getForSpace, { spaceId: sId });
@@ -56,6 +44,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     // Knowledge sub-mode
     const [knowledgeMode, setKnowledgeMode] = useState<"add" | "bulk">("add");
     const [content, setContent] = useState("");
+    const [title, setTitle] = useState("");
     const [source, setSource] = useState("");
     const [bulkContent, setBulkContent] = useState("");
     const [delimiter, setDelimiter] = useState("\\n\\n");
@@ -71,6 +60,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     });
     const [isGenerating, setIsGenerating] = useState(false);
     const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+    const [showTopicPicker, setShowTopicPicker] = useState(false);
+    const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Test card hover
@@ -116,8 +107,32 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         e.preventDefault();
         if (!content.trim()) return;
         setIsAdding(true);
-        await addPiece({ spaceId: sId, content, source: source.trim() || undefined });
+
+        const pieceId = await addPiece({
+            spaceId: sId,
+            title: title.trim() || undefined,
+            content,
+            source: source.trim() || undefined,
+        });
+
+        // Auto-generate title if not provided
+        if (!title.trim()) {
+            fetch("/api/knowledge/title", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content: content.slice(0, 2000) }),
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.title && data.title !== "Untitled") {
+                        updateTitle({ id: pieceId, title: data.title });
+                    }
+                })
+                .catch(() => { /* silent */ });
+        }
+
         setContent("");
+        setTitle("");
         setSource("");
         setIsAdding(false);
     };
@@ -134,7 +149,26 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 content: p.trim(),
                 source: source.trim() || undefined
             }));
-            await bulkImport({ spaceId: sId, pieces: structuredPieces });
+            const ids = await bulkImport({ spaceId: sId, pieces: structuredPieces });
+
+            // Auto-generate titles for each piece
+            parts.forEach((part, i) => {
+                if (ids[i]) {
+                    fetch("/api/knowledge/title", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content: part.trim().slice(0, 2000) }),
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.title && data.title !== "Untitled") {
+                                updateTitle({ id: ids[i], title: data.title });
+                            }
+                        })
+                        .catch(() => { });
+                }
+            });
+
             setBulkContent("");
         } catch (err) {
             console.error("Bulk import failed", err);
@@ -148,6 +182,10 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         setIsGenerating(true);
         try {
             const testId = await createEmptyTest({ spaceId: sId, type: testType, questionCount: 5 });
+            // Store selected topic for test page to use
+            if (selectedTopicId) {
+                sessionStorage.setItem(`exigo_test_topic_${testId}`, selectedTopicId);
+            }
             router.push(`/tests/${testId}`);
         } catch (error) {
             console.error("Failed to create test", error);
@@ -160,6 +198,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         setShowTypeDropdown(false);
     };
 
+    const selectedTopic = selectedTopicId ? pieces.find(p => String(p._id) === selectedTopicId) : null;
     const TypeIcon = testType === "select" ? ListChecks : PenLine;
 
     return (
@@ -251,11 +290,15 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                                 exit={{ opacity: 0, y: -4, scale: 0.97 }}
                                                 transition={{ duration: 0.12 }}
-                                                className="absolute top-full left-0 mt-2 w-56 glass-card rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden"
+                                                className="absolute top-full left-0 mt-2 w-64 glass-card rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden"
                                             >
+                                                {/* Test type options */}
+                                                <div className="px-3 pt-2 pb-1">
+                                                    <p className="text-[9px] text-white/25 uppercase tracking-widest font-semibold px-1">Question Type</p>
+                                                </div>
                                                 <button
                                                     onClick={() => selectType("select")}
-                                                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left spring-interact transition-colors ${testType === "select" ? "bg-white/5 text-primary" : "text-secondary hover:bg-white/5 hover:text-primary"
+                                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left spring-interact transition-colors ${testType === "select" ? "bg-white/5 text-primary" : "text-secondary hover:bg-white/5 hover:text-primary"
                                                         }`}
                                                 >
                                                     <ListChecks className="w-4 h-4 shrink-0" />
@@ -265,10 +308,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                     </div>
                                                     {testType === "select" && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-auto" />}
                                                 </button>
-                                                <div className="border-t border-white/5" />
                                                 <button
                                                     onClick={() => selectType("write")}
-                                                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left spring-interact transition-colors ${testType === "write" ? "bg-white/5 text-primary" : "text-secondary hover:bg-white/5 hover:text-primary"
+                                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left spring-interact transition-colors ${testType === "write" ? "bg-white/5 text-primary" : "text-secondary hover:bg-white/5 hover:text-primary"
                                                         }`}
                                                 >
                                                     <PenLine className="w-4 h-4 shrink-0" />
@@ -278,10 +320,57 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                     </div>
                                                     {testType === "write" && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-auto" />}
                                                 </button>
+
+                                                {/* Topic picker */}
+                                                <div className="border-t border-white/5 my-1" />
+                                                <div className="px-3 pt-1 pb-1">
+                                                    <p className="text-[9px] text-white/25 uppercase tracking-widest font-semibold px-1">Topic</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => { setSelectedTopicId(null); }}
+                                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left spring-interact transition-colors ${!selectedTopicId ? "bg-white/5 text-primary" : "text-secondary hover:bg-white/5 hover:text-primary"}`}
+                                                >
+                                                    <Shuffle className="w-4 h-4 shrink-0" />
+                                                    <div>
+                                                        <p className="font-medium">Random Topic</p>
+                                                        <p className="text-[11px] text-white/30 mt-0.5">Pick a random knowledge piece</p>
+                                                    </div>
+                                                    {!selectedTopicId && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-auto" />}
+                                                </button>
+                                                <button
+                                                    onClick={() => { setShowTopicPicker(true); setShowTypeDropdown(false); }}
+                                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left spring-interact transition-colors ${selectedTopicId ? "bg-white/5 text-primary" : "text-secondary hover:bg-white/5 hover:text-primary"}`}
+                                                >
+                                                    <Target className="w-4 h-4 shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium">Pick Topic</p>
+                                                        {selectedTopic ? (
+                                                            <p className="text-[11px] text-white/50 mt-0.5 truncate">{selectedTopic.title || selectedTopic.content.slice(0, 40) + "..."}</p>
+                                                        ) : (
+                                                            <p className="text-[11px] text-white/30 mt-0.5">Choose a specific knowledge piece</p>
+                                                        )}
+                                                    </div>
+                                                    {selectedTopicId && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-auto shrink-0" />}
+                                                </button>
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
                                 </div>
+
+                                {/* Selected topic indicator */}
+                                {selectedTopic && (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -8 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        className="flex items-center gap-2 text-xs text-white/40"
+                                    >
+                                        <Target className="w-3 h-3" />
+                                        <span className="truncate max-w-[200px]">{selectedTopic.title || selectedTopic.content.slice(0, 30) + "..."}</span>
+                                        <button onClick={() => setSelectedTopicId(null)} className="p-0.5 rounded hover:bg-white/10 spring-interact">
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </motion.div>
+                                )}
 
                                 {pieces.length === 0 && (
                                     <p className="text-xs text-red-500/80">Add knowledge first</p>
@@ -455,6 +544,13 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                             onSubmit={handleAdd}
                                             className="space-y-4"
                                         >
+                                            <input
+                                                type="text"
+                                                placeholder="Title (auto-generated if empty)"
+                                                className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
+                                                value={title}
+                                                onChange={e => setTitle(e.target.value)}
+                                            />
                                             <textarea
                                                 placeholder="Type or paste a piece of knowledge here..."
                                                 className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl p-4 focus-ring spring-interact min-h-[150px] resize-y text-sm placeholder:text-neutral-600"
@@ -539,6 +635,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                     <div className="grid gap-3">
                                         {pieces.slice().reverse().map((piece) => (
                                             <div key={piece._id} className="glass-card rounded-xl p-4 hover:bg-white/5 transition-colors">
+                                                {piece.title && (
+                                                    <p className="text-xs text-white/50 font-semibold uppercase tracking-widest mb-1.5">{piece.title}</p>
+                                                )}
                                                 <p className="text-secondary text-sm leading-relaxed whitespace-pre-wrap line-clamp-4">{piece.content}</p>
                                                 {piece.source && <p className="text-xs text-tertiary mt-2 font-mono truncate">Src: <span className="text-secondary">{piece.source}</span></p>}
                                             </div>
@@ -550,6 +649,100 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                     )}
                 </AnimatePresence>
             </div>
+
+            {/* ─── Topic Picker Modal ─── */}
+            <AnimatePresence>
+                {showTopicPicker && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                        onClick={() => setShowTopicPicker(false)}
+                    >
+                        {/* Backdrop */}
+                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+                        {/* Modal */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative w-full max-w-lg max-h-[70vh] glass-card rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden"
+                        >
+                            {/* Modal header */}
+                            <div className="shrink-0 px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <Target className="w-4 h-4 text-white/40" />
+                                    <h3 className="text-sm font-semibold text-primary tracking-tight">Pick Topic</h3>
+                                    <span className="text-[10px] font-mono text-tertiary bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">{pieces.length}</span>
+                                </div>
+                                <button
+                                    onClick={() => setShowTopicPicker(false)}
+                                    className="p-1.5 rounded-lg hover:bg-white/10 spring-interact text-white/40 hover:text-white"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Topic list */}
+                            <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
+                                <div className="grid gap-2">
+                                    {pieces.map((piece) => {
+                                        const isSelected = selectedTopicId === String(piece._id);
+                                        return (
+                                            <motion.button
+                                                key={piece._id}
+                                                whileTap={{ scale: 0.98 }}
+                                                onClick={() => {
+                                                    setSelectedTopicId(String(piece._id));
+                                                    setShowTopicPicker(false);
+                                                }}
+                                                className={`group w-full text-left p-4 rounded-xl border transition-colors spring-interact ${isSelected
+                                                    ? 'border-white/20 bg-white/[0.06]'
+                                                    : 'border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10'
+                                                    }`}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        {piece.title && (
+                                                            <p className="text-xs font-semibold text-white/70 uppercase tracking-widest mb-1">{piece.title}</p>
+                                                        )}
+                                                        <p className="text-sm text-white/50 line-clamp-2 leading-relaxed">{piece.content}</p>
+                                                        {piece.source && (
+                                                            <p className="text-[10px] text-white/20 font-mono mt-1.5 truncate">{piece.source}</p>
+                                                        )}
+                                                    </div>
+                                                    {isSelected && (
+                                                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                                    )}
+                                                </div>
+                                            </motion.button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Modal footer */}
+                            <div className="shrink-0 px-6 py-3 border-t border-white/[0.06] flex items-center justify-between">
+                                <button
+                                    onClick={() => { setSelectedTopicId(null); setShowTopicPicker(false); }}
+                                    className="text-xs text-white/30 hover:text-white/60 spring-interact"
+                                >
+                                    Clear selection
+                                </button>
+                                <div className="flex items-center gap-2 text-white/20">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono">Esc</kbd>
+                                    <span className="text-[10px]">Close</span>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

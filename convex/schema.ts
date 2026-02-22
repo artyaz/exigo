@@ -8,6 +8,7 @@ export default defineSchema({
     }),
     knowledgePieces: defineTable({
         spaceId: v.id("spaces"),
+        title: v.optional(v.string()),
         content: v.string(),
         source: v.optional(v.string()), // Might be file name or url
     }).index("by_space", ["spaceId"]),

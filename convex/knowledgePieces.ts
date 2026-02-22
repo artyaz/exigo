@@ -14,15 +14,27 @@ export const getForSpace = query({
 export const add = mutation({
     args: {
         spaceId: v.id("spaces"),
+        title: v.optional(v.string()),
         content: v.string(),
-        source: v.optional(v.string())
+        source: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         return await ctx.db.insert("knowledgePieces", {
             spaceId: args.spaceId,
+            title: args.title,
             content: args.content,
             source: args.source,
         });
+    },
+});
+
+export const updateTitle = mutation({
+    args: {
+        id: v.id("knowledgePieces"),
+        title: v.string(),
+    },
+    handler: async (ctx, args) => {
+        await ctx.db.patch(args.id, { title: args.title });
     },
 });
 
@@ -31,6 +43,7 @@ export const bulkImport = mutation({
         spaceId: v.id("spaces"),
         pieces: v.array(
             v.object({
+                title: v.optional(v.string()),
                 content: v.string(),
                 source: v.optional(v.string()),
             })
@@ -42,6 +55,7 @@ export const bulkImport = mutation({
             if (piece.content.trim() === "") continue;
             const id = await ctx.db.insert("knowledgePieces", {
                 spaceId: args.spaceId,
+                title: piece.title,
                 content: piece.content,
                 source: piece.source,
             });

@@ -140,6 +140,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         spaceId: test.spaceId,
                         testType: test.config.type,
                         testId: tId,
+                        knowledgePieceId: sessionStorage.getItem(`exigo_test_topic_${tId}`) || undefined,
                     }),
                     signal: abortController.signal,
                 });
@@ -351,28 +352,49 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 {/* Progress bar */}
                 <div className="flex items-center gap-4">
                     <div className="hidden md:flex items-center gap-1">
-                        {Array.from({ length: targetQuestionCount }).map((_, i) => (
-                            <motion.div
-                                key={i}
-                                className="h-1 rounded-full"
-                                animate={{
-                                    width: i === currentIndex ? 20 : 8,
-                                    backgroundColor:
-                                        i < questions.length && (questions[i]?.userAnswer || answers[questions[i]?._id])
-                                            ? questions[i]?.isCorrect === true
-                                                ? "rgba(74, 222, 128, 0.7)"
-                                                : questions[i]?.isCorrect === false
-                                                    ? "rgba(248, 113, 113, 0.7)"
-                                                    : "rgba(255, 255, 255, 0.4)"
-                                            : i === currentIndex
-                                                ? "rgba(255, 255, 255, 0.6)"
-                                                : i < questions.length
-                                                    ? "rgba(255, 255, 255, 0.15)"
-                                                    : "rgba(255, 255, 255, 0.06)",
-                                }}
-                                transition={SPRING_SNAPPY}
-                            />
-                        ))}
+                        {Array.from({ length: targetQuestionCount }).map((_, i) => {
+                            const isCurrentlyGenerating = isGeneratingNext && i === questions.length;
+
+                            if (isCurrentlyGenerating) {
+                                return (
+                                    <motion.div
+                                        key={`${i}-gen`}
+                                        initial={{ opacity: 0, scale: 0 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="w-3 h-3 flex items-center justify-center"
+                                    >
+                                        <motion.div
+                                            className="w-2 h-2 rounded-full border border-white/30 border-t-white/70"
+                                            animate={{ rotate: 360 }}
+                                            transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
+                                        />
+                                    </motion.div>
+                                );
+                            }
+
+                            return (
+                                <motion.div
+                                    key={`${i}-dot`}
+                                    className="h-1 rounded-full"
+                                    animate={{
+                                        width: i === currentIndex ? 20 : 8,
+                                        backgroundColor:
+                                            i < questions.length && (questions[i]?.userAnswer || answers[questions[i]?._id])
+                                                ? questions[i]?.isCorrect === true
+                                                    ? "rgba(74, 222, 128, 0.7)"
+                                                    : questions[i]?.isCorrect === false
+                                                        ? "rgba(248, 113, 113, 0.7)"
+                                                        : "rgba(255, 255, 255, 0.4)"
+                                                : i === currentIndex
+                                                    ? "rgba(255, 255, 255, 0.6)"
+                                                    : i < questions.length
+                                                        ? "rgba(255, 255, 255, 0.15)"
+                                                        : "rgba(255, 255, 255, 0.06)",
+                                    }}
+                                    transition={SPRING_SNAPPY}
+                                />
+                            );
+                        })}
                     </div>
                     <div className="flex items-center gap-2 text-white/30">
                         <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono">Esc</kbd>

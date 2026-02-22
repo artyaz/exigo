@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
     const spaceId = rawBody.spaceId as string;
     const testType = rawBody.testType as string;
     const testId = rawBody.testId as string | undefined;
+    const knowledgePieceId = rawBody.knowledgePieceId as string | undefined;
 
     if (!spaceId || !testType || !process.env.GOOGLE_GEMINI_API_KEY) {
         return new Response(JSON.stringify({ error: "Missing params or API key" }), { status: 400 });
@@ -65,6 +66,20 @@ export async function POST(req: NextRequest) {
 
     if (!pieces || pieces.length === 0) {
         return new Response(JSON.stringify({ error: "No knowledge pieces" }), { status: 400 });
+    }
+
+    // Select knowledge piece(s): specific one, or random
+    type KPiece = (typeof pieces)[number];
+    let selectedPieces: KPiece[];
+    if (knowledgePieceId) {
+        const target = pieces.find(p => String(p._id) === knowledgePieceId);
+        if (!target) {
+            return new Response(JSON.stringify({ error: "Knowledge piece not found" }), { status: 404 });
+        }
+        selectedPieces = [target as KPiece];
+    } else {
+        // Random selection: pick one random piece
+        selectedPieces = [pieces[Math.floor(Math.random() * pieces.length)]!];
     }
 
     let existingQuestions: { question: string }[] = [];
@@ -92,7 +107,7 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    const knowledgeText = pieces.map(p => p.content).join("\n\n---\n\n");
+    const knowledgeText = selectedPieces.map(p => p.content).join("\n\n---\n\n");
     let contextPrompt = "";
     if (existingQuestions.length > 0) {
         contextPrompt = "\n\nCRITICAL: Do NOT ask questions similar to the following previously generated questions:\n" +
