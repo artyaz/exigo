@@ -252,9 +252,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             setIsEvaluating(prev => ({ ...prev, [questionId]: false }));
         });
 
-        // Auto-advance after brief delay
+        // Auto-advance after brief delay — capture index to prevent stale closure
+        const scheduledIndex = currentIndex;
         setTimeout(() => {
-            if (questions && currentIndex < questions.length - 1) {
+            if (questions && scheduledIndex === currentIndex && scheduledIndex < questions.length - 1) {
                 setDirection(1);
                 setCurrentIndex(prev => prev + 1);
             }
@@ -321,6 +322,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 <div className="flex items-center gap-4">
                     <Link
                         href={`/spaces/${test.spaceId}`}
+                        aria-label="Back to space"
                         className="p-2 rounded-lg glass-card hover:bg-white/5 spring-interact text-white/50 hover:text-white"
                     >
                         <ArrowLeft className="w-4 h-4" />
@@ -523,7 +525,9 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                                     </div>
                                                 ) : (
                                                     <div className="flex-1 flex flex-col gap-3">
-                                                        <textarea id={`answer-${q._id}`} placeholder="Type your answer..." className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]" />
+                                                        <textarea id={`answer-${q._id}`} placeholder="Type your answer..." className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]"
+                                                            onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); const el = e.currentTarget; if (el.value.trim()) handleAnswer(q._id, el.value); } }}
+                                                        />
                                                         <button onClick={() => { const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement; if (el?.value.trim()) handleAnswer(q._id, el.value); }} className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2">
                                                             Submit <kbd className="hidden md:inline-flex px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-white/40 border border-white/[0.06]">⌘↵</kbd>
                                                         </button>
@@ -534,13 +538,13 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     </div>
 
                                     <div className="shrink-0 px-8 py-3 border-t border-white/[0.04] flex items-center justify-between">
-                                        <button onClick={() => { setDirection(-1); setCurrentIndex(Math.max(0, currentIndex - 1)); }} disabled={currentIndex === 0} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
+                                        <button aria-label="Previous question" onClick={() => { setDirection(-1); setCurrentIndex(Math.max(0, currentIndex - 1)); }} disabled={currentIndex === 0} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
                                             <ChevronLeft className="w-3.5 h-3.5" /><span className="hidden md:inline">Prev</span><kbd className="hidden md:inline px-1 py-0.5 bg-white/5 rounded text-[9px] font-mono text-white/20 border border-white/[0.06]">←</kbd>
                                         </button>
                                         <div className="flex items-center gap-1">
                                             {questions.map((_, i) => (<button key={i} onClick={() => { setDirection(i > currentIndex ? 1 : -1); setCurrentIndex(i); }} className={`w-1.5 h-1.5 rounded-full transition-all spring-interact ${i === currentIndex ? 'bg-white/80 w-3' : i < currentIndex ? 'bg-white/25' : 'bg-white/10'}`} />))}
                                         </div>
-                                        <button onClick={() => { setDirection(1); setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1)); }} disabled={currentIndex >= questions.length - 1} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
+                                        <button aria-label="Next question" onClick={() => { setDirection(1); setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1)); }} disabled={currentIndex >= questions.length - 1} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
                                             <kbd className="hidden md:inline px-1 py-0.5 bg-white/5 rounded text-[9px] font-mono text-white/20 border border-white/[0.06]">→</kbd><span className="hidden md:inline">Next</span><ChevronRight className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
