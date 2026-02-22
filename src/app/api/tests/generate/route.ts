@@ -107,11 +107,23 @@ export async function POST(req: NextRequest) {
         });
     }
 
+    const firstPiece = selectedPieces[0]!;
+    const topicLabel = firstPiece.title || firstPiece.content.slice(0, 40);
+    const incorrectQuestions = await convex.query(api.questions.getIncorrectForTopic, {
+        spaceId: spaceId as Id<"spaces">,
+        topicTitle: topicLabel
+    });
+
     const knowledgeText = selectedPieces.map(p => p.content).join("\n\n---\n\n");
     let contextPrompt = "";
     if (existingQuestions.length > 0) {
-        contextPrompt = "\n\nCRITICAL: Do NOT ask questions similar to the following previously generated questions:\n" +
+        contextPrompt += "\n\nCRITICAL: Do NOT ask questions similar to the following previously generated questions in this test:\n" +
             existingQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n");
+    }
+
+    if (incorrectQuestions.length > 0) {
+        contextPrompt += "\n\nThe user previously struggled with the following questions. You CAN ask similar questions to test if they have learned from their mistakes, or create new ones targeting their weak points:\n" +
+            incorrectQuestions.map((q, i) => `${i + 1}. Question: ${q.question}\n   User's wrong answer: ${q.userAnswer || "N/A"}\n   Correct concept feedback: ${q.aiFeedback || "N/A"}`).join("\n\n");
     }
 
     const prompt = `You are an expert educator. Generate EXACTLY ONE tricky, conceptual question (no simple definitions; focus on "why" and edge cases) based ONLY on the following knowledge pieces.

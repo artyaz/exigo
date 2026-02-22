@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     ArrowLeft, Plus, Upload, BrainCircuit, Loader2, BookOpen,
     CheckCircle2, Clock, Zap, ChevronRight, ChevronDown, FileText, ListChecks, PenLine,
-    X, Shuffle, Target
+    X, Shuffle, Target, ArrowDown, ArrowUp
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -70,6 +70,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
     // Sort & filter
     const [sortBy, setSortBy] = useState<"date" | "status" | "questions" | "performance">("date");
+    const [sortDesc, setSortDesc] = useState(true);
     const [filterStatus, setFilterStatus] = useState<"all" | "done" | "in_progress" | "new">("all");
     const [filterTopic, setFilterTopic] = useState<string>("all");
 
@@ -434,6 +435,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 } else if (sortBy === "performance") {
                                     sorted.sort((a, b) => b.performance - a.performance);
                                 }
+                                if (!sortDesc) {
+                                    sorted.reverse();
+                                }
 
                                 // Grouping logic
                                 const now = new Date();
@@ -491,13 +495,23 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                             {(["date", "status", "questions", "performance"] as const).map(s => (
                                                 <button
                                                     key={s}
-                                                    onClick={() => setSortBy(s)}
-                                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium spring-interact transition-colors ${sortBy === s
+                                                    onClick={() => {
+                                                        if (sortBy === s) {
+                                                            setSortDesc(!sortDesc);
+                                                        } else {
+                                                            setSortBy(s);
+                                                            setSortDesc(true);
+                                                        }
+                                                    }}
+                                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium spring-interact transition-colors flex items-center gap-1 ${sortBy === s
                                                         ? "bg-white/10 text-white border border-white/15"
                                                         : "text-white/30 hover:text-white/60 hover:bg-white/5 border border-transparent"
                                                         }`}
                                                 >
                                                     {s === "date" ? "Date" : s === "status" ? "Status" : s === "questions" ? "Questions" : "Performance"}
+                                                    {sortBy === s && (
+                                                        sortDesc ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
+                                                    )}
                                                 </button>
                                             ))}
 
@@ -551,7 +565,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                             <span className="text-[10px] font-mono text-white/15 shrink-0">{group.items.length}</span>
                                                         </div>
 
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-8">
                                                             {group.items.map((test, index) => {
                                                                 const progress = Math.min(100, Math.max(0, test.target > 0 ? (test.answeredCount / test.target) * 100 : 0));
                                                                 const stackDepth = Math.min(Math.max(test.testQuestions.length, 1), 5);
@@ -572,7 +586,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                                             transition={{ delay: (gi * 3 + index) * 0.02, type: "spring", stiffness: 400, damping: 25 }}
                                                                             className="group relative cursor-pointer"
                                                                             style={{
-                                                                                paddingTop: `${Math.max(0, (stackDepth - 1) * 4)}px`,
+                                                                                paddingTop: `${Math.max(0, (stackDepth - 1) * 6)}px`,
                                                                                 paddingLeft: `${Math.max(0, (stackDepth - 1) * 2)}px`,
                                                                             }}
                                                                             onMouseEnter={() => setHoveredTestId(test._id)}
@@ -587,14 +601,20 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                                                 return (
                                                                                     <motion.div
                                                                                         key={`bg-${i}`}
-                                                                                        className="absolute inset-0 rounded-xl border border-white/[0.05] bg-neutral-950/50"
+                                                                                        className="absolute rounded-xl border border-white/[0.05] bg-neutral-950/50"
                                                                                         animate={{
                                                                                             rotate: isHovered ? rot * 1.5 : rot,
                                                                                             x: isHovered ? -depth * 3 : -depth * 2,
                                                                                             y: isHovered ? -depth * 5 : -depth * 4,
                                                                                         }}
                                                                                         transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                                                                                        style={{ zIndex: i }}
+                                                                                        style={{
+                                                                                            zIndex: i,
+                                                                                            top: `${Math.max(0, (stackDepth - 1) * 6)}px`,
+                                                                                            left: `${Math.max(0, (stackDepth - 1) * 2)}px`,
+                                                                                            right: 0,
+                                                                                            bottom: 0,
+                                                                                        }}
                                                                                     />
                                                                                 );
                                                                             })}
@@ -616,7 +636,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                                                     }}
                                                                                 />
                                                                                 <div
-                                                                                    className="relative z-10 p-4 flex flex-col gap-2.5"
+                                                                                    className="relative z-10 p-3.5 flex flex-col gap-2"
                                                                                     onMouseMove={(e) => {
                                                                                         const rect = e.currentTarget.getBoundingClientRect();
                                                                                         setTestMousePos({

@@ -72,3 +72,26 @@ export const getForSpace = query({
         return allQuestions.flat();
     },
 });
+
+export const getIncorrectForTopic = query({
+    args: { spaceId: v.id("spaces"), topicTitle: v.string() },
+    handler: async (ctx, args) => {
+        const tests = await ctx.db
+            .query("tests")
+            .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+            .filter((q) => q.eq(q.field("topicTitle"), args.topicTitle))
+            .collect();
+
+        const allQuestions = await Promise.all(
+            tests.map((test) =>
+                ctx.db.query("questions")
+                    .withIndex("by_test", (q) => q.eq("testId", test._id))
+                    .collect()
+            )
+        );
+
+        const incorrect = allQuestions.flat().filter(q => q.isCorrect === false);
+        incorrect.sort((a, b) => b._creationTime - a._creationTime);
+        return incorrect.slice(0, 10);
+    },
+});
