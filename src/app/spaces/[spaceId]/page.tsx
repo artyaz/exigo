@@ -1,10 +1,9 @@
-/* eslint-disable */
-// @ts-nocheck
+
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { useState, use, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 
 function hashCode(str: string) {
     let hash = 0;
@@ -24,19 +24,26 @@ function hashCode(str: string) {
     return hash;
 }
 
+function useSpaceData(spaceId: Id<"spaces">) {
+    const space = useQuery(api.spaces.get, { spaceId });
+    const pieces = useQuery(api.knowledgePieces.getForSpace, { spaceId });
+    const spaceTests = useQuery(api.tests.getForSpace, { spaceId });
+    const spaceQuestions = useQuery(api.questions.getForSpace, { spaceId });
+    return { space, pieces, spaceTests, spaceQuestions };
+}
+
 export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId: string }> }) {
     const router = useRouter();
+    const { userId } = useAuth();
     const { spaceId } = use(params);
     const sId = spaceId as Id<"spaces">;
 
-    const space = useQuery(api.spaces.get, { spaceId: sId });
-    const pieces = useQuery(api.knowledgePieces.getForSpace, { spaceId: sId });
+    const { space, pieces, spaceTests, spaceQuestions } = useSpaceData(sId);
+
     const addPiece = useMutation(api.knowledgePieces.add);
     const updateTitle = useMutation(api.knowledgePieces.updateTitle);
     const bulkImport = useMutation(api.knowledgePieces.bulkImport);
     const createEmptyTest = useMutation(api.tests.createEmptyTest);
-    const spaceTests = useQuery(api.tests.getForSpace, { spaceId: sId });
-    const spaceQuestions = useQuery(api.questions.getForSpace, { spaceId: sId });
 
     // Main tabs
     const [mainTab, setMainTab] = useState<"tests" | "knowledge">("tests");
@@ -168,7 +175,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                         .then(res => res.json())
                         .then(data => {
                             if (data.title && data.title !== "Untitled") {
-                                updateTitle({ id: ids[i], title: data.title });
+                                updateTitle({ id: ids[i] as Id<"knowledgePieces">, title: data.title });
                             }
                         })
                         .catch(() => { });
@@ -195,6 +202,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 type: testType,
                 questionCount: 5,
                 topicTitle: topicLabel,
+                userId: userId || "default_user",
             });
             // Store selected topic for test page to use
             if (selectedTopicId) {
@@ -400,14 +408,14 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                     const target = test.config?.questionCount ?? 5;
                                     const correctCount = testQuestions.filter(q => q.isCorrect === true).length;
                                     const wrongCount = testQuestions.filter(q => q.isCorrect === false).length;
-                                    const status = answeredCount >= target ? "done" as const
+                                    const progressStatus = answeredCount >= target ? "done" as const
                                         : answeredCount > 0 ? "in_progress" as const
                                             : "new" as const;
                                     const performance = answeredCount > 0
                                         ? correctCount / answeredCount
                                         : -1;
                                     return {
-                                        ...test, testQuestions, answeredCount, target, correctCount, wrongCount, status, performance,
+                                        ...test, testQuestions, answeredCount, target, correctCount, wrongCount, progressStatus, performance,
                                         topicLabel: test.topicTitle || "—",
                                     };
                                 });
@@ -418,7 +426,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 // Apply filters
                                 let filtered = enriched;
                                 if (filterStatus !== "all") {
-                                    filtered = filtered.filter(t => t.status === filterStatus);
+                                    filtered = filtered.filter(t => t.progressStatus === filterStatus);
                                 }
                                 if (filterTopic !== "all") {
                                     filtered = filtered.filter(t => t.topicLabel === filterTopic);
@@ -429,7 +437,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 if (sortBy === "date") sorted.sort((a, b) => b._creationTime - a._creationTime);
                                 else if (sortBy === "status") {
                                     const order = { done: 0, in_progress: 1, new: 2 };
-                                    sorted.sort((a, b) => order[a.status] - order[b.status]);
+                                    sorted.sort((a, b) => order[a.progressStatus] - order[b.progressStatus]);
                                 } else if (sortBy === "questions") {
                                     sorted.sort((a, b) => b.testQuestions.length - a.testQuestions.length);
                                 } else if (sortBy === "performance") {
@@ -467,7 +475,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
                                 const getGroup = (t: typeof sorted[0]) => {
                                     if (sortBy === "date") return getDateGroup(t._creationTime);
-                                    if (sortBy === "status") return getStatusGroup(t.status);
+                                    if (sortBy === "status") return getStatusGroup(t.progressStatus);
                                     if (sortBy === "performance") return getPerformanceGroup(t.performance);
                                     if (sortBy === "questions") return `${t.testQuestions.length} questions`;
                                     return "";
@@ -482,7 +490,10 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                         currentGroup = g;
                                         groups.push({ label: g, items: [] });
                                     }
-                                    groups[groups.length - 1].items.push(item);
+                                    const lastGroup = groups[groups.length - 1];
+                                    if (lastGroup) {
+                                        lastGroup.items.push(item);
+                                    }
                                 }
 
                                 return (
@@ -571,9 +582,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                                 const stackDepth = Math.min(Math.max(test.testQuestions.length, 1), 5);
                                                                 const isHovered = hoveredTestId === test._id;
 
-                                                                const statusInfo = test.status === "done"
+                                                                const statusInfo = test.progressStatus === "done"
                                                                     ? { label: "Done", icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" }
-                                                                    : test.status === "in_progress"
+                                                                    : test.progressStatus === "in_progress"
                                                                         ? { label: "In Progress", icon: Zap, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" }
                                                                         : { label: "New", icon: Clock, color: "text-white/40", bg: "bg-white/5", border: "border-white/10" };
                                                                 const StatusIcon = statusInfo.icon;

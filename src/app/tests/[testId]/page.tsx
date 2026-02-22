@@ -1,11 +1,10 @@
-/* eslint-disable */
-// @ts-nocheck
+
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
-import { useState, use, useEffect, useRef, useCallback } from "react";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import { useState, use, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Loader2,
@@ -81,12 +80,13 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         if (questions && questions.length > prevQuestionsLength) {
             setPrevQuestionsLength(questions.length);
         }
-    }, [questions?.length]);
+    }, [questions?.length, prevQuestionsLength]);
 
     // Track arena size
     useEffect(() => {
         if (!arenaRef.current) return;
         const ro = new ResizeObserver(entries => {
+            if (!entries || !entries[0]) return;
             const { width, height } = entries[0].contentRect;
             setArenaW(width);
             setArenaH(height);
@@ -105,7 +105,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
             // Advance to first unanswered
             const firstUnanswered = questions.findIndex(q => !q.userAnswer && !answers[q._id]);
-            if (firstUnanswered !== -1 && currentIndex === 0 && !answers[questions[0]?._id]) {
+            if (firstUnanswered !== -1 && currentIndex === 0 && questions[0] && !answers[questions[0]._id]) {
                 setCurrentIndex(firstUnanswered);
             }
         }
@@ -225,9 +225,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             // Number keys for select questions
             if (test?.config.type === "select" && currentQuestion.options && !answers[currentQuestion._id] && !currentQuestion.userAnswer) {
                 const num = parseInt(e.key);
-                if (num >= 1 && num <= 4 && currentQuestion.options[num - 1]) {
+                const opt = currentQuestion.options[num - 1];
+                if (num >= 1 && num <= 4 && opt) {
                     e.preventDefault();
-                    handleAnswer(currentQuestion._id, currentQuestion.options[num - 1]);
+                    handleAnswer(currentQuestion._id, opt);
                 }
             }
 
@@ -379,10 +380,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     animate={{
                                         width: i === currentIndex ? 20 : 8,
                                         backgroundColor:
-                                            i < questions.length && (questions[i]?.userAnswer || answers[questions[i]?._id])
-                                                ? questions[i]?.isCorrect === true
+                                            i < questions.length && questions[i] && (questions[i]!.userAnswer || answers[questions[i]!._id])
+                                                ? questions[i]!.isCorrect === true
                                                     ? "rgba(74, 222, 128, 0.7)"
-                                                    : questions[i]?.isCorrect === false
+                                                    : questions[i]!.isCorrect === false
                                                         ? "rgba(248, 113, 113, 0.7)"
                                                         : "rgba(255, 255, 255, 0.4)"
                                                 : i === currentIndex

@@ -5,7 +5,7 @@ export default defineSchema({
     spaces: defineTable({
         name: v.string(),
         userId: v.string(),
-    }),
+    }).index("by_user", ["userId"]),
     knowledgePieces: defineTable({
         spaceId: v.id("spaces"),
         title: v.optional(v.string()),

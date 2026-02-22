@@ -46,6 +46,30 @@ const writeQuestionSchema = z.object({
  * - `{"type":"error","error":string}` on error.
  * The endpoint also returns 400 responses (JSON error body) when required parameters or knowledge pieces are missing.
  */
+
+async function fetchGeminiStream(ai: GoogleGenAI, prompt: string, schema: z.ZodTypeAny) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            return await ai.models.generateContentStream({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseJsonSchema: zodToJsonSchema(schema),
+                }
+            });
+        } catch (retryErr: unknown) {
+            const apiErr = retryErr as { status?: number };
+            if (apiErr.status === 429 && attempt < 2) {
+                await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+                continue;
+            }
+            throw retryErr;
+        }
+    }
+    throw new Error("Failed to get stream after retries");
+}
+
 export async function POST(req: NextRequest) {
     const rawBody = await req.json() as Record<string, unknown>;
     const spaceId = rawBody.spaceId as string;
@@ -101,8 +125,12 @@ export async function POST(req: NextRequest) {
         selectedPieces = [target];
     } else {
         // Random selection: pick one random piece
+        // Using Math.random is safe here for non-cryptographic knowledge piece selection.
         selectedPieces = [pieces[Math.floor(Math.random() * pieces.length)]!];
     }
+
+    const firstPiece = selectedPieces[0]!;
+    const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
 
     let existingQuestions: { question: string }[] = [];
     let activeTestId: Id<"tests">;
@@ -119,19 +147,18 @@ export async function POST(req: NextRequest) {
         if (existingTest.config.type !== testType) {
             return new Response(JSON.stringify({ error: "Test type mismatch" }), { status: 400 });
         }
-        activeTestId = testId as never; // ESLint complains about unnecessary assertion, but TS might still need it or it doesn't matter. "testId as never" is a trick if it complains. Let's just use "testId". Wait, the linter says it's unnecessary, meaning `Id<"tests">` resolves to `string`. So just do activeTestId = testId; 
+        activeTestId = testId as Id<"tests">;
         existingQuestions = await convex.query(api.questions.getForTest, { testId: activeTestId });
     } else {
         activeTestId = await convex.mutation(api.tests.createEmptyTest, {
             spaceId: spaceId as Id<"spaces">,
             type: testType,
             questionCount: 5,
+            topicTitle: topicLabel,
             userId: userId,
         });
     }
 
-    const firstPiece = selectedPieces[0]!;
-    const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
     const incorrectQuestions = await convex.query(api.questions.getIncorrectForTopic, {
         spaceId: spaceId as Id<"spaces">,
         topicTitle: topicLabel
@@ -169,30 +196,7 @@ ${knowledgeText}`;
     const readable = new ReadableStream({
         async start(controller) {
             try {
-                // Retry loop for rate limits
-                let stream;
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        stream = await ai.models.generateContentStream({
-                            model: "gemini-2.5-flash",
-                            contents: prompt,
-                            config: {
-                                responseMimeType: "application/json",
-                                responseJsonSchema: zodToJsonSchema(schema),
-                            }
-                        });
-                        break; // success
-                    } catch (retryErr: unknown) {
-                        const apiErr = retryErr as { status?: number };
-                        if (apiErr.status === 429 && attempt < 2) {
-                            // Wait with exponential backoff: 2s, 4s
-                            await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
-                            continue;
-                        }
-                        throw retryErr;
-                    }
-                }
-                if (!stream) throw new Error("Failed to get stream after retries");
+                const stream = await fetchGeminiStream(ai, prompt, schema);
 
                 let fullText = "";
 
@@ -209,11 +213,12 @@ ${knowledgeText}`;
                 const parsed = schema.parse(JSON.parse(fullText));
 
                 // Save to Convex
+                const parsedOptions = "options" in parsed ? (parsed as { options: string[] }).options : undefined;
                 const questionId = await convex.mutation(api.questions.create, {
                     testId: activeTestId,
                     type: testType,
                     question: parsed.question,
-                    options: "options" in parsed ? (parsed as { options: string[] }).options : undefined,
+                    options: parsedOptions,
                     answer: parsed.answer,
                 });
 

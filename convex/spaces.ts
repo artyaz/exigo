@@ -6,7 +6,7 @@ export const list = query({
     handler: async (ctx, args) => {
         return await ctx.db
             .query("spaces")
-            .filter((q) => q.eq(q.field("userId"), args.userId))
+            .withIndex("by_user", (q) => q.eq("userId", args.userId))
             .collect();
     },
 });
@@ -16,7 +16,7 @@ export const countForUser = query({
     handler: async (ctx, args) => {
         const spaces = await ctx.db
             .query("spaces")
-            .filter((q) => q.eq(q.field("userId"), args.userId))
+            .withIndex("by_user", (q) => q.eq("userId", args.userId))
             .collect();
         return spaces.length;
     },

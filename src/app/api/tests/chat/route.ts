@@ -15,15 +15,6 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
  */
 export async function POST(req: NextRequest) {
     try {
-        const rawBody = await req.json() as Record<string, unknown>;
-        const testId = rawBody.testId as string | undefined;
-        const questionId = rawBody.questionId as string | undefined;
-        const message = rawBody.message as string | undefined;
-
-        if (!testId || !questionId || !message) {
-            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-        }
-
         const { userId, has } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -38,6 +29,15 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
         }
 
+        const rawBody = await req.json() as Record<string, unknown>;
+        const testId = rawBody.testId as string | undefined;
+        const questionId = rawBody.questionId as string | undefined;
+        const message = rawBody.message as string | undefined;
+
+        if (!testId || !questionId || !message) {
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        }
+
         // 1. Fetch Question details for context
         const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
         if (!question) {
@@ -47,6 +47,16 @@ export async function POST(req: NextRequest) {
         // Verify question belongs to the specified test
         if (String(question.testId) !== testId) {
             return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
+        }
+
+        // Verify test space ownership
+        const test = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
+        if (!test) {
+            return NextResponse.json({ error: "Test not found" }, { status: 404 });
+        }
+        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId });
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+            return NextResponse.json({ error: "Unauthorized access to this test's space" }, { status: 403 });
         }
 
         // 2. Fetch past messages for this question to maintain conversation history

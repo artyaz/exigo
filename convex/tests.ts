@@ -76,9 +76,13 @@ export const countForUserThisMonth = query({
             .collect();
 
         // Hydrate spaces to ensure they belong to this userId
+        const spaceIds = [...new Set(allTests.map((t) => t.spaceId))];
+        const spaces = await Promise.all(spaceIds.map((id) => ctx.db.get(id)));
+        const spaceMap = new Map(spaces.filter(Boolean).map((s) => [s!._id, s!]));
+
         let count = 0;
         for (const test of allTests) {
-            const space = await ctx.db.get(test.spaceId);
+            const space = spaceMap.get(test.spaceId);
             if (space && (space.userId === args.userId || space.userId === "default_user")) {
                 count++;
             }
@@ -166,6 +170,7 @@ export const createWithQuestions = mutation({
     args: {
         spaceId: v.id("spaces"),
         type: v.string(),
+        userId: v.string(),
         questions: v.array(v.object({
             type: v.string(),
             question: v.string(),
@@ -179,8 +184,7 @@ export const createWithQuestions = mutation({
             throw new Error("Space not found");
         }
 
-        const userId = "default_user"; // MVP mock
-        if (space.userId !== userId) {
+        if (space.userId !== args.userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
         }
 

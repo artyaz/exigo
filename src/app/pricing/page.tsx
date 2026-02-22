@@ -1,5 +1,4 @@
-/* eslint-disable */
-// @ts-nocheck
+
 "use client";
 
 import { motion } from "framer-motion";
@@ -79,7 +78,7 @@ export default function PricingPage() {
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, []);
+    }, [openUserProfile]);
 
     if (!isLoaded) {
         return (

@@ -34,6 +34,10 @@ export const updateTitle = mutation({
         title: v.string(),
     },
     handler: async (ctx, args) => {
+        const piece = await ctx.db.get(args.id);
+        if (!piece) {
+            throw new Error(`Knowledge piece not found for id: ${args.id}`);
+        }
         await ctx.db.patch(args.id, { title: args.title });
     },
 });
