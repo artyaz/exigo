@@ -124,7 +124,7 @@ ${knowledgeText}`;
                 for (let attempt = 0; attempt < 3; attempt++) {
                     try {
                         stream = await ai.models.generateContentStream({
-                            model: "gemini-2.0-flash",
+                            model: "gemini-2.5-flash",
                             contents: prompt,
                             config: {
                                 responseMimeType: "application/json",
