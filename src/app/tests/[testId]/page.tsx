@@ -482,83 +482,85 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     className="absolute inset-0 flex flex-col"
                                     style={{ zIndex: isActive ? 1 : 0, pointerEvents: isActive ? 'auto' : 'none', minWidth: activeW, minHeight: activeH }}
                                 >
-                                    <div className="shrink-0 px-8 pt-7 pb-5 border-b border-white/[0.04]">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-semibold">
-                                                Question {idx + 1}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                {q.isCorrect === true && (
-                                                    <div className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-green-400/20">
-                                                        <CheckCircle2 className="w-3 h-3" /> Correct
-                                                    </div>
-                                                )}
-                                                {q.isCorrect === false && (
-                                                    <div className="flex items-center gap-1.5 text-red-400 bg-red-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-red-400/20">
-                                                        <XCircle className="w-3 h-3" /> Incorrect
-                                                    </div>
-                                                )}
-                                                {isEvaluating[q._id] && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/30" />}
-                                            </div>
-                                        </div>
-                                        <h2 className="text-lg md:text-xl font-semibold leading-relaxed text-white tracking-tight">{q.question}</h2>
-                                    </div>
-
-                                    <div className="flex-1 px-8 py-6 overflow-y-auto custom-scrollbar">
-                                        {test.config.type === "select" && q.options ? (
-                                            <div className="grid gap-3">
-                                                {q.options.map((opt, i) => {
-                                                    const selectedAnswer = answers[q._id] || q.userAnswer;
-                                                    const isSelected = selectedAnswer === opt;
-                                                    const isAnswered = !!selectedAnswer;
-                                                    const isCorrectAnswer = q.answer === opt;
-                                                    const showResult = isAnswered && q.isCorrect !== undefined;
-                                                    let borderColor = "border-white/[0.08]";
-                                                    let bgColor = "bg-white/[0.02]";
-                                                    let textColor = "text-white/80";
-                                                    if (showResult) {
-                                                        if (isCorrectAnswer) { borderColor = "border-green-400/30"; bgColor = "bg-green-400/[0.06]"; textColor = "text-green-300"; }
-                                                        else if (isSelected) { borderColor = "border-red-400/30"; bgColor = "bg-red-400/[0.06]"; textColor = "text-red-300"; }
-                                                    } else if (isSelected) { borderColor = "border-white/20"; bgColor = "bg-white/[0.06]"; textColor = "text-white"; }
-                                                    return (
-                                                        <motion.button key={i} onClick={() => !isAnswered && handleAnswer(q._id, opt)} disabled={isAnswered} whileTap={!isAnswered ? { scale: 0.98 } : {}}
-                                                            className={`group relative w-full p-4 rounded-xl text-left text-sm font-medium transition-colors border ${borderColor} ${bgColor} ${textColor} ${!isAnswered ? 'hover:bg-white/[0.05] hover:border-white/15 cursor-pointer' : 'cursor-default'}`}>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-mono font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-white/5 text-white/30'} border border-white/[0.08]`}>{i + 1}</span>
-                                                                <span className="flex-1">{opt}</span>
-                                                                {showResult && isCorrectAnswer && <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />}
-                                                                {showResult && isSelected && !isCorrectAnswer && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
-                                                            </div>
-                                                            {!isAnswered && <kbd className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:block px-1.5 py-0.5 bg-white/5 rounded text-[10px] font-mono text-white/20 border border-white/[0.06] opacity-0 group-hover:opacity-100 transition-opacity">{i + 1}</kbd>}
-                                                        </motion.button>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col gap-4 h-full">
-                                                {(answers[q._id] || q.userAnswer) ? (
-                                                    <div className="space-y-4">
-                                                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                                                            <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Your Answer</p>
-                                                            <p className="text-sm text-white/80 leading-relaxed">{answers[q._id] || q.userAnswer}</p>
+                                    <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
+                                        <div className="shrink-0 px-8 pt-7 pb-5 border-b border-white/[0.04]">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-semibold">
+                                                    Question {idx + 1}
+                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    {q.isCorrect === true && (
+                                                        <div className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-green-400/20">
+                                                            <CheckCircle2 className="w-3 h-3" /> Correct
                                                         </div>
-                                                        {q.answer && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Reference Answer</p><p className="text-sm text-white/80 leading-relaxed">{q.answer}</p></div>}
-                                                        {q.aiFeedback && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><div className="flex items-center gap-2 mb-2"><BrainCircuit className="w-3 h-3 text-white/40" /><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold">AI Feedback</p></div><p className="text-sm text-white/70 leading-relaxed">{q.aiFeedback}</p></div>}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex-1 flex flex-col gap-3">
-                                                        <textarea id={`answer-${q._id}`} placeholder="Type your answer..." className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]"
-                                                            onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); const el = e.currentTarget; if (el.value.trim()) handleAnswer(q._id, el.value); } }}
-                                                        />
-                                                        <button onClick={() => { const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement; if (el?.value.trim()) handleAnswer(q._id, el.value); }} className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2">
-                                                            Submit <kbd className="hidden md:inline-flex px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-white/40 border border-white/[0.06]">⌘↵</kbd>
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                    )}
+                                                    {q.isCorrect === false && (
+                                                        <div className="flex items-center gap-1.5 text-red-400 bg-red-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-red-400/20">
+                                                            <XCircle className="w-3 h-3" /> Incorrect
+                                                        </div>
+                                                    )}
+                                                    {isEvaluating[q._id] && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/30" />}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
+                                            <h2 className="text-lg md:text-xl font-semibold leading-relaxed text-white tracking-tight">{q.question}</h2>
+                                        </div>
 
+                                        <div className="flex-1 px-8 py-6">
+                                            {test.config.type === "select" && q.options ? (
+                                                <div className="grid gap-3">
+                                                    {q.options.map((opt, i) => {
+                                                        const selectedAnswer = answers[q._id] || q.userAnswer;
+                                                        const isSelected = selectedAnswer === opt;
+                                                        const isAnswered = !!selectedAnswer;
+                                                        const isCorrectAnswer = q.answer === opt;
+                                                        const showResult = isAnswered && q.isCorrect !== undefined;
+                                                        let borderColor = "border-white/[0.08]";
+                                                        let bgColor = "bg-white/[0.02]";
+                                                        let textColor = "text-white/80";
+                                                        if (showResult) {
+                                                            if (isCorrectAnswer) { borderColor = "border-green-400/30"; bgColor = "bg-green-400/[0.06]"; textColor = "text-green-300"; }
+                                                            else if (isSelected) { borderColor = "border-red-400/30"; bgColor = "bg-red-400/[0.06]"; textColor = "text-red-300"; }
+                                                        } else if (isSelected) { borderColor = "border-white/20"; bgColor = "bg-white/[0.06]"; textColor = "text-white"; }
+                                                        return (
+                                                            <motion.button key={i} onClick={() => !isAnswered && handleAnswer(q._id, opt)} disabled={isAnswered} whileTap={!isAnswered ? { scale: 0.98 } : {}}
+                                                                className={`group relative w-full p-4 rounded-xl text-left text-sm font-medium transition-colors border ${borderColor} ${bgColor} ${textColor} ${!isAnswered ? 'hover:bg-white/[0.05] hover:border-white/15 cursor-pointer' : 'cursor-default'}`}>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-mono font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-white/5 text-white/30'} border border-white/[0.08]`}>{i + 1}</span>
+                                                                    <span className="flex-1">{opt}</span>
+                                                                    {showResult && isCorrectAnswer && <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />}
+                                                                    {showResult && isSelected && !isCorrectAnswer && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
+                                                                </div>
+                                                                {!isAnswered && <kbd className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:block px-1.5 py-0.5 bg-white/5 rounded text-[10px] font-mono text-white/20 border border-white/[0.06] opacity-0 group-hover:opacity-100 transition-opacity">{i + 1}</kbd>}
+                                                            </motion.button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col gap-4 h-full">
+                                                    {(answers[q._id] || q.userAnswer) ? (
+                                                        <div className="space-y-4">
+                                                            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                                                                <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Your Answer</p>
+                                                                <p className="text-sm text-white/80 leading-relaxed">{answers[q._id] || q.userAnswer}</p>
+                                                            </div>
+                                                            {q.answer && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Reference Answer</p><p className="text-sm text-white/80 leading-relaxed">{q.answer}</p></div>}
+                                                            {q.aiFeedback && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><div className="flex items-center gap-2 mb-2"><BrainCircuit className="w-3 h-3 text-white/40" /><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold">AI Feedback</p></div><p className="text-sm text-white/70 leading-relaxed">{q.aiFeedback}</p></div>}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex-1 flex flex-col gap-3">
+                                                            <textarea id={`answer-${q._id}`} placeholder="Type your answer..." className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]"
+                                                                onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); const el = e.currentTarget; if (el.value.trim()) handleAnswer(q._id, el.value); } }}
+                                                            />
+                                                            <button onClick={() => { const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement; if (el?.value.trim()) handleAnswer(q._id, el.value); }} className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2">
+                                                                Submit <kbd className="hidden md:inline-flex px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-white/40 border border-white/[0.06]">⌘↵</kbd>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                    </div>
                                     <div className="shrink-0 px-8 py-3 border-t border-white/[0.04] flex items-center justify-between">
                                         <button aria-label="Previous question" onClick={() => { setDirection(-1); setCurrentIndex(Math.max(0, currentIndex - 1)); }} disabled={currentIndex === 0} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
                                             <ChevronLeft className="w-3.5 h-3.5" /><span className="hidden md:inline">Prev</span><kbd className="hidden md:inline px-1 py-0.5 bg-white/5 rounded text-[9px] font-mono text-white/20 border border-white/[0.06]">←</kbd>
