@@ -7,8 +7,36 @@ import { mutation, query } from "./_generated/server";
  *
  * @returns ID reference of the newly provisioned test
  */
+// Status "active": the test is immediately usable — questions are generated
+// asynchronously one-by-one via the /api/tests/generate streaming endpoint.
+export const createEmptyTest = mutation({
+    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number() },
+    handler: async (ctx, args) => {
+        const space = await ctx.db.get(args.spaceId);
+        if (!space) {
+            throw new Error("Space not found");
+        }
+
+        const userId = "default_user"; // MVP mock
+        if (space.userId !== userId) {
+            throw new Error("Unauthorized access to this space");
+        }
+
+        return await ctx.db.insert("tests", {
+            spaceId: args.spaceId,
+            status: "active",
+            config: {
+                type: args.type,
+                questionCount: args.questionCount,
+            },
+        });
+    },
+});
+
+// Status "generating": used when the server batch-generates all questions before
+// the test becomes usable. The caller is expected to flip status to "active" once done.
 export const create = mutation({
-    args: { spaceId: v.id("spaces"), type: v.string() },
+    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.optional(v.number()) },
     handler: async (ctx, args) => {
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
@@ -23,7 +51,10 @@ export const create = mutation({
         return await ctx.db.insert("tests", {
             spaceId: args.spaceId,
             status: "generating",
-            config: { type: args.type },
+            config: {
+                type: args.type,
+                questionCount: args.questionCount ?? 5,
+            },
         });
     },
 });
@@ -56,6 +87,33 @@ export const getForSpace = query({
 });
 
 /**
+ * Lists all tests across all spaces, enriched with the parent space name.
+ */
+export const listAll = query({
+    args: {},
+    handler: async (ctx) => {
+        const tests = await ctx.db.query("tests").order("desc").collect();
+        const enriched = await Promise.all(
+            tests.map(async (test) => {
+                const space = await ctx.db.get(test.spaceId);
+                const questions = await ctx.db
+                    .query("questions")
+                    .withIndex("by_test", (q) => q.eq("testId", test._id))
+                    .collect();
+                const answeredCount = questions.filter(q => q.userAnswer).length;
+                return {
+                    ...test,
+                    spaceName: space?.name ?? "Unknown",
+                    questionCount: questions.length,
+                    answeredCount,
+                };
+            })
+        );
+        return enriched;
+    },
+});
+
+/**
  * Fetches the document entry of an individual granular test directly by its ID.
  *
  * @returns Serialized test data or null
@@ -73,6 +131,8 @@ export const get = query({
  *
  * @returns ID reference of the newly committed active test
  */
+// Status "active": the full set of questions is provided up-front so the test
+// is immediately ready to take — no async generation step required.
 export const createWithQuestions = mutation({
     args: {
         spaceId: v.id("spaces"),
@@ -98,7 +158,10 @@ export const createWithQuestions = mutation({
         const testId = await ctx.db.insert("tests", {
             spaceId: args.spaceId,
             status: "active",
-            config: { type: args.type },
+            config: {
+                type: args.type,
+                questionCount: args.questions.length,
+            },
         });
 
         for (const q of args.questions) {

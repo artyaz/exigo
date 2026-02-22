@@ -5,12 +5,38 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { useState, use } from "react";
+import { useState, use, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Plus, Upload, BrainCircuit, Loader2, Sparkles, BookOpen } from "lucide-react";
+import {
+    ArrowLeft, Plus, Upload, BrainCircuit, Loader2, BookOpen,
+    CheckCircle2, Clock, Zap, ChevronRight, ChevronDown, FileText, ListChecks, PenLine
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+/**
+ * Computes a 32-bit integer hash for the given string.
+ *
+ * @param str - Input string to hash.
+ * @returns A 32-bit signed integer hash derived from `str`.
+ */
+function hashCode(str: string) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
+}
+
+/**
+ * Renders the detail view for a space, providing tabs to manage and generate tests and to add or import knowledge pieces.
+ *
+ * Persists the selected test type to localStorage and navigates to a newly created test when generation completes.
+ *
+ * @param params - A Promise that resolves to route parameters; must include `spaceId` identifying the space to display.
+ * @returns The React element for the Space detail page.
+ */
 export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId: string }> }) {
     const router = useRouter();
     const { spaceId } = use(params);
@@ -20,19 +46,52 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const pieces = useQuery(api.knowledgePieces.getForSpace, { spaceId: sId });
     const addPiece = useMutation(api.knowledgePieces.add);
     const bulkImport = useMutation(api.knowledgePieces.bulkImport);
+    const createEmptyTest = useMutation(api.tests.createEmptyTest);
+    const spaceTests = useQuery(api.tests.getForSpace, { spaceId: sId });
+    const spaceQuestions = useQuery(api.questions.getForSpace, { spaceId: sId });
 
-    const [activeTab, setActiveTab] = useState<"add" | "bulk">("add");
+    // Main tabs
+    const [mainTab, setMainTab] = useState<"tests" | "knowledge">("tests");
+
+    // Knowledge sub-mode
+    const [knowledgeMode, setKnowledgeMode] = useState<"add" | "bulk">("add");
     const [content, setContent] = useState("");
     const [source, setSource] = useState("");
-
     const [bulkContent, setBulkContent] = useState("");
     const [delimiter, setDelimiter] = useState("\\n\\n");
-
     const [isAdding, setIsAdding] = useState(false);
 
-    // Type selection for generated test
-    const [testType, setTestType] = useState<"select" | "write">("select");
+    // Test generation
+    const [testType, setTestType] = useState<"select" | "write">(() => {
+        if (typeof window !== "undefined") {
+            const stored = localStorage.getItem("exigo_test_type");
+            if (stored === "select" || stored === "write") return stored;
+        }
+        return "select";
+    });
     const [isGenerating, setIsGenerating] = useState(false);
+    const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Test card hover
+    const [hoveredTestId, setHoveredTestId] = useState<string | null>(null);
+    const [testMousePos, setTestMousePos] = useState({ x: 0, y: 0 });
+
+    // Persist test type
+    useEffect(() => {
+        localStorage.setItem("exigo_test_type", testType);
+    }, [testType]);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setShowTypeDropdown(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClick);
+        return () => document.removeEventListener("mousedown", handleClick);
+    }, []);
 
     if (space === undefined || pieces === undefined) {
         return (
@@ -67,225 +126,429 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         e.preventDefault();
         if (!bulkContent.trim()) return;
         setIsAdding(true);
-
-        // Convert literal \n\n to actual newlines for regex split if specified, else use straight string
-        const splitRegex = new RegExp(delimiter.replace(/\\n/g, '\n'));
-        const parts = bulkContent.split(splitRegex).filter(p => p.trim().length > 0);
-
-        const structuredPieces = parts.map(p => ({
-            content: p.trim(),
-            source: source.trim() || undefined
-        }));
-
-        await bulkImport({ spaceId: sId, pieces: structuredPieces });
-        setBulkContent("");
-        setIsAdding(false);
+        try {
+            const escaped = delimiter.replace(/\\n/g, '\n').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const splitRegex = new RegExp(escaped);
+            const parts = bulkContent.split(splitRegex).filter(p => p.trim().length > 0);
+            const structuredPieces = parts.map(p => ({
+                content: p.trim(),
+                source: source.trim() || undefined
+            }));
+            await bulkImport({ spaceId: sId, pieces: structuredPieces });
+            setBulkContent("");
+        } catch (err) {
+            console.error("Bulk import failed", err);
+        } finally {
+            setIsAdding(false);
+        }
     };
 
     const handleTestMe = async () => {
         if (pieces.length === 0) return;
         setIsGenerating(true);
-
-        // In actual implementation, we'd trigger convex AI action here
-        // For now we simulate navigation to test page which handles generation visually
-        // Let's create an action in our Next part anyway
-        const res = await fetch("/api/tests/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ spaceId: sId, testType })
-        });
-
-        setIsGenerating(false);
-
-        if (res.ok) {
-            const data = await res.json();
-            router.push(`/tests/${data.testId}`);
+        try {
+            const testId = await createEmptyTest({ spaceId: sId, type: testType, questionCount: 5 });
+            router.push(`/tests/${testId}`);
+        } catch (error) {
+            console.error("Failed to create test", error);
+            setIsGenerating(false);
         }
     };
 
+    const selectType = (type: "select" | "write") => {
+        setTestType(type);
+        setShowTypeDropdown(false);
+    };
+
+    const TypeIcon = testType === "select" ? ListChecks : PenLine;
+
     return (
         <div className="min-h-screen bg-black text-white p-4 md:p-8">
-            <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="max-w-5xl mx-auto flex flex-col gap-6">
 
-                {/* Left Column: Management */}
-                <div className="lg:col-span-8 flex flex-col gap-8">
-                    <header className="flex items-center gap-6">
-                        <Link href="/spaces" className="p-2 glass-card rounded-xl hover:bg-white/5 spring-interact text-secondary hover:text-primary">
-                            <ArrowLeft className="w-5 h-5" />
-                        </Link>
-                        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-primary">
-                            {space.name}
-                        </h1>
-                    </header>
+                {/* Header */}
+                <header className="flex items-center gap-4">
+                    <Link href="/spaces" className="p-2 glass-card rounded-xl hover:bg-white/5 spring-interact text-secondary hover:text-primary">
+                        <ArrowLeft className="w-5 h-5" />
+                    </Link>
+                    <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-primary">{space.name}</h1>
+                </header>
 
-                    <section className="glass-card rounded-2xl p-6 md:p-8 space-y-6">
-                        <div className="flex gap-6 border-b border-white/10 pb-4">
-                            <button
-                                onClick={() => setActiveTab("add")}
-                                className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[17px] ${activeTab === "add" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
-                            >
-                                Add Piece
-                            </button>
-                            <button
-                                onClick={() => setActiveTab("bulk")}
-                                className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[17px] ${activeTab === "bulk" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
-                            >
-                                Bulk Import
-                            </button>
-                        </div>
-
-                        <AnimatePresence mode="wait">
-                            {activeTab === "add" ? (
-                                <motion.form
-                                    key="add"
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: 10 }}
-                                    onSubmit={handleAdd}
-                                    className="space-y-4"
-                                >
-                                    <textarea
-                                        placeholder="Type or paste a piece of knowledge here..."
-                                        className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl p-4 focus-ring spring-interact min-h-[150px] resize-y text-sm placeholder:text-neutral-600"
-                                        value={content}
-                                        onChange={e => setContent(e.target.value)}
-                                    />
-                                    <div className="flex flex-col sm:flex-row gap-4">
-                                        <input
-                                            type="text"
-                                            placeholder="Source (Optional URL or tag)"
-                                            className="flex-1 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
-                                            value={source}
-                                            onChange={e => setSource(e.target.value)}
-                                        />
-                                        <button
-                                            disabled={isAdding || !content.trim()}
-                                            type="submit"
-                                            className="bg-white text-black font-medium px-6 py-2.5 rounded-xl spring-interact flex items-center justify-center gap-2 disabled:opacity-50 text-sm hover:opacity-90"
-                                        >
-                                            {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                                            Adding
-                                        </button>
-                                    </div>
-                                </motion.form>
-                            ) : (
-                                <motion.form
-                                    key="bulk"
-                                    initial={{ opacity: 0, x: 10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -10 }}
-                                    onSubmit={handleBulkImport}
-                                    className="space-y-4"
-                                >
-                                    <p className="text-secondary text-xs">Paste huge text blocks and separate them by your chosen delimiter.</p>
-                                    <div className="flex gap-4">
-                                        <input
-                                            type="text"
-                                            placeholder="Delimiter (e.g., \\n\\n, ###)"
-                                            className="w-1/3 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
-                                            value={delimiter}
-                                            onChange={e => setDelimiter(e.target.value)}
-                                        />
-                                        <input
-                                            type="text"
-                                            placeholder="Global Source (Optional)"
-                                            className="w-2/3 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
-                                            value={source}
-                                            onChange={e => setSource(e.target.value)}
-                                        />
-                                    </div>
-                                    <textarea
-                                        placeholder="Paste massive piece of text here..."
-                                        className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl p-4 focus-ring spring-interact min-h-[250px] resize-y text-sm placeholder:text-neutral-600"
-                                        value={bulkContent}
-                                        onChange={e => setBulkContent(e.target.value)}
-                                    />
-                                    <button
-                                        disabled={isAdding || !bulkContent.trim()}
-                                        type="submit"
-                                        className="w-full bg-white text-black font-medium px-8 py-3 rounded-xl spring-interact flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90 text-sm"
-                                    >
-                                        {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                                        Process & Import Bulk
-                                    </button>
-                                </motion.form>
-                            )}
-                        </AnimatePresence>
-                    </section>
-
-                    <section className="space-y-4 flex-1">
-                        <h2 className="text-lg font-medium flex items-center gap-2 text-primary">
-                            <BookOpen className="text-secondary w-5 h-5" /> Knowledge Base <span className="text-xs font-mono text-tertiary bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">{pieces.length} items</span>
-                        </h2>
-                        {pieces.length === 0 ? (
-                            <div className="glass-card border-dashed rounded-2xl p-12 text-center text-secondary flex flex-col items-center gap-4">
-                                <BrainCircuit className="w-10 h-10 opacity-50" />
-                                <p className="text-sm">This space is empty. Add some knowledge pieces above.</p>
-                            </div>
-                        ) : (
-                            <div className="grid gap-4">
-                                {pieces.slice().reverse().map((piece) => (
-                                    <div key={piece._id} className="glass-card rounded-xl p-5 hover:bg-white/5 transition-colors">
-                                        <p className="text-secondary text-sm leading-relaxed whitespace-pre-wrap line-clamp-4">{piece.content}</p>
-                                        {piece.source && <p className="text-xs text-tertiary mt-3 font-mono truncate inline-block">Src: <span className="text-secondary">{piece.source}</span></p>}
-                                    </div>
-                                ))}
-                            </div>
+                {/* Tab bar */}
+                <div className="flex items-center gap-1 border-b border-white/10">
+                    <button
+                        onClick={() => setMainTab("tests")}
+                        className={`px-4 py-2.5 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${mainTab === "tests"
+                            ? "border-white text-primary"
+                            : "border-transparent text-secondary hover:text-primary"
+                            }`}
+                    >
+                        <FileText className="w-3.5 h-3.5" />
+                        Tests
+                        {spaceTests && spaceTests.length > 0 && (
+                            <span className="text-[10px] font-mono text-tertiary bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">{spaceTests.length}</span>
                         )}
-                    </section>
+                    </button>
+                    <button
+                        onClick={() => setMainTab("knowledge")}
+                        className={`px-4 py-2.5 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${mainTab === "knowledge"
+                            ? "border-white text-primary"
+                            : "border-transparent text-secondary hover:text-primary"
+                            }`}
+                    >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        Knowledge
+                        {pieces && pieces.length > 0 && (
+                            <span className="text-[10px] font-mono text-tertiary bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">{pieces.length}</span>
+                        )}
+                    </button>
                 </div>
 
-                {/* Right Column: AI Action Panel */}
-                <div className="lg:col-span-4 relative">
-                    <div className="sticky top-8 glass-card rounded-2xl p-6 md:p-8 space-y-8">
-                        <div>
-                            <h2 className="text-lg font-medium flex items-center gap-2 text-primary">
-                                <Sparkles className="w-5 h-5 text-secondary" /> Test Me
-                            </h2>
-                            <p className="text-secondary mt-2 text-xs leading-relaxed">Turn your knowledge base into an interactive test and check how much you remember.</p>
-                        </div>
-
-                        <div className="space-y-4">
-                            <p className="text-sm font-medium text-primary">Format:</p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    onClick={() => setTestType("select")}
-                                    className={`border rounded-xl px-4 py-2 font-medium transition-all text-sm spring-interact ${testType === "select" ? "border-white text-primary bg-white/5" : "border-white/10 text-tertiary hover:text-secondary hover:bg-white/5"}`}
-                                >
-                                    Select Ans
-                                </button>
-                                <button
-                                    onClick={() => setTestType("write")}
-                                    className={`border rounded-xl px-4 py-2 font-medium transition-all text-sm spring-interact ${testType === "write" ? "border-white text-primary bg-white/5" : "border-white/10 text-tertiary hover:text-secondary hover:bg-white/5"}`}
-                                >
-                                    Write Ans
-                                </button>
-                            </div>
-                        </div>
-
-                        <button
-                            disabled={pieces.length === 0 || isGenerating}
-                            onClick={handleTestMe}
-                            className="w-full bg-white text-black font-medium flex items-center justify-center gap-2 rounded-xl py-3 spring-interact disabled:opacity-50 hover:opacity-90 text-sm"
+                {/* Tab Content */}
+                <AnimatePresence mode="wait">
+                    {mainTab === "tests" ? (
+                        <motion.div
+                            key="tests-tab"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.15 }}
+                            className="flex flex-col gap-6"
                         >
-                            {isGenerating ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Generating...</span>
-                                </>
+                            {/* Generate button - split button */}
+                            <div className="flex items-center gap-3">
+                                <div className="relative flex" ref={dropdownRef}>
+                                    {/* Main generate button */}
+                                    <button
+                                        disabled={pieces.length === 0 || isGenerating}
+                                        onClick={handleTestMe}
+                                        className="flex items-center gap-2.5 bg-white text-black font-medium pl-5 pr-4 py-2.5 rounded-l-xl spring-interact disabled:opacity-50 hover:opacity-90 text-sm"
+                                    >
+                                        {isGenerating ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <BrainCircuit className="w-4 h-4" />
+                                        )}
+                                        <span>Generate Test</span>
+                                        <TypeIcon className="w-3 h-3 opacity-50" />
+                                        <kbd className="hidden md:inline px-1.5 py-0.5 rounded bg-black/10 text-[10px] font-mono opacity-40">⌘↵</kbd>
+                                    </button>
+
+                                    {/* Divider + dropdown arrow */}
+                                    <button
+                                        onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                                        className="flex items-center px-2.5 py-2.5 bg-white text-black rounded-r-xl border-l border-black/10 spring-interact hover:bg-neutral-100 disabled:opacity-50"
+                                        disabled={pieces.length === 0 || isGenerating}
+                                    >
+                                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showTypeDropdown ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {/* Dropdown */}
+                                    <AnimatePresence>
+                                        {showTypeDropdown && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                                                transition={{ duration: 0.12 }}
+                                                className="absolute top-full left-0 mt-2 w-56 glass-card rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden"
+                                            >
+                                                <button
+                                                    onClick={() => selectType("select")}
+                                                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left spring-interact transition-colors ${testType === "select" ? "bg-white/5 text-primary" : "text-secondary hover:bg-white/5 hover:text-primary"
+                                                        }`}
+                                                >
+                                                    <ListChecks className="w-4 h-4 shrink-0" />
+                                                    <div>
+                                                        <p className="font-medium">Multiple Choice</p>
+                                                        <p className="text-[11px] text-white/30 mt-0.5">Select from 4 options</p>
+                                                    </div>
+                                                    {testType === "select" && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-auto" />}
+                                                </button>
+                                                <div className="border-t border-white/5" />
+                                                <button
+                                                    onClick={() => selectType("write")}
+                                                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-left spring-interact transition-colors ${testType === "write" ? "bg-white/5 text-primary" : "text-secondary hover:bg-white/5 hover:text-primary"
+                                                        }`}
+                                                >
+                                                    <PenLine className="w-4 h-4 shrink-0" />
+                                                    <div>
+                                                        <p className="font-medium">Written Answer</p>
+                                                        <p className="text-[11px] text-white/30 mt-0.5">Full explanation required</p>
+                                                    </div>
+                                                    {testType === "write" && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 ml-auto" />}
+                                                </button>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+
+                                {pieces.length === 0 && (
+                                    <p className="text-xs text-red-500/80">Add knowledge first</p>
+                                )}
+                            </div>
+
+                            {/* Tests grid */}
+                            {!spaceTests ? (
+                                <div className="flex justify-center p-12">
+                                    <Loader2 className="w-6 h-6 animate-spin text-white/20" />
+                                </div>
+                            ) : spaceTests.length === 0 ? (
+                                <div className="glass-card border-dashed rounded-2xl p-16 text-center flex flex-col items-center gap-4">
+                                    <FileText className="w-10 h-10 text-white/10" />
+                                    <p className="text-secondary text-sm">No tests yet. Hit generate to create your first one.</p>
+                                </div>
                             ) : (
-                                <>
-                                    <BrainCircuit className="w-4 h-4" />
-                                    <span>Generate Test</span>
-                                    <span className="hidden sm:inline bg-black/10 px-1.5 py-0.5 rounded-md text-[10px] ml-1 opacity-60">⌘ Enter</span>
-                                </>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {spaceTests.slice().reverse().map((test, index) => {
+                                        const testQuestions = spaceQuestions?.filter(q => q.testId === test._id) ?? [];
+                                        const answeredCount = testQuestions.filter(q => q.userAnswer).length;
+                                        const target = test.config?.questionCount ?? 5;
+                                        const progress = Math.min(100, Math.max(0, target > 0 ? (answeredCount / target) * 100 : 0));
+                                        const stackDepth = Math.min(Math.max(testQuestions.length, 1), 5);
+                                        const isHovered = hoveredTestId === test._id;
+
+                                        const statusInfo = answeredCount >= target
+                                            ? { label: "Done", icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" }
+                                            : answeredCount > 0
+                                                ? { label: "In Progress", icon: Zap, color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" }
+                                                : { label: "New", icon: Clock, color: "text-white/40", bg: "bg-white/5", border: "border-white/10" };
+                                        const StatusIcon = statusInfo.icon;
+
+                                        return (
+                                            <Link href={`/tests/${test._id}`} key={test._id}>
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: 12 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: index * 0.03, type: "spring", stiffness: 400, damping: 25 }}
+                                                    className="group relative cursor-pointer"
+                                                    style={{
+                                                        paddingTop: `${Math.max(0, (stackDepth - 1) * 4)}px`,
+                                                        paddingLeft: `${Math.max(0, (stackDepth - 1) * 2)}px`,
+                                                    }}
+                                                    onMouseEnter={() => setHoveredTestId(test._id)}
+                                                    onMouseLeave={() => setHoveredTestId(null)}
+                                                >
+                                                    {/* Stack background cards */}
+                                                    {Array.from({ length: stackDepth }).map((_, i) => {
+                                                        if (i === stackDepth - 1) return null;
+                                                        const depth = stackDepth - 1 - i;
+                                                        const h = hashCode(test._id + i);
+                                                        const rot = ((h % 5) - 2) * 0.6;
+                                                        return (
+                                                            <motion.div
+                                                                key={`bg-${i}`}
+                                                                className="absolute inset-0 rounded-xl border border-white/[0.05] bg-neutral-950/50"
+                                                                animate={{
+                                                                    rotate: isHovered ? rot * 1.5 : rot,
+                                                                    x: isHovered ? -depth * 3 : -depth * 2,
+                                                                    y: isHovered ? -depth * 5 : -depth * 4,
+                                                                }}
+                                                                transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                                                                style={{ zIndex: i }}
+                                                            />
+                                                        );
+                                                    })}
+
+                                                    {/* Top card */}
+                                                    <motion.div
+                                                        className="relative glass-card rounded-xl overflow-hidden"
+                                                        animate={{ scale: isHovered ? 1.02 : 1, y: isHovered ? -3 : 0 }}
+                                                        whileTap={{ scale: 0.98 }}
+                                                        transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                                                        style={{ zIndex: stackDepth }}
+                                                    >
+                                                        <div
+                                                            className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                            style={{
+                                                                background: isHovered
+                                                                    ? `radial-gradient(250px circle at ${testMousePos.x}% ${testMousePos.y}%, rgba(255,255,255,0.04), transparent 60%)`
+                                                                    : 'none'
+                                                            }}
+                                                        />
+                                                        <div
+                                                            className="relative z-10 p-4 flex flex-col gap-3"
+                                                            onMouseMove={(e) => {
+                                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                                setTestMousePos({
+                                                                    x: ((e.clientX - rect.left) / rect.width) * 100,
+                                                                    y: ((e.clientY - rect.top) / rect.height) * 100,
+                                                                });
+                                                            }}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold uppercase tracking-wider ${statusInfo.color} ${statusInfo.bg} border ${statusInfo.border}`}>
+                                                                    <StatusIcon className="w-2.5 h-2.5" />
+                                                                    {statusInfo.label}
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 text-[9px] font-mono text-white/15">
+                                                                    {test.config?.type === "select" ? <ListChecks className="w-2.5 h-2.5" /> : <PenLine className="w-2.5 h-2.5" />}
+                                                                    {test.config?.type ?? "write"}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-sm font-medium text-primary"># {spaceTests.length - index}</span>
+                                                                <span className="text-[9px] font-mono text-white/15">
+                                                                    {new Date(test._creationTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                                                </span>
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <div className="flex justify-between text-[9px] font-mono text-white/25">
+                                                                    <span>{answeredCount}/{target}</span>
+                                                                    <span>{testQuestions.length} q</span>
+                                                                </div>
+                                                                <div className="w-full h-0.5 rounded-full bg-white/5 overflow-hidden">
+                                                                    <motion.div
+                                                                        className="h-full rounded-full bg-white/20"
+                                                                        initial={{ width: 0 }}
+                                                                        animate={{ width: `${progress}%` }}
+                                                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center justify-end gap-1 text-white/20 group-hover:text-white/60 transition-colors">
+                                                                <span className="text-[9px] font-semibold uppercase tracking-widest">Open</span>
+                                                                <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                </motion.div>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
                             )}
-                        </button>
-                        {pieces.length === 0 && (
-                            <p className="text-xs text-center text-red-500">Need at least 1 piece of knowledge first.</p>
-                        )}
-                    </div>
-                </div>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="knowledge-tab"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.15 }}
+                            className="flex flex-col gap-6"
+                        >
+                            {/* Add / Bulk mode toggle */}
+                            <section className="glass-card rounded-2xl p-6 space-y-5">
+                                <div className="flex gap-4 border-b border-white/10 pb-3">
+                                    <button
+                                        onClick={() => setKnowledgeMode("add")}
+                                        className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 ${knowledgeMode === "add" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                                    >
+                                        <Plus className="w-3 h-3" /> Add Piece
+                                    </button>
+                                    <button
+                                        onClick={() => setKnowledgeMode("bulk")}
+                                        className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 ${knowledgeMode === "bulk" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                                    >
+                                        <Upload className="w-3 h-3" /> Bulk Import
+                                    </button>
+                                </div>
+
+                                <AnimatePresence mode="wait">
+                                    {knowledgeMode === "add" ? (
+                                        <motion.form
+                                            key="add"
+                                            initial={{ opacity: 0, x: -8 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: 8 }}
+                                            onSubmit={handleAdd}
+                                            className="space-y-4"
+                                        >
+                                            <textarea
+                                                placeholder="Type or paste a piece of knowledge here..."
+                                                className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl p-4 focus-ring spring-interact min-h-[150px] resize-y text-sm placeholder:text-neutral-600"
+                                                value={content}
+                                                onChange={e => setContent(e.target.value)}
+                                            />
+                                            <div className="flex flex-col sm:flex-row gap-3">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Source (Optional)"
+                                                    className="flex-1 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
+                                                    value={source}
+                                                    onChange={e => setSource(e.target.value)}
+                                                />
+                                                <button
+                                                    disabled={isAdding || !content.trim()}
+                                                    type="submit"
+                                                    className="bg-white text-black font-medium px-6 py-2.5 rounded-xl spring-interact flex items-center justify-center gap-2 disabled:opacity-50 text-sm hover:opacity-90"
+                                                >
+                                                    {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                                    Add
+                                                </button>
+                                            </div>
+                                        </motion.form>
+                                    ) : (
+                                        <motion.form
+                                            key="bulk"
+                                            initial={{ opacity: 0, x: 8 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -8 }}
+                                            onSubmit={handleBulkImport}
+                                            className="space-y-4"
+                                        >
+                                            <p className="text-secondary text-xs">Paste text and split by delimiter.</p>
+                                            <div className="flex gap-3">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Delimiter"
+                                                    className="w-1/3 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
+                                                    value={delimiter}
+                                                    onChange={e => setDelimiter(e.target.value)}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Source (Optional)"
+                                                    className="w-2/3 bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm placeholder:text-neutral-600"
+                                                    value={source}
+                                                    onChange={e => setSource(e.target.value)}
+                                                />
+                                            </div>
+                                            <textarea
+                                                placeholder="Paste text here..."
+                                                className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl p-4 focus-ring spring-interact min-h-[200px] resize-y text-sm placeholder:text-neutral-600"
+                                                value={bulkContent}
+                                                onChange={e => setBulkContent(e.target.value)}
+                                            />
+                                            <button
+                                                disabled={isAdding || !bulkContent.trim()}
+                                                type="submit"
+                                                className="w-full bg-white text-black font-medium py-3 rounded-xl spring-interact flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90 text-sm"
+                                            >
+                                                {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                                                Process & Import
+                                            </button>
+                                        </motion.form>
+                                    )}
+                                </AnimatePresence>
+                            </section>
+
+                            {/* Knowledge pieces list */}
+                            <section className="space-y-4">
+                                <h2 className="text-sm font-medium flex items-center gap-2 text-secondary">
+                                    <BookOpen className="w-4 h-4" /> Knowledge Base
+                                    <span className="text-[10px] font-mono text-tertiary bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">{pieces.length}</span>
+                                </h2>
+                                {pieces.length === 0 ? (
+                                    <div className="glass-card border-dashed rounded-2xl p-12 text-center text-secondary flex flex-col items-center gap-4">
+                                        <BrainCircuit className="w-10 h-10 opacity-30" />
+                                        <p className="text-sm">This space is empty. Add some knowledge above.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid gap-3">
+                                        {pieces.slice().reverse().map((piece) => (
+                                            <div key={piece._id} className="glass-card rounded-xl p-4 hover:bg-white/5 transition-colors">
+                                                <p className="text-secondary text-sm leading-relaxed whitespace-pre-wrap line-clamp-4">{piece.content}</p>
+                                                {piece.source && <p className="text-xs text-tertiary mt-2 font-mono truncate">Src: <span className="text-secondary">{piece.source}</span></p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );

@@ -27,6 +27,17 @@ function validateAIResponse(result: unknown): { isCorrect: boolean; feedback: st
     return null;
 }
 
+/**
+ * Handle POST requests that evaluate a student's answer and update the question's feedback.
+ *
+ * Parses the request body for `questionId`, `answer`, and `testType`. For `select` tests it compares
+ * the submitted answer to the stored answer; for `write` tests it performs an AI evaluation and
+ * derives correctness and brief feedback. The function updates the question's stored feedback and
+ * returns the evaluation outcome.
+ *
+ * @returns JSON containing `{ isCorrect, aiFeedback }` on success, or `{ error }` with an error message on failure.
+ *          Uses HTTP 400 for missing fields, 404 if the question is not found, and 500 for server-side errors.
+ */
 export async function POST(req: NextRequest) {
     try {
         const rawBody = await req.json() as Record<string, unknown>;
@@ -36,6 +47,10 @@ export async function POST(req: NextRequest) {
 
         if (!questionId || !answer || !testType) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        }
+
+        if (testType !== "select" && testType !== "write") {
+            return NextResponse.json({ error: "Invalid testType — must be 'select' or 'write'" }, { status: 400 });
         }
 
         // Validate active question directly
@@ -68,7 +83,7 @@ export async function POST(req: NextRequest) {
       `;
 
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.0-flash",
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",

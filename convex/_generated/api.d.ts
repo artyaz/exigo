@@ -11,6 +11,7 @@
 import type * as knowledgePieces from "../knowledgePieces.js";
 import type * as questions from "../questions.js";
 import type * as spaces from "../spaces.js";
+import type * as testMessages from "../testMessages.js";
 import type * as tests from "../tests.js";
 
 import type {
@@ -23,6 +24,7 @@ declare const fullApi: ApiFromModules<{
   knowledgePieces: typeof knowledgePieces;
   questions: typeof questions;
   spaces: typeof spaces;
+  testMessages: typeof testMessages;
   tests: typeof tests;
 }>;
 
