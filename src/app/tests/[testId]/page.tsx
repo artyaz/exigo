@@ -5,20 +5,38 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { Id } from "../../../../convex/_generated/dataModel";
-import { useState, use, useEffect, useRef } from "react";
+import { useState, use, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ArrowLeft, CheckCircle2, XCircle, ChevronRight, BrainCircuit, MessageSquare, Send } from "lucide-react";
+import {
+    Loader2,
+    ArrowLeft,
+    CheckCircle2,
+    XCircle,
+    ChevronLeft,
+    ChevronRight,
+    BrainCircuit,
+    MessageSquare,
+    Send,
+    Sparkles,
+    CornerDownLeft,
+} from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
-/**
- * Render the interactive test-taking page that handles question progression, background question generation, review mode with stacked question cards, and a tutor chat sidebar.
- *
- * @param params - A promise resolving to route parameters; must include `testId` identifying the test to load.
- * @returns The rendered React element tree for the test page.
- */
+/* ─── spring presets ─── */
+const SPRING_SNAPPY = { type: "spring" as const, stiffness: 500, damping: 30 };
+const SPRING_GENTLE = { type: "spring" as const, stiffness: 300, damping: 28 };
+
+/* ─── card stack config ─── */
+const STACK_VISIBLE = 3;
+
+/** Deterministic hash for pseudo-random card offsets */
+function cardHash(id: string, seed: number) {
+    let h = seed;
+    for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+    return h;
+}
+
 export default function TestPage({ params }: { params: Promise<{ testId: string }> }) {
-    const router = useRouter();
     const { testId } = use(params);
     const tId = testId as Id<"tests">;
 
@@ -32,23 +50,52 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const [streamingText, setStreamingText] = useState("");
     const [genError, setGenError] = useState<string | null>(null);
     const [retryNonce, setRetryNonce] = useState(0);
-
-    // Review Mode State
-    const [activeReviewIndex, setActiveReviewIndex] = useState(0);
+    const [direction, setDirection] = useState(1); // 1 = forward, -1 = backward
+    const [prevQuestionsLength, setPrevQuestionsLength] = useState(0);
 
     // Chat State
     const [chatInput, setChatInput] = useState("");
     const [isSendingChat, setIsSendingChat] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
+    const chatInputRef = useRef<HTMLInputElement>(null);
 
-    const activeReviewQuestionId = questions && activeReviewIndex < questions.length ? questions[activeReviewIndex]._id : undefined;
-    const testMessages = useQuery(api.testMessages.getForQuestion, activeReviewQuestionId ? { questionId: activeReviewQuestionId } : "skip");
+    // Arena dimensions for card positioning
+    const arenaRef = useRef<HTMLDivElement>(null);
+    const [arenaW, setArenaW] = useState(800);
+    const [arenaH, setArenaH] = useState(600);
 
     const targetQuestionCount = test?.config?.questionCount ?? 5;
-    const isCompleted = currentIndex >= targetQuestionCount;
+    const isCompleted = questions && questions.length >= targetQuestionCount &&
+        questions.every(q => q.userAnswer || answers[q._id]);
+    const currentQuestion = questions?.[currentIndex];
+
+    // Chat for current question
+    const currentQuestionId = currentQuestion?._id;
+    const testMessages = useQuery(
+        api.testMessages.getForQuestion,
+        currentQuestionId ? { questionId: currentQuestionId } : "skip"
+    );
+
+    // Detect new question appearing (for animation)
+    useEffect(() => {
+        if (questions && questions.length > prevQuestionsLength) {
+            setPrevQuestionsLength(questions.length);
+        }
+    }, [questions?.length]);
+
+    // Track arena size
+    useEffect(() => {
+        if (!arenaRef.current) return;
+        const ro = new ResizeObserver(entries => {
+            const { width, height } = entries[0].contentRect;
+            setArenaW(width);
+            setArenaH(height);
+        });
+        ro.observe(arenaRef.current);
+        return () => ro.disconnect();
+    }, []);
 
     useEffect(() => {
-        // Basic sync from db if user refreshes
         if (questions) {
             const existing: Record<string, string> = {};
             questions.forEach(q => {
@@ -56,12 +103,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             });
             setAnswers(prev => ({ ...existing, ...prev }));
 
-            // Advance current index to first unanswered question
-            const firstUnansweredIndex = questions.findIndex(q => !q.userAnswer && !answers[q._id]);
-            if (firstUnansweredIndex !== -1 && currentIndex === 0) {
-                setCurrentIndex(firstUnansweredIndex);
-            } else if (firstUnansweredIndex === -1 && questions.length > 0 && currentIndex === 0) {
-                setCurrentIndex(questions.length >= targetQuestionCount ? targetQuestionCount : questions.length);
+            // Advance to first unanswered
+            const firstUnanswered = questions.findIndex(q => !q.userAnswer && !answers[q._id]);
+            if (firstUnanswered !== -1 && currentIndex === 0 && !answers[questions[0]?._id]) {
+                setCurrentIndex(firstUnanswered);
             }
         }
     }, [questions, targetQuestionCount]);
@@ -72,31 +117,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         }
     }, [testMessages]);
 
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (isCompleted && questions) {
-                // If focus is in an input/textarea, don't navigate the stack
-                if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
-
-                if (e.key === "ArrowLeft") {
-                    setActiveReviewIndex(Math.max(0, activeReviewIndex - 1));
-                } else if (e.key === "ArrowRight") {
-                    setActiveReviewIndex(Math.min(questions.length - 1, activeReviewIndex + 1));
-                }
-            }
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isCompleted, activeReviewIndex, questions]);
-
-    // Eagerly generate questions in the background until we hit the target count
-    // Use a ref to prevent infinite re-trigger loops: only fire when questions.length actually changes
+    // Background question generation
     const lastGeneratedForCount = useRef(-1);
-
     useEffect(() => {
         if (!questions || !test) return;
         if (questions.length >= targetQuestionCount) return;
-        // Only trigger if questions.length changed since last generation
         if (lastGeneratedForCount.current === questions.length) return;
 
         lastGeneratedForCount.current = questions.length;
@@ -114,7 +139,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     body: JSON.stringify({
                         spaceId: test.spaceId,
                         testType: test.config.type,
-                        testId: tId
+                        testId: tId,
                     }),
                     signal: abortController.signal,
                 });
@@ -122,7 +147,9 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 if (!res.ok) {
                     const errBody = await res.text().catch(() => "");
                     const msg = errBody || `Server error (${res.status})`;
-                    setGenError(msg.includes("429") || msg.includes("quota") ? "API rate limit reached. Please wait a moment and retry." : msg);
+                    setGenError(msg.includes("429") || msg.includes("quota")
+                        ? "API rate limit reached. Please wait a moment and retry."
+                        : msg);
                     lastGeneratedForCount.current = -1;
                     return;
                 }
@@ -137,9 +164,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-
                     buffer += decoder.decode(value, { stream: true });
-
                     const lines = buffer.split("\n\n");
                     buffer = lines.pop() || "";
 
@@ -158,15 +183,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     setGenError(msg);
                                 }
                             }
-                        } catch {
-                            // skip malformed lines
-                        }
+                        } catch { /* skip */ }
                     }
                 }
-                if (hadError) {
-                    // Allow retry by resetting the ref
-                    lastGeneratedForCount.current = -1;
-                }
+                if (hadError) lastGeneratedForCount.current = -1;
             } catch (e) {
                 if ((e as Error).name !== "AbortError") {
                     console.error("Failed to generate question", e);
@@ -182,51 +202,70 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         return () => abortController.abort();
     }, [questions?.length, test, tId, targetQuestionCount, retryNonce]);
 
-    if (test === undefined || questions === undefined) {
-        return (
-            <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center gap-4">
-                <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
-                <p className="text-emerald-500 font-medium tracking-widest uppercase">Preparing your test</p>
-            </div>
-        );
-    }
+    // Keyboard navigation
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const tag = document.activeElement?.tagName;
+            if (tag === "INPUT" || tag === "TEXTAREA") return;
 
-    if (test === null) {
-        return (
-            <div className="min-h-screen bg-neutral-950 text-neutral-50 flex items-center justify-center flex-col gap-4">
-                <h1 className="text-3xl font-bold">Test not found</h1>
-                <Link href="/spaces" className="text-emerald-500 hover:text-emerald-400">
-                    Return to Spaces
-                </Link>
-            </div>
-        );
-    }
+            if (!questions || !currentQuestion) return;
 
-    const handleNext = async (questionId: string, answer: string) => {
+            // Arrow keys for navigation in review
+            if (e.key === "ArrowLeft" && currentIndex > 0) {
+                e.preventDefault();
+                setDirection(-1);
+                setCurrentIndex(currentIndex - 1);
+            } else if (e.key === "ArrowRight" && currentIndex < questions.length - 1) {
+                e.preventDefault();
+                setDirection(1);
+                setCurrentIndex(currentIndex + 1);
+            }
+
+            // Number keys for select questions
+            if (test?.config.type === "select" && currentQuestion.options && !answers[currentQuestion._id] && !currentQuestion.userAnswer) {
+                const num = parseInt(e.key);
+                if (num >= 1 && num <= 4 && currentQuestion.options[num - 1]) {
+                    e.preventDefault();
+                    handleAnswer(currentQuestion._id, currentQuestion.options[num - 1]);
+                }
+            }
+
+            // Escape to go back
+            if (e.key === "Escape") {
+                window.history.back();
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [questions, currentIndex, currentQuestion, answers, test]);
+
+    const handleAnswer = async (questionId: string, answer: string) => {
         if (!answer.trim()) return;
-
-        // Save answer optimistic
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
         setIsEvaluating(prev => ({ ...prev, [questionId]: true }));
 
-        // Fire Validation asynchronously (Fire and Forget)
         fetch("/api/tests/validate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ questionId, answer, testType: test.config.type })
+            body: JSON.stringify({ questionId, answer, testType: test?.config.type }),
         }).finally(() => {
             setIsEvaluating(prev => ({ ...prev, [questionId]: false }));
         });
 
-        const nextIndex = currentIndex + 1;
-        setCurrentIndex(nextIndex); // Optimistically move index
+        // Auto-advance after brief delay — capture index to prevent stale closure
+        const scheduledIndex = currentIndex;
+        setTimeout(() => {
+            if (questions && scheduledIndex === currentIndex && scheduledIndex < questions.length - 1) {
+                setDirection(1);
+                setCurrentIndex(prev => prev + 1);
+            }
+        }, 600);
     };
 
     const handleSendChat = async () => {
-        if (!chatInput.trim() || !activeReviewQuestionId) return;
-
+        if (!chatInput.trim() || !currentQuestionId) return;
         setIsSendingChat(true);
-        const currentMessage = chatInput;
+        const msg = chatInput;
         setChatInput("");
 
         try {
@@ -235,321 +274,406 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     testId: tId,
-                    questionId: activeReviewQuestionId,
-                    message: currentMessage
-                })
+                    questionId: currentQuestionId,
+                    message: msg,
+                }),
             });
-
-            if (!response.ok) {
-                const errText = await response.text().catch(() => "");
-                throw new Error(errText || `Chat failed (${response.status})`);
-            }
+            if (!response.ok) throw new Error("Chat failed");
         } catch (e) {
             console.error("Chat failed", e);
-            setChatInput(currentMessage); // restore on fail
+            setChatInput(msg);
         } finally {
             setIsSendingChat(false);
         }
     };
 
-    return (
-        <div className="min-h-screen bg-neutral-950 text-neutral-50 p-4 md:p-8 flex flex-col items-center">
-            <div className="w-full max-w-2xl mt-4 flex justify-between items-center mb-12">
-                <Link href={`/spaces/${test.spaceId}`} className="p-3 bg-neutral-900 border border-neutral-800 rounded-full hover:bg-neutral-800 transition-colors">
-                    <ArrowLeft className="w-5 h-5 text-neutral-300" />
-                </Link>
-                <div className="flex gap-2">
-                    {questions.map((q, idx) => (
-                        <div
-                            key={q._id}
-                            className={`h-2 rounded-full transition-all duration-500 ${idx < currentIndex ? 'bg-emerald-500 w-8' : idx === currentIndex ? 'bg-neutral-600 w-8' : 'bg-neutral-800 w-4'}`}
-                        />
-                    ))}
-                </div>
+    /* ─── Loading ─── */
+    if (test === undefined || questions === undefined) {
+        return (
+            <div className="h-screen bg-black flex flex-col items-center justify-center gap-4">
+                <Loader2 className="w-8 h-8 text-white/30 animate-spin" />
+                <p className="text-white/40 text-xs font-medium tracking-widest uppercase">Loading test</p>
             </div>
+        );
+    }
 
-            <div className={`w-full ${isCompleted ? 'max-w-6xl h-[700px]' : 'max-w-3xl h-[700px] md:h-[600px]'} relative transition-all duration-500`}>
-                <AnimatePresence mode="popLayout">
-                    {isCompleted ? (
-                        <motion.div
-                            key="review-mode"
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="flex gap-6 h-full w-full"
-                        >
-                            {/* LEFT: Stack Area */}
-                            <div className="flex-1 relative flex items-center justify-center">
-                                {/* Stack Items */}
-                                {questions.map((q, idx) => {
-                                    // Stack math
-                                    const diff = idx - activeReviewIndex;
-                                    // if diff < 0, it's a previous question (could hide or slide left)
-                                    // we only show diff >= 0 (the stack below it) or active
-                                    if (diff < 0) return null;
-                                    if (diff > 3) return null; // Only show top 3 behind it
+    if (test === null) {
+        return (
+            <div className="h-screen bg-black text-white flex items-center justify-center flex-col gap-4">
+                <h1 className="text-xl font-semibold">Test not found</h1>
+                <Link href="/spaces" className="text-white/60 hover:text-white text-sm spring-interact">
+                    Return to Spaces
+                </Link>
+            </div>
+        );
+    }
 
-                                    const isTop = diff === 0;
+    const answeredCount = questions.filter(q => q.userAnswer || answers[q._id]).length;
+    const progress = targetQuestionCount > 0 ? Math.min(100, (answeredCount / targetQuestionCount) * 100) : 0;
 
-                                    return (
-                                        <motion.div
-                                            key={q._id}
-                                            initial={false}
-                                            animate={{
-                                                scale: 1 - diff * 0.05,
-                                                y: diff * -15, // Moves upwards behind
-                                                opacity: 1 - diff * 0.2,
-                                                zIndex: questions.length - idx,
-                                            }}
-                                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                            className={`absolute w-full max-w-xl mx-auto bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col pt-8 pb-6 px-8 ${isTop ? 'pointer-events-auto' : 'pointer-events-none blur-[1px]'}`}
-                                        >
-                                            {isTop && (
-                                                <div className="flex justify-between items-center mb-6">
-                                                    <p className="text-white/60 font-medium text-xs tracking-widest uppercase">Question {idx + 1} of {questions.length}</p>
-                                                    <div className="flex items-center gap-2">
-                                                        {q.isCorrect === true && <div className="flex items-center gap-1.5 text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-semibold"><CheckCircle2 className="w-3.5 h-3.5" /> Correct</div>}
-                                                        {q.isCorrect === false && <div className="flex items-center gap-1.5 text-red-500 bg-red-500/10 px-2 py-1 rounded-md text-xs font-semibold"><XCircle className="w-3.5 h-3.5" /> Incorrect</div>}
-                                                    </div>
-                                                </div>
-                                            )}
+    // Build left stack (answered/past) and right stack (upcoming)
+    const leftCards = questions.filter((_, i) => i < currentIndex);
+    const rightCards = questions.filter((_, i) => i > currentIndex);
 
-                                            <h2 className={`text-xl md:text-2xl font-semibold leading-relaxed mb-6 flex-1 text-white`}>{q.question}</h2>
+    return (
+        <div className="h-screen bg-black text-white flex flex-col overflow-hidden">
+            {/* ─── Header ─── */}
+            <header className="shrink-0 px-6 py-4 flex items-center justify-between border-b border-white/[0.06]">
+                <div className="flex items-center gap-4">
+                    <Link
+                        href={`/spaces/${test.spaceId}`}
+                        aria-label="Back to space"
+                        className="p-2 rounded-lg glass-card hover:bg-white/5 spring-interact text-white/50 hover:text-white"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                    </Link>
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-white/90">
+                            Question {currentIndex + 1}
+                        </span>
+                        <span className="text-white/20">/</span>
+                        <span className="text-sm text-white/40">
+                            {targetQuestionCount}
+                        </span>
+                        {isGeneratingNext && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                className="flex items-center gap-1.5 ml-2"
+                            >
+                                <Loader2 className="w-3 h-3 animate-spin text-white/30" />
+                                <span className="text-[10px] text-white/30 uppercase tracking-widest">Generating</span>
+                            </motion.div>
+                        )}
+                    </div>
+                </div>
 
-                                            {isTop && (
-                                                <div className="space-y-4">
-                                                    {/* Context blocks */}
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-2">
-                                                            <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">Your Answer</span>
-                                                            <p className="text-sm text-white/90">{answers[q._id] || q.userAnswer}</p>
-                                                        </div>
-                                                        <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-2">
-                                                            <span className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">System Answer</span>
-                                                            <p className="text-sm text-white/90">{q.answer || 'N/A'}</p>
-                                                        </div>
-                                                    </div>
+                {/* Progress bar */}
+                <div className="flex items-center gap-4">
+                    <div className="hidden md:flex items-center gap-1">
+                        {Array.from({ length: targetQuestionCount }).map((_, i) => (
+                            <motion.div
+                                key={i}
+                                className="h-1 rounded-full"
+                                animate={{
+                                    width: i === currentIndex ? 20 : 8,
+                                    backgroundColor:
+                                        i < questions.length && (questions[i]?.userAnswer || answers[questions[i]?._id])
+                                            ? questions[i]?.isCorrect === true
+                                                ? "rgba(74, 222, 128, 0.7)"
+                                                : questions[i]?.isCorrect === false
+                                                    ? "rgba(248, 113, 113, 0.7)"
+                                                    : "rgba(255, 255, 255, 0.4)"
+                                            : i === currentIndex
+                                                ? "rgba(255, 255, 255, 0.6)"
+                                                : i < questions.length
+                                                    ? "rgba(255, 255, 255, 0.15)"
+                                                    : "rgba(255, 255, 255, 0.06)",
+                                }}
+                                transition={SPRING_SNAPPY}
+                            />
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2 text-white/30">
+                        <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono">Esc</kbd>
+                        <span className="text-[10px]">Back</span>
+                    </div>
+                </div>
+            </header>
 
-                                                    {/* AI Feedback */}
-                                                    {q.aiFeedback && (
-                                                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4 flex gap-3 items-start">
-                                                            <BrainCircuit className="w-4 h-4 text-emerald-500 mt-1 shrink-0" />
-                                                            <div className="flex-1">
-                                                                <span className="text-[10px] uppercase tracking-widest text-emerald-500/70 font-semibold block mb-1">AI Feedback</span>
-                                                                <p className="text-sm text-emerald-100/90 leading-relaxed">{q.aiFeedback}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
+            {/* ─── Main content ─── */}
+            <div className="flex-1 flex min-h-0">
+                {/* ─── Card arena ─── */}
+                <div className="flex-1 relative min-w-0 overflow-hidden" ref={arenaRef}>
+                    {/* Every question = one motion.div that grows/shrinks */}
+                    {questions.map((q, idx) => {
+                        const isActive = idx === currentIndex;
+                        const offset = idx - currentIndex;
+                        const isLeft = offset < 0;
+                        const absOffset = Math.abs(offset);
 
-                                                    {/* Navigation Controls */}
-                                                    <div className="flex items-center justify-between mt-8 pt-4 border-t border-white/5">
-                                                        <button
-                                                            onClick={() => setActiveReviewIndex(Math.max(0, activeReviewIndex - 1))}
-                                                            disabled={activeReviewIndex === 0}
-                                                            className="flex items-center gap-2 text-white/60 hover:text-white disabled:opacity-30 transition-colors text-sm font-medium spring-interact"
-                                                        >
-                                                            <ArrowLeft className="w-4 h-4" /> Prev <kbd className="hidden md:inline-block ml-1 px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px]">←</kbd>
-                                                        </button>
+                        if (!isActive && absOffset > STACK_VISIBLE) return null;
 
-                                                        <div className="flex items-center justify-center gap-1">
-                                                            {questions.map((_, i) => (
-                                                                <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === activeReviewIndex ? 'bg-white' : 'bg-white/20'}`} />
-                                                            ))}
-                                                        </div>
+                        const depth = Math.max(0, absOffset - 1);
+                        const rot = isActive ? 0 : ((cardHash(q._id, isLeft ? 1 : 3) % 9) - 4) * 1.0;
+                        const yOff = isActive ? 0 : ((cardHash(q._id, isLeft ? 2 : 4) % 7) - 3) * 4;
 
-                                                        <button
-                                                            onClick={() => setActiveReviewIndex(Math.min(questions.length - 1, activeReviewIndex + 1))}
-                                                            disabled={activeReviewIndex === questions.length - 1}
-                                                            className="flex items-center gap-2 text-white/60 hover:text-white disabled:opacity-30 transition-colors text-sm font-medium spring-interact"
-                                                        >
-                                                            <kbd className="hidden md:inline-block mr-1 px-1.5 py-0.5 bg-white/10 rounded font-mono text-[10px]">→</kbd> Next <ChevronRight className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </motion.div>
-                                    );
-                                })}
-                            </div>
+                        const stackX = isLeft
+                            ? -(arenaW / 2 - 90) + depth * -16
+                            : (arenaW / 2 - 90) + depth * 16;
 
-                            {/* RIGHT: Chat Sidebar */}
-                            <div className="w-80 lg:w-96 bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col overflow-hidden">
-                                <div className="p-4 border-b border-white/10 bg-white/5 flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                                        <MessageSquare className="w-4 h-4 text-emerald-500" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-medium text-sm text-white">Review Tutor</h3>
-                                        <p className="text-[10px] text-white/60 uppercase tracking-widest">Question {activeReviewIndex + 1} Context</p>
-                                    </div>
-                                </div>
+                        const activeW = Math.min(arenaW - 48, 672);
+                        const activeH = arenaH - 48;
 
-                                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                                    {testMessages === undefined ? (
-                                        <div className="h-full flex items-center justify-center">
-                                            <Loader2 className="w-5 h-5 animate-spin text-white/30" />
-                                        </div>
-                                    ) : testMessages.length === 0 ? (
-                                        <div className="h-full flex flex-col items-center justify-center text-center px-4 opacity-50">
-                                            <BrainCircuit className="w-8 h-8 text-white/50 mb-3" />
-                                            <p className="text-sm text-white/80">Still confused about this answer?</p>
-                                            <p className="text-xs text-white/50 mt-1">Ask the AI tutor for a deeper explanation.</p>
-                                        </div>
-                                    ) : (
-                                        testMessages.map((msg) => (
-                                            <div key={msg._id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'user' ? 'bg-white/10 text-white border border-white/5' : 'bg-transparent border border-white/10 text-white/90'}`}>
-                                                    <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                    {isSendingChat && (
-                                        <div className="flex justify-start">
-                                            <div className="max-w-[85%] rounded-2xl px-4 py-2.5 bg-transparent border border-white/10 text-white/90">
-                                                <Loader2 className="w-4 h-4 animate-spin text-white/50" />
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div ref={chatEndRef} />
-                                </div>
-
-                                <div className="p-4 border-t border-white/10 bg-[#0A0A0A]">
-                                    <form
-                                        onSubmit={e => { e.preventDefault(); handleSendChat(); }}
-                                        className="relative flex items-center"
-                                    >
-                                        <input
-                                            type="text"
-                                            value={chatInput}
-                                            onChange={e => setChatInput(e.target.value)}
-                                            placeholder="Ask a follow up..."
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-4 pr-12 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-white/20 spring-interact disabled:opacity-50"
-                                            disabled={isSendingChat}
-                                        />
-                                        <button
-                                            type="submit"
-                                            disabled={!chatInput.trim() || isSendingChat}
-                                            className="absolute right-2 p-1.5 text-white/60 hover:text-white disabled:opacity-30 transition-colors spring-interact"
-                                        >
-                                            <Send className="w-4 h-4" />
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ) : !isCompleted && currentIndex >= questions.length ? (
-                        <motion.div
-                            key="generating-next"
-                            initial={{ opacity: 0, y: 50, rotateX: 20 }}
-                            animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                            exit={{ opacity: 0, x: -200, rotateZ: -10 }}
-                            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                            className="absolute inset-0 bg-neutral-900 border border-neutral-800 shadow-2xl rounded-3xl p-8 flex flex-col"
-                        >
-                            {genError ? (
-                                <div className="flex items-center gap-3 mb-6">
-                                    <XCircle className="w-5 h-5 text-red-500 shrink-0" />
-                                    <p className="text-red-500 font-semibold uppercase tracking-wider text-sm">Generation Failed</p>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-3 mb-6">
-                                    <Loader2 className="w-5 h-5 text-emerald-500 animate-spin shrink-0" />
-                                    <p className="text-emerald-500 font-semibold uppercase tracking-wider text-sm">Generating Question {(questions?.length ?? 0) + 1}</p>
-                                </div>
-                            )}
-                            {genError ? (
-                                <div className="flex-1 flex flex-col items-center justify-center text-center gap-6">
-                                    <p className="text-white/60 text-sm max-w-sm">{genError}</p>
-                                    <button
-                                        onClick={() => {
-                                            setGenError(null);
-                                            lastGeneratedForCount.current = -1;
-                                            setRetryNonce(n => n + 1);
-                                        }}
-                                        className="px-6 py-3 bg-white/10 border border-white/10 rounded-xl text-white text-sm font-medium hover:bg-white/20 transition-colors"
-                                    >
-                                        Retry Generation
-                                    </button>
-                                </div>
-                            ) : streamingText ? (
-                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-4">
-                                    <h2 className="text-2xl md:text-3xl font-bold leading-relaxed text-white">
-                                        {(() => {
-                                            try {
-                                                const match = streamingText.match(/"question"\s*:\s*"((?:[^"\\]|\\.)*)/)
-                                                if (match?.[1]) return match[1];
-                                            } catch { /* ignore */ }
-                                            return null;
-                                        })()}
-                                        <span className="inline-block w-0.5 h-6 bg-emerald-500 animate-pulse ml-1 align-text-bottom" />
-                                    </h2>
-                                </div>
-                            ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
-                                    <p className="text-white/60 text-sm">Reviewing previous answers to synthesize the next challenge...</p>
-                                </div>
-                            )}
-                        </motion.div>
-                    ) : (
-                        questions.map((q, idx) => {
-                            if (idx !== currentIndex) return null;
-
-                            return (
+                        return (
+                            <motion.div
+                                key={q._id}
+                                animate={{
+                                    width: isActive ? activeW : 130,
+                                    height: isActive ? activeH : 170,
+                                    x: isActive ? -activeW / 2 : stackX - 65,
+                                    y: isActive ? -activeH / 2 : yOff - 85,
+                                    rotate: rot,
+                                    scale: isActive ? 1 : (1 - depth * 0.06),
+                                    opacity: isActive ? 1 : ((isLeft ? 0.7 : 0.6) - depth * 0.15),
+                                    zIndex: isActive ? 50 : (STACK_VISIBLE - depth + 1),
+                                }}
+                                transition={{
+                                    x: SPRING_SNAPPY,
+                                    y: SPRING_SNAPPY,
+                                    scale: SPRING_SNAPPY,
+                                    rotate: SPRING_SNAPPY,
+                                    opacity: SPRING_SNAPPY,
+                                    width: { duration: 0 },
+                                    height: { duration: 0 },
+                                    zIndex: { duration: 0 },
+                                }}
+                                className={`absolute rounded-2xl border overflow-hidden ${isActive
+                                    ? 'border-white/[0.08] bg-[#0A0A0A] shadow-[0_4px_24px_rgba(0,0,0,0.5)]'
+                                    : 'border-white/[0.08] bg-[#0D0D0D] shadow-[0_2px_12px_rgba(0,0,0,0.4)] cursor-pointer hover:bg-white/[0.04]'
+                                    }`}
+                                style={{ top: '50%', left: '50%' }}
+                                onClick={!isActive ? () => { setDirection(offset > 0 ? 1 : -1); setCurrentIndex(idx); } : undefined}
+                            >
+                                {/* Stack preview — fades out when active */}
                                 <motion.div
-                                    key={q._id}
-                                    initial={{ opacity: 0, y: 50, rotateX: 20 }}
-                                    animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                                    exit={{ opacity: 0, x: -200, rotateZ: -10 }}
-                                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                                    className="absolute inset-0 bg-neutral-900 border border-neutral-800 shadow-2xl rounded-3xl p-8 flex flex-col"
+                                    animate={{ opacity: isActive ? 0 : 1 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute inset-0 p-3 flex flex-col gap-2 overflow-hidden"
+                                    style={{ zIndex: isActive ? 0 : 1, pointerEvents: 'none' }}
                                 >
-                                    <p className="text-emerald-500 font-semibold mb-6 uppercase tracking-wider text-sm shrink-0">Question {idx + 1}</p>
-                                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 mb-8">
-                                        <h2 className="text-2xl md:text-3xl font-bold leading-relaxed text-white">{q.question}</h2>
-                                    </div>
-
-                                    {test.config.type === "select" && q.options ? (
-                                        <div className="grid gap-4">
-                                            {q.options.map((opt, i) => {
-                                                const isSelected = answers[q._id] === opt;
-                                                return (
-                                                    <button
-                                                        key={i}
-                                                        onClick={() => handleNext(q._id, opt)}
-                                                        className={`p-5 rounded-2xl text-left font-medium text-lg transition-all border ${isSelected ? 'border-emerald-500 bg-emerald-500/10 text-white' : 'border-neutral-800 bg-neutral-950 text-neutral-300 hover:border-neutral-600'}`}
-                                                    >
-                                                        {opt}
-                                                    </button>
-                                                )
-                                            })}
-                                        </div>
-                                    ) : (
-                                        <div className="mt-auto space-y-4">
-                                            <textarea
-                                                id={`answer-${q._id}`}
-                                                placeholder="Type your answer here..."
-                                                className="w-full bg-neutral-950 border border-neutral-800 rounded-2xl p-5 min-h-[150px] resize-y focus:outline-none focus:ring-2 focus:ring-emerald-500 text-lg"
-                                            />
-                                            <button
-                                                onClick={() => {
-                                                    const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement;
-                                                    if (el) {
-                                                        handleNext(q._id, el.value);
-                                                        el.value = ''; // clear input
-                                                    }
-                                                }}
-                                                className="w-full bg-emerald-500 text-neutral-950 font-bold text-lg py-5 rounded-2xl flex items-center justify-center gap-2 hover:bg-emerald-400 transition-colors"
-                                            >
-                                                Next Question <ChevronRight className="w-5 h-5" />
-                                            </button>
+                                    <p className="text-[9px] text-white/40 uppercase tracking-widest font-semibold">Q{idx + 1}</p>
+                                    <p className="text-[10px] text-white/30 line-clamp-5 leading-relaxed flex-1">{q.question}</p>
+                                    {isLeft && (
+                                        <div className="flex items-center gap-1">
+                                            {q.isCorrect === true && <CheckCircle2 className="w-3 h-3 text-green-400/60" />}
+                                            {q.isCorrect === false && <XCircle className="w-3 h-3 text-red-400/60" />}
+                                            {q.isCorrect === undefined && q.userAnswer && <div className="w-2 h-2 rounded-full bg-white/25" />}
                                         </div>
                                     )}
                                 </motion.div>
-                            );
-                        })
+
+                                {/* Full card content — fades in when active */}
+                                <motion.div
+                                    animate={{ opacity: isActive ? 1 : 0 }}
+                                    transition={{ duration: 0.2, delay: isActive ? 0.12 : 0 }}
+                                    className="absolute inset-0 flex flex-col"
+                                    style={{ zIndex: isActive ? 1 : 0, pointerEvents: isActive ? 'auto' : 'none', minWidth: activeW, minHeight: activeH }}
+                                >
+                                    <div className="shrink-0 px-8 pt-7 pb-5 border-b border-white/[0.04]">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-semibold">
+                                                Question {idx + 1}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                {q.isCorrect === true && (
+                                                    <div className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-green-400/20">
+                                                        <CheckCircle2 className="w-3 h-3" /> Correct
+                                                    </div>
+                                                )}
+                                                {q.isCorrect === false && (
+                                                    <div className="flex items-center gap-1.5 text-red-400 bg-red-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-red-400/20">
+                                                        <XCircle className="w-3 h-3" /> Incorrect
+                                                    </div>
+                                                )}
+                                                {isEvaluating[q._id] && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/30" />}
+                                            </div>
+                                        </div>
+                                        <h2 className="text-lg md:text-xl font-semibold leading-relaxed text-white tracking-tight">{q.question}</h2>
+                                    </div>
+
+                                    <div className="flex-1 px-8 py-6 overflow-y-auto custom-scrollbar">
+                                        {test.config.type === "select" && q.options ? (
+                                            <div className="grid gap-3">
+                                                {q.options.map((opt, i) => {
+                                                    const selectedAnswer = answers[q._id] || q.userAnswer;
+                                                    const isSelected = selectedAnswer === opt;
+                                                    const isAnswered = !!selectedAnswer;
+                                                    const isCorrectAnswer = q.answer === opt;
+                                                    const showResult = isAnswered && q.isCorrect !== undefined;
+                                                    let borderColor = "border-white/[0.08]";
+                                                    let bgColor = "bg-white/[0.02]";
+                                                    let textColor = "text-white/80";
+                                                    if (showResult) {
+                                                        if (isCorrectAnswer) { borderColor = "border-green-400/30"; bgColor = "bg-green-400/[0.06]"; textColor = "text-green-300"; }
+                                                        else if (isSelected) { borderColor = "border-red-400/30"; bgColor = "bg-red-400/[0.06]"; textColor = "text-red-300"; }
+                                                    } else if (isSelected) { borderColor = "border-white/20"; bgColor = "bg-white/[0.06]"; textColor = "text-white"; }
+                                                    return (
+                                                        <motion.button key={i} onClick={() => !isAnswered && handleAnswer(q._id, opt)} disabled={isAnswered} whileTap={!isAnswered ? { scale: 0.98 } : {}}
+                                                            className={`group relative w-full p-4 rounded-xl text-left text-sm font-medium transition-colors border ${borderColor} ${bgColor} ${textColor} ${!isAnswered ? 'hover:bg-white/[0.05] hover:border-white/15 cursor-pointer' : 'cursor-default'}`}>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-mono font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-white/5 text-white/30'} border border-white/[0.08]`}>{i + 1}</span>
+                                                                <span className="flex-1">{opt}</span>
+                                                                {showResult && isCorrectAnswer && <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />}
+                                                                {showResult && isSelected && !isCorrectAnswer && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
+                                                            </div>
+                                                            {!isAnswered && <kbd className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:block px-1.5 py-0.5 bg-white/5 rounded text-[10px] font-mono text-white/20 border border-white/[0.06] opacity-0 group-hover:opacity-100 transition-opacity">{i + 1}</kbd>}
+                                                        </motion.button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col gap-4 h-full">
+                                                {(answers[q._id] || q.userAnswer) ? (
+                                                    <div className="space-y-4">
+                                                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                                                            <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Your Answer</p>
+                                                            <p className="text-sm text-white/80 leading-relaxed">{answers[q._id] || q.userAnswer}</p>
+                                                        </div>
+                                                        {q.answer && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Reference Answer</p><p className="text-sm text-white/80 leading-relaxed">{q.answer}</p></div>}
+                                                        {q.aiFeedback && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><div className="flex items-center gap-2 mb-2"><BrainCircuit className="w-3 h-3 text-white/40" /><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold">AI Feedback</p></div><p className="text-sm text-white/70 leading-relaxed">{q.aiFeedback}</p></div>}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex-1 flex flex-col gap-3">
+                                                        <textarea id={`answer-${q._id}`} placeholder="Type your answer..." className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]"
+                                                            onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); const el = e.currentTarget; if (el.value.trim()) handleAnswer(q._id, el.value); } }}
+                                                        />
+                                                        <button onClick={() => { const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement; if (el?.value.trim()) handleAnswer(q._id, el.value); }} className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2">
+                                                            Submit <kbd className="hidden md:inline-flex px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-white/40 border border-white/[0.06]">⌘↵</kbd>
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="shrink-0 px-8 py-3 border-t border-white/[0.04] flex items-center justify-between">
+                                        <button aria-label="Previous question" onClick={() => { setDirection(-1); setCurrentIndex(Math.max(0, currentIndex - 1)); }} disabled={currentIndex === 0} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
+                                            <ChevronLeft className="w-3.5 h-3.5" /><span className="hidden md:inline">Prev</span><kbd className="hidden md:inline px-1 py-0.5 bg-white/5 rounded text-[9px] font-mono text-white/20 border border-white/[0.06]">←</kbd>
+                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            {questions.map((_, i) => (<button key={i} onClick={() => { setDirection(i > currentIndex ? 1 : -1); setCurrentIndex(i); }} className={`w-1.5 h-1.5 rounded-full transition-all spring-interact ${i === currentIndex ? 'bg-white/80 w-3' : i < currentIndex ? 'bg-white/25' : 'bg-white/10'}`} />))}
+                                        </div>
+                                        <button aria-label="Next question" onClick={() => { setDirection(1); setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1)); }} disabled={currentIndex >= questions.length - 1} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
+                                            <kbd className="hidden md:inline px-1 py-0.5 bg-white/5 rounded text-[9px] font-mono text-white/20 border border-white/[0.06]">→</kbd><span className="hidden md:inline">Next</span><ChevronRight className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+                        );
+                    })}
+
+                    {/* Generating placeholder */}
+                    {isGeneratingNext && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.85, rotate: 2 }}
+                            animate={{ opacity: 0.2, x: (arenaW / 2 - 90) + Math.min(rightCards.length, STACK_VISIBLE) * 16 - 65, y: -85, rotate: 2, scale: 1 - Math.min(rightCards.length, STACK_VISIBLE) * 0.06 }}
+                            transition={SPRING_GENTLE}
+                            className="absolute rounded-xl border border-white/[0.08] border-dashed bg-[#0A0A0A] flex items-center justify-center shadow-[0_2px_12px_rgba(0,0,0,0.3)]"
+                            style={{ zIndex: 0, width: 130, height: 170, top: '50%', left: '50%' }}
+                        >
+                            <div className="flex flex-col items-center gap-2">
+                                <Sparkles className="w-4 h-4 text-white/20 animate-pulse" />
+                                <span className="text-[8px] text-white/20 uppercase tracking-widest">Generating</span>
+                            </div>
+                        </motion.div>
                     )}
-                </AnimatePresence>
+
+                    {/* Empty state: waiting for first question */}
+                    {!currentQuestion && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 p-8">
+                            {genError ? (
+                                <>
+                                    <XCircle className="w-8 h-8 text-red-400/50" />
+                                    <p className="text-sm text-white/50 text-center max-w-sm">{genError}</p>
+                                    <button onClick={() => { setGenError(null); lastGeneratedForCount.current = -1; setRetryNonce(n => n + 1); }} className="px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact">Retry Generation</button>
+                                </>
+                            ) : isGeneratingNext ? null : (
+                                <>
+                                    <Loader2 className="w-6 h-6 animate-spin text-white/20" />
+                                    <p className="text-sm text-white/50">Waiting for questions...</p>
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* ─── Chat sidebar ─── */}
+                <div className="shrink-0 w-80 lg:w-[340px] border-l border-white/[0.06] flex flex-col bg-[#050505] hidden md:flex">
+                    {/* Chat header */}
+                    <div className="shrink-0 px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/[0.08] flex items-center justify-center">
+                            <MessageSquare className="w-3.5 h-3.5 text-white/40" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-xs text-white/80">AI Tutor</h3>
+                            <p className="text-[10px] text-white/30 truncate">
+                                {currentQuestion ? `Q${currentIndex + 1} context` : "Select a question"}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar min-h-0">
+                        {!currentQuestionId ? (
+                            <div className="h-full flex items-center justify-center">
+                                <p className="text-xs text-white/20 text-center">No question selected</p>
+                            </div>
+                        ) : testMessages === undefined ? (
+                            <div className="h-full flex items-center justify-center">
+                                <Loader2 className="w-4 h-4 animate-spin text-white/20" />
+                            </div>
+                        ) : testMessages.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center px-4">
+                                <BrainCircuit className="w-6 h-6 text-white/10 mb-3" />
+                                <p className="text-xs text-white/40 mb-1">Need help?</p>
+                                <p className="text-[10px] text-white/20 leading-relaxed">
+                                    Ask the AI tutor about this question for a deeper explanation.
+                                </p>
+                            </div>
+                        ) : (
+                            testMessages.map((msg) => (
+                                <motion.div
+                                    key={msg._id}
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={SPRING_SNAPPY}
+                                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                                >
+                                    <div className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${msg.role === "user"
+                                        ? "bg-white/[0.08] text-white/80 border border-white/[0.06]"
+                                        : "bg-transparent text-white/70 border border-white/[0.06]"
+                                        }`}>
+                                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                                    </div>
+                                </motion.div>
+                            ))
+                        )}
+                        {isSendingChat && (
+                            <div className="flex justify-start">
+                                <div className="rounded-xl px-3.5 py-2.5 border border-white/[0.06]">
+                                    <Loader2 className="w-3 h-3 animate-spin text-white/30" />
+                                </div>
+                            </div>
+                        )}
+                        <div ref={chatEndRef} />
+                    </div>
+
+                    {/* Chat input */}
+                    <div className="shrink-0 p-4 border-t border-white/[0.06]">
+                        <form
+                            onSubmit={e => { e.preventDefault(); handleSendChat(); }}
+                            className="relative flex items-center"
+                        >
+                            <input
+                                ref={chatInputRef}
+                                type="text"
+                                value={chatInput}
+                                onChange={e => setChatInput(e.target.value)}
+                                placeholder="Ask about this question..."
+                                disabled={!currentQuestionId || isSendingChat}
+                                className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/15 transition-colors disabled:opacity-40"
+                            />
+                            <button
+                                type="submit"
+                                disabled={!chatInput.trim() || isSendingChat}
+                                className="absolute right-2 p-1.5 text-white/30 hover:text-white/70 disabled:text-white/10 transition-colors spring-interact"
+                            >
+                                <CornerDownLeft className="w-3.5 h-3.5" />
+                            </button>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     );
