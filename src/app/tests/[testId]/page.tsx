@@ -1,11 +1,10 @@
-/* eslint-disable */
-// @ts-nocheck
+
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import { Id } from "../../../../convex/_generated/dataModel";
-import { useState, use, useEffect, useRef, useCallback } from "react";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import { useState, use, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Loader2,
@@ -16,9 +15,9 @@ import {
     ChevronRight,
     BrainCircuit,
     MessageSquare,
-    Send,
     Sparkles,
     CornerDownLeft,
+    AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -32,8 +31,96 @@ const STACK_VISIBLE = 3;
 /** Deterministic hash for pseudo-random card offsets */
 function cardHash(id: string, seed: number) {
     let h = seed;
-    for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+    for (let i = 0; i < id.length; i++) h = Math.trunc(((h << 5) - h + (id.codePointAt(i) ?? 0)));
     return h;
+}
+
+/* ─── Basic markdown renderer for chat messages ─── */
+/**
+ * Parses inline markdown tokens: **bold**, *italic*, `code`.
+ * Uses lookbehind / lookahead so a single * doesn't collide with **.
+ */
+function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
+    const result: ReactNode[] = [];
+    // Order matters: match bold (**text**) or code (`text`) before italic (*text*).
+    // This avoids lookbehind/lookahead which breaks on older Safari.
+    const tokenRegex = /(\*\*(.+?)\*\*|`(.+?)`|\*([^*]+?)\*)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let partIdx = 0;
+
+    while ((match = tokenRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            result.push(text.slice(lastIndex, match.index));
+        }
+
+        const key = `${keyPrefix}-${partIdx++}`;
+        if (match[2] !== undefined) {
+            // **bold**
+            result.push(
+                <strong key={key} className="font-semibold text-white">
+                    {match[2]}
+                </strong>
+            );
+        } else if (match[3] !== undefined) {
+            // `code`
+            result.push(
+                <code
+                    key={key}
+                    className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-white/90 border border-white/[0.06]"
+                >
+                    {match[3]}
+                </code>
+            );
+        } else if (match[4] !== undefined) {
+            // *italic* (captured without lookbehind)
+            result.push(
+                <em key={key} className="italic text-white/80">
+                    {match[4]}
+                </em>
+            );
+        }
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        result.push(text.slice(lastIndex));
+    }
+
+    return result;
+}
+
+/**
+ * Renders basic markdown: bullet lists (* / -), **bold**, *italic*, `code`,
+ * and newlines.
+ */
+function renderMarkdown(text: string): ReactNode[] {
+    const lines = text.split("\n");
+    const result: ReactNode[] = [];
+
+    lines.forEach((line, lineIdx) => {
+        if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
+
+        // Detect bullet-list lines: "* text", "*   text", "- text"
+        const bulletMatch = /^(\s*)[*-]\s+(.*)/.exec(line);
+        if (bulletMatch) {
+            const indent = bulletMatch[1] ?? "";
+            const content = bulletMatch[2] ?? "";
+            result.push(
+                <span key={`li-${lineIdx}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
+                    <span className="text-white/40 select-none shrink-0">•</span>
+                    <span>{renderInlineMarkdown(content, `${lineIdx}`)}</span>
+                </span>
+            );
+            return;
+        }
+
+        // Regular line — just inline formatting
+        result.push(...renderInlineMarkdown(line, `${lineIdx}`));
+    });
+
+    return result;
 }
 
 export default function TestPage({ params }: { params: Promise<{ testId: string }> }) {
@@ -47,10 +134,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [isEvaluating, setIsEvaluating] = useState<Record<string, boolean>>({});
     const [isGeneratingNext, setIsGeneratingNext] = useState(false);
-    const [streamingText, setStreamingText] = useState("");
+    const [, setStreamingText] = useState(""); // value unused; only setter needed
     const [genError, setGenError] = useState<string | null>(null);
     const [retryNonce, setRetryNonce] = useState(0);
-    const [direction, setDirection] = useState(1); // 1 = forward, -1 = backward
+    const [, setDirection] = useState(1); // value unused; only setter needed
     const [prevQuestionsLength, setPrevQuestionsLength] = useState(0);
 
     // Chat State
@@ -59,14 +146,22 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const chatEndRef = useRef<HTMLDivElement>(null);
     const chatInputRef = useRef<HTMLInputElement>(null);
 
+    // Context menu ("Feels hard") state
+    const [contextMenu, setContextMenu] = useState<{
+        x: number;
+        y: number;
+        messageId: string;
+        messageContent: string;
+    } | null>(null);
+    const [feelsHardLoading, setFeelsHardLoading] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
     // Arena dimensions for card positioning
     const arenaRef = useRef<HTMLDivElement>(null);
     const [arenaW, setArenaW] = useState(800);
     const [arenaH, setArenaH] = useState(600);
 
     const targetQuestionCount = test?.config?.questionCount ?? 5;
-    const isCompleted = questions && questions.length >= targetQuestionCount &&
-        questions.every(q => q.userAnswer || answers[q._id]);
     const currentQuestion = questions?.[currentIndex];
 
     // Chat for current question
@@ -81,12 +176,14 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         if (questions && questions.length > prevQuestionsLength) {
             setPrevQuestionsLength(questions.length);
         }
-    }, [questions?.length]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [questions?.length, prevQuestionsLength]);
 
     // Track arena size
     useEffect(() => {
         if (!arenaRef.current) return;
         const ro = new ResizeObserver(entries => {
+            if (!entries?.[0]) return;
             const { width, height } = entries[0].contentRect;
             setArenaW(width);
             setArenaH(height);
@@ -105,10 +202,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
             // Advance to first unanswered
             const firstUnanswered = questions.findIndex(q => !q.userAnswer && !answers[q._id]);
-            if (firstUnanswered !== -1 && currentIndex === 0 && !answers[questions[0]?._id]) {
+            if (firstUnanswered !== -1 && currentIndex === 0 && questions[0] && !answers[questions[0]._id]) {
                 setCurrentIndex(firstUnanswered);
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, targetQuestionCount]);
 
     useEffect(() => {
@@ -131,7 +229,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
         const abortController = new AbortController();
 
-        (async () => {
+        void (async () => {
             try {
                 const res = await fetch("/api/tests/generate", {
                     method: "POST",
@@ -140,13 +238,14 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         spaceId: test.spaceId,
                         testType: test.config.type,
                         testId: tId,
+                        knowledgePieceId: sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined,
                     }),
                     signal: abortController.signal,
                 });
 
                 if (!res.ok) {
                     const errBody = await res.text().catch(() => "");
-                    const msg = errBody || `Server error (${res.status})`;
+                    const msg = errBody.trim() ? errBody : `Server error (${res.status})`;
                     setGenError(msg.includes("429") || msg.includes("quota")
                         ? "API rate limit reached. Please wait a moment and retry."
                         : msg);
@@ -166,17 +265,17 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split("\n\n");
-                    buffer = lines.pop() || "";
+                    buffer = lines.pop() ?? "";
 
                     for (const line of lines) {
                         if (!line.startsWith("data: ")) continue;
                         try {
-                            const payload = JSON.parse(line.slice(6));
+                            const payload = JSON.parse(line.slice(6)) as { type: string; text?: string; error?: string };
                             if (payload.type === "delta") {
-                                setStreamingText(prev => prev + payload.text);
+                                setStreamingText(prev => prev + (payload.text ?? ""));
                             } else if (payload.type === "error") {
                                 hadError = true;
-                                const msg = (payload.error as string) || "Generation failed";
+                                const msg = payload.error ?? "Generation failed";
                                 if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
                                     setGenError("API rate limit reached. Please wait a moment and retry.");
                                 } else {
@@ -200,6 +299,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         })();
 
         return () => abortController.abort();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions?.length, test, tId, targetQuestionCount, retryNonce]);
 
     // Keyboard navigation
@@ -223,20 +323,22 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
             // Number keys for select questions
             if (test?.config.type === "select" && currentQuestion.options && !answers[currentQuestion._id] && !currentQuestion.userAnswer) {
-                const num = parseInt(e.key);
-                if (num >= 1 && num <= 4 && currentQuestion.options[num - 1]) {
+                const num = Number.parseInt(e.key);
+                const opt = currentQuestion.options[num - 1];
+                if (num >= 1 && num <= 4 && opt) {
                     e.preventDefault();
-                    handleAnswer(currentQuestion._id, currentQuestion.options[num - 1]);
+                    void handleAnswer(currentQuestion._id, opt);
                 }
             }
 
             // Escape to go back
             if (e.key === "Escape") {
-                window.history.back();
+                globalThis.history.back();
             }
         };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
+        globalThis.addEventListener("keydown", handleKeyDown);
+        return () => globalThis.removeEventListener("keydown", handleKeyDown);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, currentIndex, currentQuestion, answers, test]);
 
     const handleAnswer = async (questionId: string, answer: string) => {
@@ -244,7 +346,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
         setIsEvaluating(prev => ({ ...prev, [questionId]: true }));
 
-        fetch("/api/tests/validate", {
+        void fetch("/api/tests/validate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ questionId, answer, testType: test?.config.type }),
@@ -287,6 +389,70 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         }
     };
 
+    // Context menu handler for right-clicking AI messages
+    const handleMessageContextMenu = useCallback((e: React.MouseEvent, messageId: string, messageContent: string) => {
+        e.preventDefault();
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            messageId,
+            messageContent,
+        });
+    }, []);
+
+    // Close context menu on any click or scroll
+    useEffect(() => {
+        if (!contextMenu) return;
+        const close = () => setContextMenu(null);
+        globalThis.addEventListener("click", close);
+        globalThis.addEventListener("scroll", close, true);
+        return () => {
+            globalThis.removeEventListener("click", close);
+            globalThis.removeEventListener("scroll", close, true);
+        };
+    }, [contextMenu]);
+
+    // Auto-dismiss toast
+    useEffect(() => {
+        if (!toast) return;
+        const timer = setTimeout(() => setToast(null), 3500);
+        return () => clearTimeout(timer);
+    }, [toast]);
+
+    const handleFeelsHard = async (messageId: string, messageContent: string) => {
+        setContextMenu(null);
+        if (!currentQuestionId) return;
+
+        setFeelsHardLoading(messageId);
+
+        try {
+            const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined;
+
+            const res = await fetch("/api/tests/feels-hard", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    testId: tId,
+                    questionId: currentQuestionId,
+                    messageContent,
+                    knowledgePieceId,
+                }),
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({})) as { error?: string };
+                throw new Error(errData.error ?? "Failed to save");
+            }
+
+            setToast({ message: "Struggle note added to knowledge base", type: "success" });
+        } catch (e) {
+            console.error("Feels hard failed", e);
+            setToast({ message: e instanceof Error ? e.message : "Failed to save", type: "error" });
+        } finally {
+            setFeelsHardLoading(null);
+        }
+    };
+
     /* ─── Loading ─── */
     if (test === undefined || questions === undefined) {
         return (
@@ -308,11 +474,9 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         );
     }
 
-    const answeredCount = questions.filter(q => q.userAnswer || answers[q._id]).length;
-    const progress = targetQuestionCount > 0 ? Math.min(100, (answeredCount / targetQuestionCount) * 100) : 0;
+
 
     // Build left stack (answered/past) and right stack (upcoming)
-    const leftCards = questions.filter((_, i) => i < currentIndex);
     const rightCards = questions.filter((_, i) => i > currentIndex);
 
     return (
@@ -351,28 +515,49 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 {/* Progress bar */}
                 <div className="flex items-center gap-4">
                     <div className="hidden md:flex items-center gap-1">
-                        {Array.from({ length: targetQuestionCount }).map((_, i) => (
-                            <motion.div
-                                key={i}
-                                className="h-1 rounded-full"
-                                animate={{
-                                    width: i === currentIndex ? 20 : 8,
-                                    backgroundColor:
-                                        i < questions.length && (questions[i]?.userAnswer || answers[questions[i]?._id])
-                                            ? questions[i]?.isCorrect === true
-                                                ? "rgba(74, 222, 128, 0.7)"
-                                                : questions[i]?.isCorrect === false
-                                                    ? "rgba(248, 113, 113, 0.7)"
-                                                    : "rgba(255, 255, 255, 0.4)"
-                                            : i === currentIndex
-                                                ? "rgba(255, 255, 255, 0.6)"
-                                                : i < questions.length
-                                                    ? "rgba(255, 255, 255, 0.15)"
-                                                    : "rgba(255, 255, 255, 0.06)",
-                                }}
-                                transition={SPRING_SNAPPY}
-                            />
-                        ))}
+                        {Array.from({ length: targetQuestionCount }).map((_, i) => {
+                            const isCurrentlyGenerating = isGeneratingNext && i === questions.length;
+
+                            if (isCurrentlyGenerating) {
+                                return (
+                                    <motion.div
+                                        key={`${i}-gen`}
+                                        initial={{ opacity: 0, scale: 0 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        className="w-3 h-3 flex items-center justify-center"
+                                    >
+                                        <motion.div
+                                            className="w-2 h-2 rounded-full border border-white/30 border-t-white/70"
+                                            animate={{ rotate: 360 }}
+                                            transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
+                                        />
+                                    </motion.div>
+                                );
+                            }
+
+                            return (
+                                <motion.div
+                                    key={`${i}-dot`}
+                                    className="h-1 rounded-full"
+                                    animate={{
+                                        width: i === currentIndex ? 20 : 8,
+                                        backgroundColor:
+                                            i < questions.length && questions[i] && (questions[i].userAnswer || answers[questions[i]._id])
+                                                ? questions[i].isCorrect === true
+                                                    ? "rgba(74, 222, 128, 0.7)"
+                                                    : questions[i].isCorrect === false
+                                                        ? "rgba(248, 113, 113, 0.7)"
+                                                        : "rgba(255, 255, 255, 0.4)"
+                                                : i === currentIndex
+                                                    ? "rgba(255, 255, 255, 0.6)"
+                                                    : i < questions.length
+                                                        ? "rgba(255, 255, 255, 0.15)"
+                                                        : "rgba(255, 255, 255, 0.06)",
+                                    }}
+                                    transition={SPRING_SNAPPY}
+                                />
+                            );
+                        })}
                     </div>
                     <div className="flex items-center gap-2 text-white/30">
                         <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono">Esc</kbd>
@@ -460,83 +645,85 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     className="absolute inset-0 flex flex-col"
                                     style={{ zIndex: isActive ? 1 : 0, pointerEvents: isActive ? 'auto' : 'none', minWidth: activeW, minHeight: activeH }}
                                 >
-                                    <div className="shrink-0 px-8 pt-7 pb-5 border-b border-white/[0.04]">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-semibold">
-                                                Question {idx + 1}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                {q.isCorrect === true && (
-                                                    <div className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-green-400/20">
-                                                        <CheckCircle2 className="w-3 h-3" /> Correct
-                                                    </div>
-                                                )}
-                                                {q.isCorrect === false && (
-                                                    <div className="flex items-center gap-1.5 text-red-400 bg-red-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-red-400/20">
-                                                        <XCircle className="w-3 h-3" /> Incorrect
-                                                    </div>
-                                                )}
-                                                {isEvaluating[q._id] && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/30" />}
-                                            </div>
-                                        </div>
-                                        <h2 className="text-lg md:text-xl font-semibold leading-relaxed text-white tracking-tight">{q.question}</h2>
-                                    </div>
-
-                                    <div className="flex-1 px-8 py-6 overflow-y-auto custom-scrollbar">
-                                        {test.config.type === "select" && q.options ? (
-                                            <div className="grid gap-3">
-                                                {q.options.map((opt, i) => {
-                                                    const selectedAnswer = answers[q._id] || q.userAnswer;
-                                                    const isSelected = selectedAnswer === opt;
-                                                    const isAnswered = !!selectedAnswer;
-                                                    const isCorrectAnswer = q.answer === opt;
-                                                    const showResult = isAnswered && q.isCorrect !== undefined;
-                                                    let borderColor = "border-white/[0.08]";
-                                                    let bgColor = "bg-white/[0.02]";
-                                                    let textColor = "text-white/80";
-                                                    if (showResult) {
-                                                        if (isCorrectAnswer) { borderColor = "border-green-400/30"; bgColor = "bg-green-400/[0.06]"; textColor = "text-green-300"; }
-                                                        else if (isSelected) { borderColor = "border-red-400/30"; bgColor = "bg-red-400/[0.06]"; textColor = "text-red-300"; }
-                                                    } else if (isSelected) { borderColor = "border-white/20"; bgColor = "bg-white/[0.06]"; textColor = "text-white"; }
-                                                    return (
-                                                        <motion.button key={i} onClick={() => !isAnswered && handleAnswer(q._id, opt)} disabled={isAnswered} whileTap={!isAnswered ? { scale: 0.98 } : {}}
-                                                            className={`group relative w-full p-4 rounded-xl text-left text-sm font-medium transition-colors border ${borderColor} ${bgColor} ${textColor} ${!isAnswered ? 'hover:bg-white/[0.05] hover:border-white/15 cursor-pointer' : 'cursor-default'}`}>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-mono font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-white/5 text-white/30'} border border-white/[0.08]`}>{i + 1}</span>
-                                                                <span className="flex-1">{opt}</span>
-                                                                {showResult && isCorrectAnswer && <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />}
-                                                                {showResult && isSelected && !isCorrectAnswer && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
-                                                            </div>
-                                                            {!isAnswered && <kbd className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:block px-1.5 py-0.5 bg-white/5 rounded text-[10px] font-mono text-white/20 border border-white/[0.06] opacity-0 group-hover:opacity-100 transition-opacity">{i + 1}</kbd>}
-                                                        </motion.button>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-col gap-4 h-full">
-                                                {(answers[q._id] || q.userAnswer) ? (
-                                                    <div className="space-y-4">
-                                                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                                                            <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Your Answer</p>
-                                                            <p className="text-sm text-white/80 leading-relaxed">{answers[q._id] || q.userAnswer}</p>
+                                    <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
+                                        <div className="shrink-0 px-8 pt-7 pb-5 border-b border-white/[0.04]">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-semibold">
+                                                    Question {idx + 1}
+                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    {q.isCorrect === true && (
+                                                        <div className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-green-400/20">
+                                                            <CheckCircle2 className="w-3 h-3" /> Correct
                                                         </div>
-                                                        {q.answer && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Reference Answer</p><p className="text-sm text-white/80 leading-relaxed">{q.answer}</p></div>}
-                                                        {q.aiFeedback && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><div className="flex items-center gap-2 mb-2"><BrainCircuit className="w-3 h-3 text-white/40" /><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold">AI Feedback</p></div><p className="text-sm text-white/70 leading-relaxed">{q.aiFeedback}</p></div>}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex-1 flex flex-col gap-3">
-                                                        <textarea id={`answer-${q._id}`} placeholder="Type your answer..." className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]"
-                                                            onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); const el = e.currentTarget; if (el.value.trim()) handleAnswer(q._id, el.value); } }}
-                                                        />
-                                                        <button onClick={() => { const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement; if (el?.value.trim()) handleAnswer(q._id, el.value); }} className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2">
-                                                            Submit <kbd className="hidden md:inline-flex px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-white/40 border border-white/[0.06]">⌘↵</kbd>
-                                                        </button>
-                                                    </div>
-                                                )}
+                                                    )}
+                                                    {q.isCorrect === false && (
+                                                        <div className="flex items-center gap-1.5 text-red-400 bg-red-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-red-400/20">
+                                                            <XCircle className="w-3 h-3" /> Incorrect
+                                                        </div>
+                                                    )}
+                                                    {isEvaluating[q._id] && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/30" />}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
+                                            <h2 className="text-lg md:text-xl font-semibold leading-relaxed text-white tracking-tight">{q.question}</h2>
+                                        </div>
 
+                                        <div className="flex-1 px-8 py-6">
+                                            {test.config.type === "select" && q.options ? (
+                                                <div className="grid gap-3">
+                                                    {q.options.map((opt, i) => {
+                                                        const selectedAnswer = answers[q._id] ?? q.userAnswer;
+                                                        const isSelected = selectedAnswer === opt;
+                                                        const isAnswered = !!selectedAnswer;
+                                                        const isCorrectAnswer = q.answer === opt;
+                                                        const showResult = isAnswered && q.isCorrect !== undefined;
+                                                        let borderColor = "border-white/[0.08]";
+                                                        let bgColor = "bg-white/[0.02]";
+                                                        let textColor = "text-white/80";
+                                                        if (showResult) {
+                                                            if (isCorrectAnswer) { borderColor = "border-green-400/30"; bgColor = "bg-green-400/[0.06]"; textColor = "text-green-300"; }
+                                                            else if (isSelected) { borderColor = "border-red-400/30"; bgColor = "bg-red-400/[0.06]"; textColor = "text-red-300"; }
+                                                        } else if (isSelected) { borderColor = "border-white/20"; bgColor = "bg-white/[0.06]"; textColor = "text-white"; }
+                                                        return (
+                                                            <motion.button key={i} onClick={() => !isAnswered && handleAnswer(q._id, opt)} disabled={isAnswered} whileTap={!isAnswered ? { scale: 0.98 } : {}}
+                                                                className={`group relative w-full p-4 rounded-xl text-left text-sm font-medium transition-colors border ${borderColor} ${bgColor} ${textColor} ${!isAnswered ? 'hover:bg-white/[0.05] hover:border-white/15 cursor-pointer' : 'cursor-default'}`}>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-mono font-bold ${isSelected ? 'bg-white/15 text-white' : 'bg-white/5 text-white/30'} border border-white/[0.08]`}>{i + 1}</span>
+                                                                    <span className="flex-1">{opt}</span>
+                                                                    {showResult && isCorrectAnswer && <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />}
+                                                                    {showResult && isSelected && !isCorrectAnswer && <XCircle className="w-4 h-4 text-red-400 shrink-0" />}
+                                                                </div>
+                                                                {!isAnswered && <kbd className="absolute right-4 top-1/2 -translate-y-1/2 hidden md:block px-1.5 py-0.5 bg-white/5 rounded text-[10px] font-mono text-white/20 border border-white/[0.06] opacity-0 group-hover:opacity-100 transition-opacity">{i + 1}</kbd>}
+                                                            </motion.button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col gap-4 h-full">
+                                                    {(answers[q._id] ?? q.userAnswer) ? (
+                                                        <div className="space-y-4">
+                                                            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                                                                <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Your Answer</p>
+                                                                <p className="text-sm text-white/80 leading-relaxed">{answers[q._id] ?? q.userAnswer}</p>
+                                                            </div>
+                                                            {q.answer && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Reference Answer</p><p className="text-sm text-white/80 leading-relaxed">{q.answer}</p></div>}
+                                                            {q.aiFeedback && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><div className="flex items-center gap-2 mb-2"><BrainCircuit className="w-3 h-3 text-white/40" /><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold">AI Feedback</p></div><p className="text-sm text-white/70 leading-relaxed">{q.aiFeedback}</p></div>}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex-1 flex flex-col gap-3">
+                                                            <textarea id={`answer-${q._id}`} placeholder="Type your answer..." className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]"
+                                                                onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); const el = e.currentTarget; if (el.value.trim()) void handleAnswer(q._id, el.value); } }}
+                                                            />
+                                                            <button onClick={() => { const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement; if (el?.value.trim()) void handleAnswer(q._id, el.value); }} className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2">
+                                                                Submit <kbd className="hidden md:inline-flex px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-white/40 border border-white/[0.06]">⌘↵</kbd>
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                    </div>
                                     <div className="shrink-0 px-8 py-3 border-t border-white/[0.04] flex items-center justify-between">
                                         <button aria-label="Previous question" onClick={() => { setDirection(-1); setCurrentIndex(Math.max(0, currentIndex - 1)); }} disabled={currentIndex === 0} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
                                             <ChevronLeft className="w-3.5 h-3.5" /><span className="hidden md:inline">Prev</span><kbd className="hidden md:inline px-1 py-0.5 bg-white/5 rounded text-[9px] font-mono text-white/20 border border-white/[0.06]">←</kbd>
@@ -630,11 +817,23 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     transition={SPRING_SNAPPY}
                                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                                 >
-                                    <div className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${msg.role === "user"
-                                        ? "bg-white/[0.08] text-white/80 border border-white/[0.06]"
-                                        : "bg-transparent text-white/70 border border-white/[0.06]"
-                                        }`}>
-                                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                                    <div
+                                        className={`relative max-w-[88%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed group/msg ${msg.role === "user"
+                                            ? "bg-white/[0.08] text-white/80 border border-white/[0.06]"
+                                            : "bg-transparent text-white/70 border border-white/[0.06]"
+                                            }`}
+                                        onContextMenu={msg.role === "ai" ? (e) => handleMessageContextMenu(e, msg._id, msg.content) : undefined}
+                                    >
+                                        <p className="whitespace-pre-wrap">{renderMarkdown(msg.content)}</p>
+                                        {/* "Feels hard" loading indicator on this specific message */}
+                                        {feelsHardLoading === msg._id && (
+                                            <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                                                    <span className="text-[10px] text-amber-400 font-medium">Saving...</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             ))
@@ -652,7 +851,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     {/* Chat input */}
                     <div className="shrink-0 p-4 border-t border-white/[0.06]">
                         <form
-                            onSubmit={e => { e.preventDefault(); handleSendChat(); }}
+                            onSubmit={e => { e.preventDefault(); void handleSendChat(); }}
                             className="relative flex items-center"
                         >
                             <input
@@ -675,6 +874,52 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     </div>
                 </div>
             </div>
+
+            {/* ─── Custom context menu ─── */}
+            <AnimatePresence>
+                {contextMenu && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.92 }}
+                        transition={{ duration: 0.1 }}
+                        className="fixed z-[200] min-w-[180px] rounded-xl border border-white/[0.1] bg-[#1a1a1a]/95 backdrop-blur-xl shadow-2xl overflow-hidden"
+                        style={{ top: contextMenu.y, left: contextMenu.x }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => handleFeelsHard(contextMenu.messageId, contextMenu.messageContent)}
+                            className="w-full flex items-center gap-2.5 px-4 py-3 text-xs text-left hover:bg-white/[0.06] transition-colors spring-interact"
+                        >
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            <span className="text-white/80 font-medium">Feels hard</span>
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ─── Toast notification ─── */}
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20, x: "-50%" }}
+                        animate={{ opacity: 1, y: 0, x: "-50%" }}
+                        exit={{ opacity: 0, y: 20, x: "-50%" }}
+                        transition={SPRING_SNAPPY}
+                        className={`fixed bottom-6 left-1/2 z-[200] flex items-center gap-2.5 px-5 py-3 rounded-xl border backdrop-blur-xl shadow-2xl text-xs font-medium ${toast.type === "success"
+                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                            : "bg-red-500/10 border-red-500/20 text-red-400"
+                            }`}
+                    >
+                        {toast.type === "success" ? (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                        ) : (
+                            <XCircle className="w-3.5 h-3.5" />
+                        )}
+                        {toast.message}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

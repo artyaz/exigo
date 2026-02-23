@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, ChevronRight, Loader2, CheckCircle2, Clock, Zap, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 
 /**
  * Produces a deterministic 32-bit integer hash for the given string.
@@ -34,7 +35,8 @@ function hashCode(str: string) {
  * @returns The React element for the Tests page.
  */
 export default function TestsPage() {
-    const tests = useQuery(api.tests.listAll);
+    const { userId } = useAuth();
+    const tests = useQuery(api.tests.listAll, userId ? { userId } : "skip");
     const [hoveredId, setHoveredId] = useState<string | null>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 

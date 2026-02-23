@@ -50,3 +50,4 @@ yarn-error.log*
 .agent/
 # clerk configuration (can include secrets)
 /.clerk/
+lint-output*.txt

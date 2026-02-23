@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
@@ -14,6 +15,20 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
  */
 export async function POST(req: NextRequest) {
     try {
+        const { userId, has } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const hasConversationalAI = has({ feature: "conversational_ai" });
+        if (!hasConversationalAI) {
+            return NextResponse.json({ error: "Upgrade to Pro to chat further about answers!" }, { status: 403 });
+        }
+
+        if (!process.env.GOOGLE_GEMINI_API_KEY) {
+            return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
+        }
+
         const rawBody = await req.json() as Record<string, unknown>;
         const testId = rawBody.testId as string | undefined;
         const questionId = rawBody.questionId as string | undefined;
@@ -21,10 +36,6 @@ export async function POST(req: NextRequest) {
 
         if (!testId || !questionId || !message) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-        }
-
-        if (!process.env.GOOGLE_GEMINI_API_KEY) {
-            return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
         }
 
         // 1. Fetch Question details for context
@@ -36,6 +47,16 @@ export async function POST(req: NextRequest) {
         // Verify question belongs to the specified test
         if (String(question.testId) !== testId) {
             return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
+        }
+
+        // Verify test space ownership
+        const test = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
+        if (!test) {
+            return NextResponse.json({ error: "Test not found" }, { status: 404 });
+        }
+        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId });
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+            return NextResponse.json({ error: "Unauthorized access to this test's space" }, { status: 403 });
         }
 
         // 2. Fetch past messages for this question to maintain conversation history
@@ -71,11 +92,17 @@ export async function POST(req: NextRequest) {
         
         [Conversation]${historyPrompt}
 
-        Respond directly and concisely to the student's latest message. Be encouraging but highly accurate. Format your response in plain text or simple markdown.
+        Respond directly and concisely to the student's latest message. Be encouraging but highly accurate. Format your response in plain text.
+        ### OUTPUT FORMAT REQUIREMENTS (STRICT)
+1. Tone: Casual, slightly witty, professional. Use emojis 🧠.
+2. Structure: NO WALLS OF TEXT. Bullet points & bold text.
+3. Keep in mind that the chat window is horizontally small, so keep your responses not hard to read in this format.
         `;
 
+        // Default model; override via GEMINI_MODEL env var
+        const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model,
             contents: prompt,
         });
 

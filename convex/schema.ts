@@ -5,14 +5,16 @@ export default defineSchema({
     spaces: defineTable({
         name: v.string(),
         userId: v.string(),
-    }),
+    }).index("by_user", ["userId"]),
     knowledgePieces: defineTable({
         spaceId: v.id("spaces"),
+        title: v.optional(v.string()),
         content: v.string(),
         source: v.optional(v.string()), // Might be file name or url
     }).index("by_space", ["spaceId"]),
     tests: defineTable({
         spaceId: v.id("spaces"),
+        topicTitle: v.optional(v.string()),
         status: v.union(
             v.literal("draft"),
             v.literal("generating"),

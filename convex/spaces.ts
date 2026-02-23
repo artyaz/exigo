@@ -2,10 +2,23 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
 export const list = query({
-    args: {},
-    handler: async (ctx) => {
-        // In a real app we would filter by userId, but for now we list all
-        return await ctx.db.query("spaces").collect();
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
+        return await ctx.db
+            .query("spaces")
+            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .collect();
+    },
+});
+
+export const countForUser = query({
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
+        const spaces = await ctx.db
+            .query("spaces")
+            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .collect();
+        return spaces.length;
     },
 });
 
@@ -17,9 +30,8 @@ export const get = query({
 });
 
 export const create = mutation({
-    args: { name: v.string() },
+    args: { name: v.string(), userId: v.string() },
     handler: async (ctx, args) => {
-        // Hardcoded userId for simplicity if no auth is configured yet.
-        return await ctx.db.insert("spaces", { name: args.name, userId: "default_user" });
+        return await ctx.db.insert("spaces", { name: args.name, userId: args.userId });
     },
 });

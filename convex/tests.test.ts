@@ -42,12 +42,16 @@ const createMockDb = (): MockDbContext => ({
 });
 
 // Handler functions that mirror the actual implementation in convex/tests.ts
-const createHandler = async (db: MockDbContext, args: { spaceId: string; type: string }) => {
-  return await (db.insert as any)('tests', {
+const createHandler = async (db: MockDbContext, args: { spaceId: string; type: string; topicTitle?: string }) => {
+  const insertData: any = {
     spaceId: args.spaceId,
     status: 'generating',
     config: { type: args.type },
-  });
+  };
+  if (args.topicTitle !== undefined) {
+    insertData.topicTitle = args.topicTitle;
+  }
+  return await (db.insert as any)('tests', insertData);
 };
 
 const updateStatusHandler = async (
@@ -174,6 +178,29 @@ describe('convex/tests - create mutation logic', () => {
 
     const callArgs = (db.insert as any).mock.calls[0];
     expect(callArgs[1]).toHaveProperty('status', 'generating');
+  });
+
+  it('should create test with topicTitle when provided', async () => {
+    const db = createMockDb();
+    (db.insert as any).mockResolvedValue('test_topic');
+
+    await createHandler(db, { spaceId: 'space_1', type: 'quiz', topicTitle: 'My Custom Topic' });
+
+    expect(db.insert).toHaveBeenCalledWith('tests', expect.objectContaining({
+      spaceId: 'space_1',
+      topicTitle: 'My Custom Topic',
+      status: 'generating'
+    }));
+  });
+
+  it('should create test with undefined topicTitle when omitted', async () => {
+    const db = createMockDb();
+    (db.insert as any).mockResolvedValue('test_notopic');
+
+    await createHandler(db, { spaceId: 'space_1', type: 'quiz' });
+
+    const callArgs = (db.insert as any).mock.calls[0];
+    expect(callArgs[1].topicTitle).toBeUndefined();
   });
 });
 

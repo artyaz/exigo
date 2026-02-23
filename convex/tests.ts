@@ -10,20 +10,20 @@ import { mutation, query } from "./_generated/server";
 // Status "active": the test is immediately usable — questions are generated
 // asynchronously one-by-one via the /api/tests/generate streaming endpoint.
 export const createEmptyTest = mutation({
-    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number() },
+    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), topicTitle: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
             throw new Error("Space not found");
         }
 
-        const userId = "default_user"; // MVP mock
-        if (space.userId !== userId) {
+        if (space.userId !== args.userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
         }
 
         return await ctx.db.insert("tests", {
             spaceId: args.spaceId,
+            topicTitle: args.topicTitle,
             status: "active",
             config: {
                 type: args.type,
@@ -36,15 +36,14 @@ export const createEmptyTest = mutation({
 // Status "generating": used when the server batch-generates all questions before
 // the test becomes usable. The caller is expected to flip status to "active" once done.
 export const create = mutation({
-    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.optional(v.number()) },
+    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.optional(v.number()), userId: v.string() },
     handler: async (ctx, args) => {
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
             throw new Error("Space not found");
         }
 
-        const userId = "default_user"; // MVP mock
-        if (space.userId !== userId) {
+        if (space.userId !== args.userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
         }
 
@@ -56,6 +55,39 @@ export const create = mutation({
                 questionCount: args.questionCount ?? 5,
             },
         });
+    },
+});
+
+/**
+ * Counts the total number of tests an authenticated user has generated during the current month.
+ */
+export const countForUserThisMonth = query({
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
+        // Since we don't have a direct index spanning from spaces to tests by userId,
+        // we'll filter tests that belong to spaces owned by this user, created this month.
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const allTests = await ctx.db
+            .query("tests")
+            .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
+            .collect();
+
+        // Hydrate spaces to ensure they belong to this userId
+        const spaceIds = [...new Set(allTests.map((t) => t.spaceId))];
+        const spaces = await Promise.all(spaceIds.map((id) => ctx.db.get(id)));
+        const spaceMap = new Map(spaces.filter(Boolean).map((s) => [s!._id, s!]));
+
+        let count = 0;
+        for (const test of allTests) {
+            const space = spaceMap.get(test.spaceId);
+            if (space && (space.userId === args.userId || space.userId === "default_user")) {
+                count++;
+            }
+        }
+        return count;
     },
 });
 
@@ -90,12 +122,13 @@ export const getForSpace = query({
  * Lists all tests across all spaces, enriched with the parent space name.
  */
 export const listAll = query({
-    args: {},
-    handler: async (ctx) => {
+    args: { userId: v.string() },
+    handler: async (ctx, args) => {
         const tests = await ctx.db.query("tests").order("desc").collect();
         const enriched = await Promise.all(
             tests.map(async (test) => {
                 const space = await ctx.db.get(test.spaceId);
+                if (!space || (space.userId !== args.userId && space.userId !== "default_user")) return null;
                 const questions = await ctx.db
                     .query("questions")
                     .withIndex("by_test", (q) => q.eq("testId", test._id))
@@ -109,7 +142,7 @@ export const listAll = query({
                 };
             })
         );
-        return enriched;
+        return enriched.filter((t): t is NonNullable<typeof t> => t !== null);
     },
 });
 
@@ -137,6 +170,7 @@ export const createWithQuestions = mutation({
     args: {
         spaceId: v.id("spaces"),
         type: v.string(),
+        userId: v.string(),
         questions: v.array(v.object({
             type: v.string(),
             question: v.string(),
@@ -150,8 +184,7 @@ export const createWithQuestions = mutation({
             throw new Error("Space not found");
         }
 
-        const userId = "default_user"; // MVP mock
-        if (space.userId !== userId) {
+        if (space.userId !== args.userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
         }
 
