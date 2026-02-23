@@ -61,7 +61,10 @@ export async function POST(req: NextRequest) {
 
 
         // 2. Fetch past messages for this question to maintain conversation history
-        const pastMessages = await convex.query(api.testMessages.getForQuestion, { questionId: questionId as Id<"questions"> });
+        const pastMessages = await convex.query(api.testMessages.getForQuestion, {
+            questionId: questionId as Id<"questions">,
+            userId,
+        });
 
         // 3. Save User Message to DB
         await convex.mutation(api.testMessages.send, {

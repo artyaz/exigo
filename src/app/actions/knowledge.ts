@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { getMaxKnowledgePieces } from "./knowledgeLimits";
 
 if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
     throw new Error("NEXT_PUBLIC_CONVEX_URL is not defined in environment variables");
@@ -24,14 +25,7 @@ export async function addKnowledgePieceAction(spaceId: string, content: string, 
     }
 
 
-    const hasUnlimitedKnowledge = has({ feature: "unlimited_knowledge" });
-    const hasProKnowledge = has({ feature: "pro_knowledge" });
-    const hasBasicKnowledge = has({ feature: "basic_knowledge" });
-
-    let maxPieces = 20; // Default for Free
-    if (hasUnlimitedKnowledge) maxPieces = Infinity;
-    else if (hasProKnowledge) maxPieces = 200;
-    else if (hasBasicKnowledge) maxPieces = 50;
+    const maxPieces = getMaxKnowledgePieces(has);
 
     const pieceId = await convex.mutation(api.knowledgePieces.add, {
         spaceId: spaceId as Id<"spaces">,
@@ -60,14 +54,7 @@ export async function bulkImportKnowledgeAction(spaceId: string, pieces: { title
     }
 
 
-    const hasUnlimitedKnowledge = has({ feature: "unlimited_knowledge" });
-    const hasProKnowledge = has({ feature: "pro_knowledge" });
-    const hasBasicKnowledge = has({ feature: "basic_knowledge" });
-
-    let maxPieces = 20;
-    if (hasUnlimitedKnowledge) maxPieces = Infinity;
-    else if (hasProKnowledge) maxPieces = 200;
-    else if (hasBasicKnowledge) maxPieces = 50;
+    const maxPieces = getMaxKnowledgePieces(has);
 
     const ids = await convex.mutation(api.knowledgePieces.bulkImport, {
         spaceId: spaceId as Id<"spaces">,

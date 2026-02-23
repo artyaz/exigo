@@ -91,6 +91,10 @@ export async function POST(req: NextRequest) {
         const isPro = has({ feature: "pro_tests" });
         const limit = isEducator ? 150 : isPro ? 50 : 0;
 
+        if (limit === 0) {
+            return NextResponse.json({ error: "You don't have access to Deep Dive study notes. Please upgrade your plan." }, { status: 403 });
+        }
+
 
         if (!process.env.GOOGLE_GEMINI_API_KEY) {
             return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
@@ -108,9 +112,19 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Test not found" }, { status: 404 });
         }
 
-        // Mutation to record creation with atomic limit check
-        // @ts-expect-error - new table not yet in generated types
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId, userId });
+        if (!space) {
+            return NextResponse.json({ error: "Unauthorized access or space not found" }, { status: 403 });
+        }
+
+        const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
+        if (!question) {
+            return NextResponse.json({ error: "Question not found" }, { status: 404 });
+        }
+        if (String(question.testId) !== testId) {
+            return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
+        }
+
         await convex.mutation(api.deepDives.create, {
             userId,
             spaceId: test.spaceId,
@@ -119,26 +133,15 @@ export async function POST(req: NextRequest) {
         });
 
 
-
-
-        const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
-        if (!question) {
-            return NextResponse.json({ error: "Question not found" }, { status: 404 });
-        }
-
-        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId, userId });
-
-        if (!space) {
-            return NextResponse.json({ error: "Unauthorized access or space not found" }, { status: 403 });
-        }
-
-
         const targetPieceId = await resolveTargetPiece(knowledgePieceId, test.spaceId);
         if (!targetPieceId) {
             return NextResponse.json({ error: "No knowledge piece found to append to" }, { status: 404 });
         }
 
-        const pastMessages = await convex.query(api.testMessages.getForQuestion, { questionId: questionId as Id<"questions"> });
+        const pastMessages = await convex.query(api.testMessages.getForQuestion, {
+            questionId: questionId as Id<"questions">,
+            userId,
+        });
         const conversationContext = pastMessages
             .map((m) => `${m.role === "user" ? "Student" : "AI Tutor"}: ${m.content}`)
             .join("\n") || "No prior conversation.";

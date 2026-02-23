@@ -6,6 +6,10 @@ export default defineSchema({
         name: v.string(),
         userId: v.string(),
     }).index("by_user", ["userId"]),
+    spaceCounters: defineTable({
+        userId: v.string(),
+        count: v.number(),
+    }).index("by_user", ["userId"]),
     knowledgePieces: defineTable({
         spaceId: v.id("spaces"),
         title: v.optional(v.string()),

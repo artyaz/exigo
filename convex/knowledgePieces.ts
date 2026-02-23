@@ -26,12 +26,13 @@ export const add = mutation({
             throw new Error("Unauthorized access to this space");
         }
 
-        const pieces = await ctx.db
+        const existingPieces = await ctx.db
             .query("knowledgePieces")
             .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
             .collect();
 
-        if (pieces.length >= args.maxPieces) {
+        const projectedTotal = existingPieces.length + 1;
+        if (projectedTotal > args.maxPieces) {
             throw new Error(`Limit reached: You can only have ${args.maxPieces} knowledge pieces per space on your current plan.`);
         }
 
@@ -91,7 +92,9 @@ export const bulkImport = mutation({
             .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
             .collect();
 
-        if (existingPieces.length + args.pieces.length > args.maxPieces) {
+        const nonEmptyIncomingCount = args.pieces.filter((piece) => piece.content.trim() !== "").length;
+        const projectedTotal = existingPieces.length + nonEmptyIncomingCount;
+        if (projectedTotal > args.maxPieces) {
             throw new Error(`Limit reached: Bulk import would exceed the limit of ${args.maxPieces} knowledge pieces per space.`);
         }
 
@@ -133,5 +136,4 @@ export const appendContent = mutation({
         });
     },
 });
-
 

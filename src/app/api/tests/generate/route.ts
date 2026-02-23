@@ -165,6 +165,13 @@ export async function POST(req: NextRequest) {
     }
 
     const MAX_TESTS = getTestLimit(has);
+    if (MAX_TESTS === 0) {
+        return new Response(JSON.stringify({
+            error: "Access Denied",
+            message: "You don't have access to test generation. Please upgrade your plan."
+        }), { status: 403 });
+    }
+
     const testsThisMonth = await convex.query(api.tests.countForUserThisMonth, { userId });
     if (testsThisMonth >= MAX_TESTS) {
         return new Response(JSON.stringify({

@@ -1,9 +1,35 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
+async function authorizeQuestionAccess(
+    ctx: QueryCtx | MutationCtx,
+    questionId: Id<"questions">,
+    userId: string
+) {
+    const question = await ctx.db.get(questionId);
+    if (!question) {
+        throw new Error("Question not found");
+    }
+
+    const test = await ctx.db.get(question.testId);
+    if (!test) {
+        throw new Error("Test not found");
+    }
+
+    const space = await ctx.db.get(test.spaceId);
+    if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+        throw new Error("Unauthorized access to this question");
+    }
+
+    return { question, test };
+}
 
 export const getForQuestion = query({
-    args: { questionId: v.id("questions") },
+    args: { questionId: v.id("questions"), userId: v.string() },
     handler: async (ctx, args) => {
+        await authorizeQuestionAccess(ctx, args.questionId, args.userId);
+
         return await ctx.db
             .query("testMessages")
             .withIndex("by_question", (q) => q.eq("questionId", args.questionId))
@@ -20,12 +46,10 @@ export const send = mutation({
         userId: v.string(),
     },
     handler: async (ctx, args) => {
-        const test = await ctx.db.get(args.testId);
-        if (!test) throw new Error("Test not found");
+        const { question } = await authorizeQuestionAccess(ctx, args.questionId, args.userId);
 
-        const space = await ctx.db.get(test.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
-            throw new Error("Unauthorized access to this test");
+        if (question.testId !== args.testId) {
+            throw new Error("Question does not belong to this test");
         }
 
         return await ctx.db.insert("testMessages", {
@@ -36,4 +60,3 @@ export const send = mutation({
         });
     },
 });
-

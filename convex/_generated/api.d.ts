@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as deepDives from "../deepDives.js";
 import type * as knowledgePieces from "../knowledgePieces.js";
 import type * as questions from "../questions.js";
 import type * as spaces from "../spaces.js";
@@ -21,6 +22,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  deepDives: typeof deepDives;
   knowledgePieces: typeof knowledgePieces;
   questions: typeof questions;
   spaces: typeof spaces;

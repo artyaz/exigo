@@ -1,5 +1,55 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+
+function getStartOfMonthMs() {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    return startOfMonth.getTime();
+}
+
+async function getOwnedSpaceIds(ctx: QueryCtx | MutationCtx, userId: string): Promise<Id<"spaces">[]> {
+    const [userSpaces, defaultSpaces] = await Promise.all([
+        ctx.db
+            .query("spaces")
+            .withIndex("by_user", (q) => q.eq("userId", userId))
+            .collect(),
+        ctx.db
+            .query("spaces")
+            .withIndex("by_user", (q) => q.eq("userId", "default_user"))
+            .collect(),
+    ]);
+
+    return [...new Set([...userSpaces, ...defaultSpaces].map((space) => space._id))];
+}
+
+async function countTestsForSpacesSince(
+    ctx: QueryCtx | MutationCtx,
+    spaceIds: Id<"spaces">[],
+    createdAfterMs: number
+) {
+    if (spaceIds.length === 0) {
+        return 0;
+    }
+
+    const testsBySpace = await Promise.all(
+        spaceIds.map((spaceId) =>
+            ctx.db
+                .query("tests")
+                .withIndex("by_space", (q) => q.eq("spaceId", spaceId))
+                .filter((q) => q.gte(q.field("_creationTime"), createdAfterMs))
+                .collect()
+        )
+    );
+
+    return testsBySpace.reduce((sum, tests) => sum + tests.length, 0);
+}
+
+async function countForUserThisMonthInternal(ctx: QueryCtx | MutationCtx, userId: string) {
+    const spaceIds = await getOwnedSpaceIds(ctx, userId);
+    return await countTestsForSpacesSince(ctx, spaceIds, getStartOfMonthMs());
+}
 
 /**
  * Initializes a new test generation request for a given space.
@@ -21,28 +71,7 @@ export const createEmptyTest = mutation({
             throw new Error("Unauthorized access to this space");
         }
 
-        // Atomic check for monthly limit
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-
-        const recentTests = await ctx.db
-            .query("tests")
-            .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
-            .collect();
-
-        // Calculate count correctly for user
-        const spaceIds = [...new Set(recentTests.map((t) => t.spaceId))];
-        const spaces = await Promise.all(spaceIds.map((id) => ctx.db.get(id)));
-        const spaceMap = new Map(spaces.filter(Boolean).map((s) => [s!._id, s!]));
-
-        let count = 0;
-        for (const test of recentTests) {
-            const s = spaceMap.get(test.spaceId);
-            if (s && (s.userId === args.userId || s.userId === "default_user")) {
-                count++;
-            }
-        }
+        const count = await countForUserThisMonthInternal(ctx, args.userId);
 
         if (count >= args.maxTests) {
             throw new Error(`Limit reached: You can only create ${args.maxTests} tests per month on your current plan.`);
@@ -92,30 +121,7 @@ export const create = mutation({
 export const countForUserThisMonth = query({
     args: { userId: v.string() },
     handler: async (ctx, args) => {
-        // Since we don't have a direct index spanning from spaces to tests by userId,
-        // we'll filter tests that belong to spaces owned by this user, created this month.
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-
-        const allTests = await ctx.db
-            .query("tests")
-            .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
-            .collect();
-
-        // Hydrate spaces to ensure they belong to this userId
-        const spaceIds = [...new Set(allTests.map((t) => t.spaceId))];
-        const spaces = await Promise.all(spaceIds.map((id) => ctx.db.get(id)));
-        const spaceMap = new Map(spaces.filter(Boolean).map((s) => [s!._id, s!]));
-
-        let count = 0;
-        for (const test of allTests) {
-            const space = spaceMap.get(test.spaceId);
-            if (space && (space.userId === args.userId || space.userId === "default_user")) {
-                count++;
-            }
-        }
-        return count;
+        return await countForUserThisMonthInternal(ctx, args.userId);
     },
 });
 
