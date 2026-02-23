@@ -61,7 +61,8 @@ async function countForUserThisMonthInternal(ctx: QueryCtx | MutationCtx, userId
 export const createEmptyTest = mutation({
     args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), topicTitle: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
-        const maxAllowed = getServerPlanLimitsForUser(args.userId).maxTestsPerMonth;
+        const identity = await ctx.auth.getUserIdentity();
+        const maxAllowed = getServerPlanLimitsForUser(args.userId, identity).maxTestsPerMonth;
         if (maxAllowed === 0) {
             throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
         }

@@ -4,18 +4,12 @@ import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { getTestLimit } from "../../lib/testLimits";
 
 if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
     throw new Error("NEXT_PUBLIC_CONVEX_URL is not defined in environment variables");
 }
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL);
-
-function getTestLimit(has: (params: { feature: string }) => boolean): number {
-    if (has({ feature: "unlimited_ai_tests" })) return 300;
-    if (has({ feature: "pro_tests" })) return 100;
-    if (has({ feature: "basic_tests" })) return 10;
-    return 0;
-}
 
 export async function createSpaceServerAction(name: string) {
     const { userId } = await auth();

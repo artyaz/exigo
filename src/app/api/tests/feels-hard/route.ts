@@ -6,7 +6,9 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+function createConvexClient() {
+    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+}
 
 interface FeelsHardBody {
     testId?: string;
@@ -60,6 +62,7 @@ Important:
 }
 
 async function resolveTargetPiece(
+    convex: ConvexHttpClient,
     knowledgePieceId: string | undefined,
     spaceId: Id<"spaces">
 ): Promise<Id<"knowledgePieces"> | null> {
@@ -77,10 +80,17 @@ async function resolveTargetPiece(
  */
 export async function POST(req: NextRequest) {
     try {
-        const { userId, has } = await auth();
+        const { userId, has, getToken } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const token = await getToken({ template: "convex" }) ?? await getToken();
+        if (!token) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const convex = createConvexClient();
+        convex.setAuth(token);
 
         const hasConversationalAI = has({ feature: "conversational_ai" });
         if (!hasConversationalAI) {
@@ -125,17 +135,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
         }
 
-        const targetPieceId = await resolveTargetPiece(knowledgePieceId, test.spaceId);
+        const targetPieceId = await resolveTargetPiece(convex, knowledgePieceId, test.spaceId);
         if (!targetPieceId) {
             return NextResponse.json({ error: "No knowledge piece found to append to" }, { status: 404 });
         }
-
-        await convex.mutation(api.deepDives.create, {
-            userId,
-            spaceId: test.spaceId,
-            questionId: questionId as Id<"questions">,
-            maxDives: limit,
-        });
 
         const pastMessages = await convex.query(api.testMessages.getForQuestion, {
             questionId: questionId as Id<"questions">,
@@ -160,8 +163,14 @@ export async function POST(req: NextRequest) {
 
         await convex.mutation(api.knowledgePieces.appendContent, {
             id: targetPieceId,
-            userId,
             content: `---\n📌 Study Note (auto-generated): ${struggleNote}`,
+        });
+
+        await convex.mutation(api.deepDives.create, {
+            userId,
+            spaceId: test.spaceId,
+            questionId: questionId as Id<"questions">,
+            maxDives: limit,
         });
 
 

@@ -61,7 +61,7 @@ const updateStatusHandler = async (
 ) => {
   const test = await (db.get as any)(args.testId) as { userId?: string } | null;
   if (!test) throw new Error('Test not found');
-  if (test.userId !== undefined && test.userId !== args.userId) {
+  if (test.userId === undefined || test.userId !== args.userId) {
     throw new Error('Unauthorized access to this test');
   }
   await (db.patch as any)(args.testId, { status: args.status });
@@ -297,17 +297,14 @@ describe('convex/tests - updateStatus mutation logic', () => {
     expect(db.patch).not.toHaveBeenCalled();
   });
 
-  it('should handle non-existent test ID without throwing', async () => {
+  it('should throw when test record is missing', async () => {
     const db = createMockDb();
-    (db.patch as any).mockResolvedValue(undefined);
+    (db.get as any).mockResolvedValue(null);
 
-    await updateStatusHandler(db, {
-      testId: 'non_existent_test',
-      userId: 'user_id',
-      status: 'active',
-    });
-
-    expect(db.patch).toHaveBeenCalledWith('non_existent_test', { status: 'active' });
+    await expect(
+      updateStatusHandler(db, { testId: 'non_existent_test', userId: 'user_id', status: 'active' })
+    ).rejects.toThrow('Test not found');
+    expect(db.patch).not.toHaveBeenCalled();
   });
 
   it('should handle rapid concurrent status updates', async () => {
@@ -604,7 +601,7 @@ describe('convex/tests - integration scenarios', () => {
     expect(db.patch).toHaveBeenCalledWith(testId, { status: 'active' });
 
     // Retrieve test
-    const mockTest = { _id: testId, spaceId: 'space_1', status: 'active' as TestStatus };
+    const mockTest = { _id: testId, spaceId: 'space_1', userId: 'user_id', status: 'active' as TestStatus };
     (db.get as any).mockResolvedValue(mockTest);
     const retrieved = await getHandler(db, { testId });
     expect(retrieved).toEqual(mockTest);

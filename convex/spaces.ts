@@ -35,13 +35,14 @@ export const get = query({
 export const create = mutation({
     args: { name: v.string(), userId: v.string() },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
         const spaces = await ctx.db
             .query("spaces")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))
             .collect();
         const currentCount = spaces.length;
 
-        const serverLimit = getServerPlanLimitsForUser(args.userId).maxSpaces;
+        const serverLimit = getServerPlanLimitsForUser(args.userId, identity).maxSpaces;
         if (currentCount >= serverLimit) {
             throw new Error(`Limit reached: You can only have ${serverLimit} spaces on your current plan.`);
         }

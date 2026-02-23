@@ -150,7 +150,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                             return;
                         }
                         if (data.title && data.title !== "Untitled") {
-                            void updateTitle({ id: pieceId as Id<"knowledgePieces">, title: data.title, userId });
+                            void updateTitle({ id: pieceId as Id<"knowledgePieces">, title: data.title });
                         }
 
                     })
@@ -197,7 +197,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 return;
                             }
                             if (data?.title && data.title !== "Untitled") {
-                                void updateTitle({ id: ids[i] as Id<"knowledgePieces">, title: String(data.title), userId });
+                                void updateTitle({ id: ids[i] as Id<"knowledgePieces">, title: String(data.title) });
                             }
 
                         })

@@ -6,6 +6,7 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { getTestLimit } from "../../../../lib/testLimits";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -68,13 +69,6 @@ async function fetchGeminiStream<T extends z.ZodSchema>(ai: GoogleGenAI, prompt:
         }
     }
     throw new Error("Failed to get stream after retries");
-}
-
-function getTestLimit(has: (params: { feature: string }) => boolean): number {
-    if (has({ feature: "unlimited_ai_tests" })) return 300;
-    if (has({ feature: "pro_tests" })) return 100;
-    if (has({ feature: "basic_tests" })) return 10;
-    return 0;
 }
 
 type KPiece = { _id: Id<"knowledgePieces">; content: string; title?: string };

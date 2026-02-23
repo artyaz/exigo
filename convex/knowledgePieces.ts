@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getServerPlanLimitsForUser } from "./planLimits";
+import { getAuthenticatedUserId } from "./auth";
 
 export const getForSpace = query({
     args: { spaceId: v.id("spaces") },
@@ -15,14 +16,18 @@ export const getForSpace = query({
 export const add = mutation({
     args: {
         spaceId: v.id("spaces"),
-        userId: v.string(),
         title: v.optional(v.string()),
         content: v.string(),
         source: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const userId = await getAuthenticatedUserId(ctx);
+        if (!userId) {
+            throw new Error("Unauthorized access to this space");
+        }
+
         const space = await ctx.db.get(args.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
             throw new Error("Unauthorized access to this space");
         }
 
@@ -31,7 +36,8 @@ export const add = mutation({
             .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
             .collect();
 
-        const serverLimit = getServerPlanLimitsForUser(args.userId).maxKnowledgePiecesPerSpace;
+        const identity = await ctx.auth.getUserIdentity();
+        const serverLimit = getServerPlanLimitsForUser(userId, identity).maxKnowledgePiecesPerSpace;
         const projectedTotal = existingPieces.length + 1;
         if (projectedTotal > serverLimit) {
             throw new Error(`Limit reached: You can only have ${serverLimit} knowledge pieces per space on your current plan.`);
@@ -50,17 +56,21 @@ export const add = mutation({
 export const updateTitle = mutation({
     args: {
         id: v.id("knowledgePieces"),
-        userId: v.string(),
         title: v.string(),
     },
     handler: async (ctx, args) => {
+        const userId = await getAuthenticatedUserId(ctx);
+        if (!userId) {
+            throw new Error("Unauthorized access to this space");
+        }
+
         const piece = await ctx.db.get(args.id);
         if (!piece) {
             throw new Error(`Knowledge piece not found for id: ${args.id}`);
         }
 
         const space = await ctx.db.get(piece.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
             throw new Error("Unauthorized access to this knowledge piece");
         }
 
@@ -72,7 +82,6 @@ export const updateTitle = mutation({
 export const bulkImport = mutation({
     args: {
         spaceId: v.id("spaces"),
-        userId: v.string(),
         pieces: v.array(
             v.object({
                 title: v.optional(v.string()),
@@ -82,8 +91,13 @@ export const bulkImport = mutation({
         ),
     },
     handler: async (ctx, args) => {
+        const userId = await getAuthenticatedUserId(ctx);
+        if (!userId) {
+            throw new Error("Unauthorized access to this space");
+        }
+
         const space = await ctx.db.get(args.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
             throw new Error("Unauthorized access to this space");
         }
 
@@ -92,7 +106,8 @@ export const bulkImport = mutation({
             .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
             .collect();
 
-        const serverLimit = getServerPlanLimitsForUser(args.userId).maxKnowledgePiecesPerSpace;
+        const identity = await ctx.auth.getUserIdentity();
+        const serverLimit = getServerPlanLimitsForUser(userId, identity).maxKnowledgePiecesPerSpace;
         const nonEmptyIncomingCount = args.pieces.filter((piece) => piece.content.trim() !== "").length;
         const projectedTotal = existingPieces.length + nonEmptyIncomingCount;
         if (projectedTotal > serverLimit) {
@@ -118,17 +133,21 @@ export const bulkImport = mutation({
 export const appendContent = mutation({
     args: {
         id: v.id("knowledgePieces"),
-        userId: v.string(),
         content: v.string(),
     },
     handler: async (ctx, args) => {
+        const userId = await getAuthenticatedUserId(ctx);
+        if (!userId) {
+            throw new Error("Unauthorized access to this space");
+        }
+
         const piece = await ctx.db.get(args.id);
         if (!piece) {
             throw new Error(`Knowledge piece not found for id: ${args.id}`);
         }
 
         const space = await ctx.db.get(piece.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
             throw new Error("Unauthorized access to this knowledge piece");
         }
 
