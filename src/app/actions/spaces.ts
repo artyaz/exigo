@@ -43,7 +43,7 @@ export async function createTestServerAction(args: {
         throw new Error("Unauthorized");
     }
 
-    let maxTests = getTestLimit(has);
+    const maxTests = getTestLimit(has);
 
     const testId = await convex.mutation(api.tests.createEmptyTest, {
         spaceId: args.spaceId as Id<"spaces">,

@@ -109,13 +109,16 @@ export async function POST(req: NextRequest) {
         }
 
         // Mutation to record creation with atomic limit check
-        // @ts-ignore - new table
+        // @ts-expect-error - new table not yet in generated types
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         await convex.mutation(api.deepDives.create, {
             userId,
             spaceId: test.spaceId,
             questionId: questionId as Id<"questions">,
             maxDives: limit,
         });
+
+
 
 
         const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
