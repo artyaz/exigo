@@ -36,6 +36,11 @@ export const create = mutation({
     args: { name: v.string(), userId: v.string() },
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
+        const authenticatedUserId = identity?.subject;
+        if (!authenticatedUserId || authenticatedUserId !== args.userId) {
+            throw new Error("Unauthorized");
+        }
+
         const spaces = await ctx.db
             .query("spaces")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))

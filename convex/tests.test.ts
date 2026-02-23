@@ -57,11 +57,12 @@ const createHandler = async (db: MockDbContext, args: { spaceId: string; type: s
 
 const updateStatusHandler = async (
   db: MockDbContext,
-  args: { testId: string; userId: string; status: TestStatus }
+  args: { testId: string; status: TestStatus }
 ) => {
+  const authenticatedUserId = 'user_id';
   const test = await (db.get as any)(args.testId) as { userId?: string } | null;
   if (!test) throw new Error('Test not found');
-  if (test.userId === undefined || test.userId !== args.userId) {
+  if (test.userId === undefined || test.userId !== authenticatedUserId) {
     throw new Error('Unauthorized access to this test');
   }
   await (db.patch as any)(args.testId, { status: args.status });
@@ -217,7 +218,6 @@ describe('convex/tests - updateStatus mutation logic', () => {
 
     await updateStatusHandler(db, {
       testId: 'test_123',
-      userId: 'user_id',
       status: 'draft',
     });
 
@@ -230,7 +230,6 @@ describe('convex/tests - updateStatus mutation logic', () => {
 
     await updateStatusHandler(db, {
       testId: 'test_456',
-      userId: 'user_id',
       status: 'generating',
     });
 
@@ -243,7 +242,6 @@ describe('convex/tests - updateStatus mutation logic', () => {
 
     await updateStatusHandler(db, {
       testId: 'test_789',
-      userId: 'user_id',
       status: 'active',
     });
 
@@ -256,7 +254,6 @@ describe('convex/tests - updateStatus mutation logic', () => {
 
     await updateStatusHandler(db, {
       testId: 'test_999',
-      userId: 'user_id',
       status: 'completed',
     });
 
@@ -272,7 +269,7 @@ describe('convex/tests - updateStatus mutation logic', () => {
 
     for (const status of statuses) {
       (db.patch as any).mockClear();
-      await updateStatusHandler(db, { testId, userId: 'user_id', status });
+      await updateStatusHandler(db, { testId, status });
       expect(db.patch).toHaveBeenCalledWith(testId, { status });
     }
   });
@@ -283,7 +280,7 @@ describe('convex/tests - updateStatus mutation logic', () => {
     (db.patch as any).mockRejectedValue(dbError);
 
     await expect(
-      updateStatusHandler(db, { testId: 'test_1', userId: 'user_id', status: 'active' })
+      updateStatusHandler(db, { testId: 'test_1', status: 'active' })
     ).rejects.toThrow('Database patch failed');
   });
 
@@ -292,7 +289,7 @@ describe('convex/tests - updateStatus mutation logic', () => {
     (db.get as any).mockResolvedValue({ _id: 'test_1', userId: 'other_user' });
 
     await expect(
-      updateStatusHandler(db, { testId: 'test_1', userId: 'user_id', status: 'active' })
+      updateStatusHandler(db, { testId: 'test_1', status: 'active' })
     ).rejects.toThrow('Unauthorized access to this test');
     expect(db.patch).not.toHaveBeenCalled();
   });
@@ -302,7 +299,7 @@ describe('convex/tests - updateStatus mutation logic', () => {
     (db.get as any).mockResolvedValue(null);
 
     await expect(
-      updateStatusHandler(db, { testId: 'non_existent_test', userId: 'user_id', status: 'active' })
+      updateStatusHandler(db, { testId: 'non_existent_test', status: 'active' })
     ).rejects.toThrow('Test not found');
     expect(db.patch).not.toHaveBeenCalled();
   });
@@ -314,9 +311,9 @@ describe('convex/tests - updateStatus mutation logic', () => {
     const testId = 'test_rapid';
 
     await Promise.all([
-      updateStatusHandler(db, { testId, userId: 'user_id', status: 'draft' }),
-      updateStatusHandler(db, { testId, userId: 'user_id', status: 'generating' }),
-      updateStatusHandler(db, { testId, userId: 'user_id', status: 'active' }),
+      updateStatusHandler(db, { testId, status: 'draft' }),
+      updateStatusHandler(db, { testId, status: 'generating' }),
+      updateStatusHandler(db, { testId, status: 'active' }),
     ]);
 
     expect(db.patch).toHaveBeenCalledTimes(3);
@@ -326,7 +323,7 @@ describe('convex/tests - updateStatus mutation logic', () => {
     const db = createMockDb();
     (db.patch as any).mockResolvedValue(undefined);
 
-    await updateStatusHandler(db, { testId: 'test_123', userId: 'user_id', status: 'completed' });
+    await updateStatusHandler(db, { testId: 'test_123', status: 'completed' });
 
     const callArgs = (db.patch as any).mock.calls[0];
     expect(Object.keys(callArgs[1])).toEqual(['status']);
@@ -597,7 +594,7 @@ describe('convex/tests - integration scenarios', () => {
 
     // Update to active
     (db.patch as any).mockResolvedValue(undefined);
-    await updateStatusHandler(db, { testId, userId: 'user_id', status: 'active' });
+    await updateStatusHandler(db, { testId, status: 'active' });
     expect(db.patch).toHaveBeenCalledWith(testId, { status: 'active' });
 
     // Retrieve test
@@ -607,7 +604,7 @@ describe('convex/tests - integration scenarios', () => {
     expect(retrieved).toEqual(mockTest);
 
     // Complete test
-    await updateStatusHandler(db, { testId, userId: 'user_id', status: 'completed' });
+    await updateStatusHandler(db, { testId, status: 'completed' });
     expect(db.patch).toHaveBeenLastCalledWith(testId, { status: 'completed' });
   });
 
@@ -666,9 +663,9 @@ describe('convex/tests - integration scenarios', () => {
     const testId = 'test_status_validation';
 
     // Valid transition: generating -> active -> completed
-    await updateStatusHandler(db, { testId, userId: 'user_id', status: 'generating' });
-    await updateStatusHandler(db, { testId, userId: 'user_id', status: 'active' });
-    await updateStatusHandler(db, { testId, userId: 'user_id', status: 'completed' });
+    await updateStatusHandler(db, { testId, status: 'generating' });
+    await updateStatusHandler(db, { testId, status: 'active' });
+    await updateStatusHandler(db, { testId, status: 'completed' });
 
     expect(db.patch).toHaveBeenNthCalledWith(1, testId, { status: 'generating' });
     expect(db.patch).toHaveBeenNthCalledWith(2, testId, { status: 'active' });

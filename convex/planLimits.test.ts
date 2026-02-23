@@ -19,4 +19,24 @@ describe("getServerPlanLimitsForUser", () => {
         expect(limits.maxTestsPerMonth).toBe(100);
         expect(limits.maxKnowledgePiecesPerSpace).toBe(200);
     });
+
+    it("returns educator limits when unlimited feature is present", () => {
+        const limits = getServerPlanLimitsForUser("user_123", { unlimited_ai_tests: true });
+        expect(limits.maxSpaces).toBe(Number.MAX_SAFE_INTEGER);
+        expect(limits.maxTestsPerMonth).toBe(300);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(Number.MAX_SAFE_INTEGER);
+    });
+
+    it("reads nested metadata flags", () => {
+        const limits = getServerPlanLimitsForUser("user_123", { publicMetadata: { pro_tests: true } });
+        expect(limits.maxTestsPerMonth).toBe(100);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(200);
+    });
+
+    it("falls back to free limits for unknown flags", () => {
+        const limits = getServerPlanLimitsForUser("user_123", { unknown_flag: true });
+        expect(limits.maxSpaces).toBe(3);
+        expect(limits.maxTestsPerMonth).toBe(10);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
+    });
 });
