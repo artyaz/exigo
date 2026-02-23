@@ -113,9 +113,14 @@ export const createEmptyTest = mutation({
 export const create = mutation({
     args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.optional(v.number()), userId: v.string() },
     handler: async (ctx, args) => {
-        const { userId } = await getAuthenticatedUser(ctx);
+        const { userId, identity } = await getAuthenticatedUser(ctx);
         if (args.userId !== userId) {
             throw new Error("Unauthorized");
+        }
+
+        const maxAllowed = getServerPlanLimitsForUser(userId, identity).maxTestsPerMonth;
+        if (maxAllowed === 0) {
+            throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
         }
 
         const space = await ctx.db.get(args.spaceId);
@@ -125,6 +130,11 @@ export const create = mutation({
 
         if (space.userId !== userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
+        }
+
+        const count = await countForUserThisMonthInternal(ctx, userId);
+        if (count >= maxAllowed) {
+            throw new Error(`Limit reached: You can only create ${maxAllowed} tests per month on your current plan.`);
         }
 
         return await ctx.db.insert("tests", {
@@ -179,6 +189,12 @@ export const updateStatus = mutation({
 export const getForSpace = query({
     args: { spaceId: v.id("spaces") },
     handler: async (ctx, args) => {
+        const { userId } = await getAuthenticatedUser(ctx);
+        const space = await ctx.db.get(args.spaceId);
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this space");
+        }
+
         return await ctx.db
             .query("tests")
             .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
@@ -222,7 +238,18 @@ export const listAll = query({
 export const get = query({
     args: { testId: v.id("tests") },
     handler: async (ctx, args) => {
-        return await ctx.db.get(args.testId);
+        const { userId } = await getAuthenticatedUser(ctx);
+        const test = await ctx.db.get(args.testId);
+        if (!test) {
+            return null;
+        }
+
+        const space = await ctx.db.get(test.spaceId);
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this test");
+        }
+
+        return test;
     },
 });
 

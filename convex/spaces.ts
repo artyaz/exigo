@@ -5,6 +5,12 @@ import { getServerPlanLimitsForUser } from "./planLimits";
 export const list = query({
     args: { userId: v.string() },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        const authenticatedUserId = identity?.subject;
+        if (!authenticatedUserId || authenticatedUserId !== args.userId) {
+            return [];
+        }
+
         return await ctx.db
             .query("spaces")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -15,6 +21,12 @@ export const list = query({
 export const countForUser = query({
     args: { userId: v.string() },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        const authenticatedUserId = identity?.subject;
+        if (!authenticatedUserId || authenticatedUserId !== args.userId) {
+            return 0;
+        }
+
         const spaces = await ctx.db
             .query("spaces")
             .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -26,6 +38,12 @@ export const countForUser = query({
 export const get = query({
     args: { spaceId: v.id("spaces"), userId: v.string() },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        const authenticatedUserId = identity?.subject;
+        if (!authenticatedUserId || authenticatedUserId !== args.userId) {
+            return null;
+        }
+
         const space = await ctx.db.get(args.spaceId);
         if (!space || (space.userId !== args.userId && space.userId !== "default_user")) return null;
         return space;
