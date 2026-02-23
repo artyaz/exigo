@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
-import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-
-function createConvexClient() {
-    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-}
+import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import { PLAN_LIMIT_CODE } from "../../../../../shared/planConfig";
 
 /**
  * Helper to securely validate incoming AI evaluation shape
@@ -31,10 +28,8 @@ function validateAIResponse(result: unknown): { isCorrect: boolean; feedback: st
 }
 
 async function resolveTargetPieceId(
-    convex: ConvexHttpClient,
     explicitKnowledgePieceId: string | undefined,
-    testKnowledgePieceId: Id<"knowledgePieces"> | undefined,
-    spaceId: Id<"spaces">
+    testKnowledgePieceId: Id<"knowledgePieces"> | undefined
 ): Promise<Id<"knowledgePieces"> | null> {
     if (explicitKnowledgePieceId) {
         return explicitKnowledgePieceId as Id<"knowledgePieces">;
@@ -42,8 +37,15 @@ async function resolveTargetPieceId(
     if (testKnowledgePieceId) {
         return testKnowledgePieceId;
     }
-    const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId });
-    return pieces?.[0]?._id ?? null;
+    return null;
+}
+
+function hasPlanLimitCode(error: unknown, code: string): boolean {
+    if (!error || typeof error !== "object") {
+        return false;
+    }
+    const err = error as { data?: { code?: string }; name?: string };
+    return err.data?.code === code || err.name === code;
 }
 
 export async function POST(req: NextRequest) {
@@ -53,18 +55,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        let token: string | null = null;
-        try {
-            token = await getToken({ template: "convex" });
-        } catch {
-            token = await getToken();
-        }
-        if (!token) {
-            return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
-        }
-
-        const convex = createConvexClient();
-        convex.setAuth(token);
+        const convex = await createAuthedConvexClient(getToken, "api.tests.validate");
 
         const rawBody = await req.json() as Record<string, unknown>;
         const questionId = rawBody.questionId as string | undefined;
@@ -169,12 +160,7 @@ export async function POST(req: NextRequest) {
             modelUsedResult = modelUsed;
         }
 
-        const targetKnowledgePieceId = await resolveTargetPieceId(
-            convex,
-            rawBody.knowledgePieceId as string | undefined,
-            test.knowledgePieceId,
-            test.spaceId
-        );
+        const targetKnowledgePieceId = await resolveTargetPieceId(rawBody.knowledgePieceId as string | undefined, test.knowledgePieceId);
 
         // Update the question
         await convex.mutation(api.questions.updateFeedback, {
@@ -207,9 +193,7 @@ export async function POST(req: NextRequest) {
                 });
             }
         } catch (planError: unknown) {
-            const message = planError instanceof Error ? planError.message : String(planError);
-            // Silently ignore if it's just a plan limit error
-            if (!message.includes("Pro plan")) {
+            if (!hasPlanLimitCode(planError, PLAN_LIMIT_CODE)) {
                 console.error("Knowledge Node mutation failed:", planError);
             }
         }
@@ -227,6 +211,10 @@ export async function POST(req: NextRequest) {
 
     } catch (err: unknown) {
         console.error(err);
+        const isAuthTokenError = err instanceof Error && err.message.includes("Missing Convex template token");
+        if (isAuthTokenError) {
+            return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
+        }
         const errorMessage = err instanceof Error ? err.message : undefined;
         return NextResponse.json({ error: errorMessage ?? "Unknown error" }, { status: 500 });
     }

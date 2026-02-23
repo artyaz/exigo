@@ -44,6 +44,17 @@ function useSpaceData(spaceId: Id<"spaces">, userId: string | null | undefined) 
     return { space, pieces, spaceTests, spaceQuestions };
 }
 
+function getNodeTypeInfo(nodeType: "feels_hard" | "struggle" | "improvement") {
+    switch (nodeType) {
+        case "feels_hard":
+            return { label: "Feels Hard", icon: AlertTriangle, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" };
+        case "struggle":
+            return { label: "Struggle Area", icon: Target, color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20" };
+        default:
+            return { label: "Improvement", icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
+    }
+}
+
 
 export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId: string }> }) {
     const router = useRouter();
@@ -903,10 +914,11 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 ) : (
                                     <div className="grid gap-3">
                                         {pieces.slice().reverse().map((piece) => (
-                                            <div
+                                            <button
                                                 key={piece._id}
+                                                type="button"
                                                 onClick={() => setViewingPieceId(String(piece._id))}
-                                                className="glass-card rounded-xl p-4 hover:bg-white/5 transition-colors cursor-pointer relative group"
+                                                className="glass-card rounded-xl p-4 hover:bg-white/5 transition-colors cursor-pointer relative group text-left"
                                             >
                                                 {piece.title && (
                                                     <p className="text-xs text-white/50 font-semibold uppercase tracking-widest mb-1.5 pr-24">{piece.title}</p>
@@ -919,7 +931,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                         Nodes
                                                     </div>
                                                 </div>
-                                            </div>
+                                            </button>
                                         ))}
                                     </div>
                                 )}
@@ -1065,48 +1077,56 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
                             {/* Node list */}
                             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                                {activeNodes === undefined ? (
-                                    <div className="flex justify-center p-12">
-                                        <Loader2 className="w-6 h-6 animate-spin text-white/20" />
-                                    </div>
-                                ) : activeNodes.length === 0 ? (
-                                    <div className="text-center flex flex-col items-center gap-3 p-12 opacity-50">
-                                        <CheckCircle2 className="w-8 h-8 opacity-50" />
-                                        <p className="text-sm">No active focus areas. You&apos;re doing great.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid gap-3">
-                                        {activeNodes.map((node) => {
-                                            const nodeInfo = node.type === "feels_hard"
-                                                ? { label: "Feels Hard", icon: AlertTriangle, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" }
-                                                : node.type === "struggle"
-                                                    ? { label: "Struggle Area", icon: Target, color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20" }
-                                                    : { label: "Improvement", icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
+                                {(() => {
+                                    if (activeNodes === undefined) {
+                                        return (
+                                            <div className="flex justify-center p-12">
+                                                <Loader2 className="w-6 h-6 animate-spin text-white/20" />
+                                            </div>
+                                        );
+                                    }
 
-                                            const Icon = nodeInfo.icon;
+                                    if (activeNodes.length === 0) {
+                                        return (
+                                            <div className="text-center flex flex-col items-center gap-3 p-12 opacity-50">
+                                                <CheckCircle2 className="w-8 h-8 opacity-50" />
+                                                <p className="text-sm">No active focus areas. You&apos;re doing great.</p>
+                                            </div>
+                                        );
+                                    }
 
-                                            return (
-                                                <div
-                                                    key={node._id}
-                                                    className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-start gap-4"
-                                                >
-                                                    <div className={`p-2 rounded-lg border shrink-0 ${nodeInfo.bg} ${nodeInfo.border} ${nodeInfo.color}`}>
-                                                        <Icon className="w-4 h-4" />
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between mb-1.5">
-                                                            <h4 className="text-xs font-semibold uppercase tracking-widest text-white/80">{nodeInfo.label}</h4>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-mono text-white/30 truncate">Target: {node.resolutionScore}/90%</span>
-                                                            </div>
+                                    return (
+                                        <div className="grid gap-3">
+                                            {activeNodes.map((node) => {
+                                                const nodeInfo = getNodeTypeInfo(node.type);
+                                                const Icon = nodeInfo.icon;
+                                                const progressPct = Math.round((node.resolutionScore / 90) * 100);
+
+                                                return (
+                                                    <div
+                                                        key={node._id}
+                                                        className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-start gap-4"
+                                                    >
+                                                        <div className={`p-2 rounded-lg border shrink-0 ${nodeInfo.bg} ${nodeInfo.border} ${nodeInfo.color}`}>
+                                                            <Icon className="w-4 h-4" />
                                                         </div>
-                                                        <p className="text-sm text-white/60 leading-relaxed whitespace-pre-wrap">{node.content}</p>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between mb-1.5">
+                                                                <h4 className="text-xs font-semibold uppercase tracking-widest text-white/80">{nodeInfo.label}</h4>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[10px] font-mono text-white/30 truncate">
+                                                                        Target: {node.resolutionScore}/90 ({progressPct}%)
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-sm text-white/60 leading-relaxed whitespace-pre-wrap">{node.content}</p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             {/* Modal footer */}

@@ -134,6 +134,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
+    const [localCorrectness, setLocalCorrectness] = useState<Record<string, boolean>>({});
     const [isEvaluating, setIsEvaluating] = useState<Record<string, boolean>>({});
     const [isGeneratingNext, setIsGeneratingNext] = useState(false);
     const [, setStreamingText] = useState(""); // value unused; only setter needed
@@ -210,6 +211,19 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, targetQuestionCount]);
+
+    useEffect(() => {
+        if (!questions) return;
+        setLocalCorrectness((prev) => {
+            const next = { ...prev };
+            for (const q of questions) {
+                if (q.isCorrect !== undefined) {
+                    next[q._id] = q.isCorrect;
+                }
+            }
+            return next;
+        });
+    }, [questions]);
 
     useEffect(() => {
         if (chatEndRef.current) {
@@ -352,18 +366,37 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
         const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined;
         let isCorrect = false;
+        let requestFailed = false;
         try {
             const res = await fetch("/api/tests/validate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ questionId, answer, testType: test?.config.type, knowledgePieceId }),
             });
-            if (res.ok) {
-                const data = await res.json() as { isCorrect?: boolean };
-                isCorrect = !!data.isCorrect;
+            if (!res.ok) {
+                requestFailed = true;
+                const errBody = await res.json().catch(() => ({})) as { error?: string };
+                throw new Error(errBody.error ?? `Validation failed (${res.status})`);
             }
+            const data = await res.json() as { isCorrect?: boolean };
+            isCorrect = !!data.isCorrect;
+            setLocalCorrectness(prev => ({ ...prev, [questionId]: isCorrect }));
+        } catch (e) {
+            requestFailed = true;
+            console.error("Answer validation failed", e);
+            setToast({ message: e instanceof Error ? e.message : "Failed to validate answer", type: "error" });
+            setAnswers((prev) => {
+                const next = { ...prev };
+                delete next[questionId];
+                return next;
+            });
         } finally {
             setIsEvaluating(prev => ({ ...prev, [questionId]: false }));
+        }
+
+        const mergedCorrectness: Record<string, boolean> = { ...localCorrectness };
+        if (!requestFailed) {
+            mergedCorrectness[questionId] = isCorrect;
         }
 
         // Auto-advance after brief delay — capture index to prevent stale closure
@@ -374,15 +407,14 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 setCurrentIndex(prev => prev + 1);
             } else if (questions && scheduledIndex === questions.length - 1 && scheduledIndex === targetQuestionCount - 1) {
                 // Last question answered! Let's compute score.
-                let correctCount = isCorrect ? 1 : 0;
-                questions.forEach(q => {
-                    if (q._id !== questionId && q.isCorrect === true) {
-                        correctCount++;
-                    }
-                });
+                const correctCount = questions.reduce((count, q) => {
+                    const resolvedCorrectness = mergedCorrectness[q._id];
+                    const isQuestionCorrect = resolvedCorrectness ?? q.isCorrect;
+                    return count + (isQuestionCorrect === true ? 1 : 0);
+                }, 0);
 
                 const score = correctCount / targetQuestionCount;
-                if (score >= 0.8 && knowledgePieceId) {
+                if (!requestFailed && score >= 0.8 && knowledgePieceId) {
                     // Trigger improvements generation softly in background
                     void generateImprovements({
                         knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">,

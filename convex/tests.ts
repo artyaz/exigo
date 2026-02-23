@@ -46,11 +46,7 @@ async function countTestsForSpacesSince(
 }
 
 async function countForUserThisMonthInternal(ctx: QueryCtx | MutationCtx, userId: string) {
-    const userSpaces = await ctx.db
-        .query("spaces")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .collect();
-    const spaceIds = userSpaces.map((space) => space._id);
+    const spaceIds = await getOwnedSpaceIds(ctx, userId);
     return await countTestsForSpacesSince(ctx, spaceIds, getStartOfMonthMs());
 }
 

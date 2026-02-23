@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, BrainCircuit, Target, Zap, AlertTriangle, TrendingUp, Settings } from "lucide-react";
+import { ArrowLeft, BrainCircuit, Target, Zap, AlertTriangle, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 

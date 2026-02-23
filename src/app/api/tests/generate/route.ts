@@ -1,16 +1,13 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
-import { ConvexHttpClient } from "convex/browser";
+import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { getTestLimit } from "../../../../lib/testLimits";
-
-function createConvexClient() {
-    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-}
+import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 
 const selectQuestionSchema = z.object({
     question: z.string().describe("The question text"),
@@ -74,6 +71,22 @@ async function fetchGeminiStream<T extends z.ZodSchema>(ai: GoogleGenAI, prompt:
 }
 
 type KPiece = { _id: Id<"knowledgePieces">; content: string; title?: string };
+
+type GenerateBody = {
+    spaceId: string;
+    testType: string;
+    testId?: string;
+    knowledgePieceId?: string;
+};
+
+function parseGenerateBody(rawBody: Record<string, unknown>): GenerateBody {
+    return {
+        spaceId: rawBody.spaceId as string,
+        testType: rawBody.testType as string,
+        testId: rawBody.testId as string | undefined,
+        knowledgePieceId: rawBody.knowledgePieceId as string | undefined,
+    };
+}
 
 function selectKnowledgePieces(pieces: KPiece[], knowledgePieceId?: string): KPiece[] | Response {
     if (knowledgePieceId) {
@@ -152,10 +165,7 @@ function buildContextPrompt(
 
 export async function POST(req: NextRequest) {
     const rawBody = await req.json() as Record<string, unknown>;
-    const spaceId = rawBody.spaceId as string;
-    const testType = rawBody.testType as string;
-    const testId = rawBody.testId as string | undefined;
-    const knowledgePieceId = rawBody.knowledgePieceId as string | undefined;
+    const { spaceId, testType, testId, knowledgePieceId } = parseGenerateBody(rawBody);
 
     if (!spaceId || !testType || !process.env.GOOGLE_GEMINI_API_KEY) {
         return new Response(JSON.stringify({ error: "Missing params or API key" }), { status: 400 });
@@ -171,18 +181,16 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
-    let token: string | null = null;
+    let convex: ConvexHttpClient;
     try {
-        token = await getToken({ template: "convex" });
-    } catch {
-        token = await getToken();
+        convex = await createAuthedConvexClient(getToken, "api.tests.generate");
+    } catch (error) {
+        const msg = error instanceof Error ? error.message : "Unauthorized";
+        if (msg.includes("Missing Convex template token")) {
+            return new Response(JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }), { status: 401 });
+        }
+        return new Response(JSON.stringify({ error: msg }), { status: 500 });
     }
-    if (!token) {
-        return new Response(JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }), { status: 401 });
-    }
-
-    const convex = createConvexClient();
-    convex.setAuth(token);
 
     const MAX_TESTS = getTestLimit(has);
     if (MAX_TESTS === 0) {
@@ -220,8 +228,9 @@ export async function POST(req: NextRequest) {
 
     const firstPiece = selectedPieces[0]!;
     const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
+    const effectiveKnowledgePieceId = knowledgePieceId ?? String(firstPiece._id);
 
-    const testResult = await resolveTestId(convex, testId, spaceId, testType, topicLabel, userId, knowledgePieceId);
+    const testResult = await resolveTestId(convex, testId, spaceId, testType, topicLabel, userId, effectiveKnowledgePieceId);
     if (testResult instanceof Response) return testResult;
     const { id: activeTestId, existingQuestions } = testResult;
 
@@ -232,9 +241,9 @@ export async function POST(req: NextRequest) {
 
     let activeNodes: { _id: Id<"knowledgeNodes">, type: string, content: string }[] = [];
     const isPro = has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" });
-    if (knowledgePieceId && isPro) {
+    if (effectiveKnowledgePieceId && isPro) {
         activeNodes = await convex.query(api.knowledgeNodes.getActiveForPiece, {
-            knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">
+            knowledgePieceId: effectiveKnowledgePieceId as Id<"knowledgePieces">
         });
     }
 

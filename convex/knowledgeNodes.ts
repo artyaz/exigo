@@ -1,7 +1,9 @@
-import { v } from "convex/values";
-import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { GoogleGenAI } from "@google/genai";
+import { internal } from "./_generated/api";
 import { getAuthenticatedUserId, getAuthenticatedUserIdForAction } from "./auth";
-import { hasFeature, isProPlan } from "./planLimits";
+import { isProPlan, PLAN_LIMIT_CODE } from "./planLimits";
 
 // ...
 
@@ -20,9 +22,11 @@ export const create = mutation({
 
         const identity = await ctx.auth.getUserIdentity();
         if (!isProPlan(identity)) {
-            const keys = identity ? Object.keys(identity).filter(k => !k.startsWith("_")).join(", ") : "none";
-            const planVal = String((identity as any)?.plan || (identity as any)?.publicMetadata?.plan || "none");
-            throw new Error(`Knowledge Nodes require a Pro plan. Detected Plan: "${planVal}". Available Claims: [${keys}]. Please upgrade or refresh.`);
+            console.debug("knowledgeNodes.create plan check failed", { identity });
+            throw new ConvexError({
+                code: PLAN_LIMIT_CODE,
+                message: "Knowledge Nodes require a Pro plan. Please upgrade or refresh.",
+            });
         }
 
         const space = await ctx.db.get(args.spaceId);
@@ -53,7 +57,10 @@ export const resolve = mutation({
 
         const identity = await ctx.auth.getUserIdentity();
         if (!isProPlan(identity)) {
-            throw new Error("Knowledge Nodes require a Pro plan. Please upgrade.");
+            throw new ConvexError({
+                code: PLAN_LIMIT_CODE,
+                message: "Knowledge Nodes require a Pro plan. Please upgrade.",
+            });
         }
 
         const node = await ctx.db.get(args.id);
@@ -87,19 +94,29 @@ export const getActiveForPiece = query({
         knowledgePieceId: v.id("knowledgePieces"),
     },
     handler: async (ctx, args) => {
-        // Absolute minimum query for debugging
-        const nodes = await ctx.db
-            .query("knowledgeNodes")
-            .withIndex("by_piece", (q) => q.eq("knowledgePieceId", args.knowledgePieceId))
-            .collect();
+        const userId = await getAuthenticatedUserId(ctx);
+        if (!userId) {
+            throw new Error("Unauthorized access");
+        }
 
-        return nodes;
+        const piece = await ctx.db.get(args.knowledgePieceId);
+        if (!piece) {
+            return [];
+        }
+
+        const space = await ctx.db.get(piece.spaceId);
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this knowledge piece");
+        }
+
+        return await ctx.db
+            .query("knowledgeNodes")
+            .withIndex("by_piece_active", (q) =>
+                q.eq("knowledgePieceId", args.knowledgePieceId).eq("isActive", true)
+            )
+            .collect();
     },
 });
-
-import { action } from "./_generated/server";
-import { GoogleGenAI } from "@google/genai";
-import { internal } from "./_generated/api";
 
 export const createInternal = internalMutation({
     args: {

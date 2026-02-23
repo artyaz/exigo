@@ -1,16 +1,9 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-
-if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
-    throw new Error("NEXT_PUBLIC_CONVEX_URL is not defined in environment variables");
-}
-function createConvexClient() {
-    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-}
+import { createAuthedConvexClient } from "../../lib/convexClientAuth";
 
 export async function addKnowledgePieceAction(spaceId: string, content: string, title?: string, source?: string) {
     const { userId, getToken } = await auth();
@@ -19,18 +12,7 @@ export async function addKnowledgePieceAction(spaceId: string, content: string, 
         throw new Error("Unauthorized: Please sign in to add knowledge.");
     }
 
-    let token: string | null = null;
-    try {
-        token = await getToken({ template: "convex" });
-    } catch {
-        token = await getToken();
-    }
-    if (!token) {
-        throw new Error("Unauthorized: Missing Convex auth token.");
-    }
-
-    const convex = createConvexClient();
-    convex.setAuth(token);
+    const convex = await createAuthedConvexClient(getToken, "actions.knowledge.addKnowledgePieceAction");
 
     // Verify space ownership
     const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces">, userId });
@@ -56,18 +38,7 @@ export async function bulkImportKnowledgeAction(spaceId: string, pieces: { title
         throw new Error("Unauthorized: Please sign in to add knowledge.");
     }
 
-    let token: string | null = null;
-    try {
-        token = await getToken({ template: "convex" });
-    } catch {
-        token = await getToken();
-    }
-    if (!token) {
-        throw new Error("Unauthorized: Missing Convex auth token.");
-    }
-
-    const convex = createConvexClient();
-    convex.setAuth(token);
+    const convex = await createAuthedConvexClient(getToken, "actions.knowledge.bulkImportKnowledgeAction");
 
     // Verify space ownership
     const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces">, userId });

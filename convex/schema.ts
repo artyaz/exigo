@@ -20,7 +20,8 @@ export default defineSchema({
         resolutionScore: v.number(), // 0 to 100
         isActive: v.boolean(),
     }).index("by_space", ["spaceId"])
-        .index("by_piece", ["knowledgePieceId"]),
+        .index("by_piece", ["knowledgePieceId"])
+        .index("by_piece_active", ["knowledgePieceId", "isActive"]),
     tests: defineTable({
         spaceId: v.id("spaces"),
         topicTitle: v.optional(v.string()),
