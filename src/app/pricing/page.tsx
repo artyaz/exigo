@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Check, X, ArrowRight, Zap, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useUser, useClerk, useAuth } from "@clerk/nextjs";
+import Link from "next/link";
 
 const plans = [
     {
@@ -16,6 +17,7 @@ const plans = [
             { name: "20 Knowledge Pieces / Space", included: true },
             { name: "Basic Storage", included: true },
             { name: "AI Testing", included: false },
+            { name: "Smart Knowledge Nodes", included: false, href: "/knowledge-nodes" },
         ],
         buttonText: "Current Plan",
         isActive: true,
@@ -30,6 +32,7 @@ const plans = [
             { name: "3 Spaces", included: true },
             { name: "50 Knowledge Pieces / Space", included: true },
             { name: "10 AI Tests / month", included: true },
+            { name: "Smart Knowledge Nodes", included: false, href: "/knowledge-nodes" },
         ],
         buttonText: "Upgrade to Basic",
         isActive: false,
@@ -47,6 +50,7 @@ const plans = [
             { name: "Basic AI Feedback", included: true },
             { name: "50 Deep Dive Study Notes", included: true },
             { name: "200 Knowledge Pieces / Space", included: true },
+            { name: "Smart Knowledge Nodes", included: true, href: "/knowledge-nodes" },
         ],
         buttonText: "Upgrade to Pro",
         isActive: false,
@@ -63,6 +67,7 @@ const plans = [
             { name: "300 AI Tests / month", included: true },
             { name: "150 Deep Dive Study Notes", included: true },
             { name: "Unlimited Conversational AI", included: true },
+            { name: "Smart Knowledge Nodes", included: true, href: "/knowledge-nodes" },
         ],
         buttonText: "Upgrade to Educator",
         isActive: false,
@@ -220,7 +225,13 @@ export default function PricingPage() {
                                                         <X className="w-5 h-5 text-neutral-700 shrink-0" />
                                                     )}
                                                     <span className={feature.included ? "text-white/80" : "text-white/40"}>
-                                                        {feature.name}
+                                                        {feature.href ? (
+                                                            <Link href={feature.href} className="underline decoration-white/30 hover:decoration-white/80 underline-offset-2 transition-colors">
+                                                                {feature.name}
+                                                            </Link>
+                                                        ) : (
+                                                            feature.name
+                                                        )}
                                                     </span>
                                                 </li>
                                             ))}

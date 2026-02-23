@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
-import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-
-function createConvexClient() {
-    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-}
+import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import { getDeepDiveLimitForTier } from "../../../../../shared/planConfig";
 
 interface FeelsHardBody {
     testId?: string;
@@ -61,16 +58,17 @@ Important:
 - Keep it under 4 sentences.`;
 }
 
-async function resolveTargetPiece(
-    convex: ConvexHttpClient,
+function resolveTargetPiece(
     knowledgePieceId: string | undefined,
-    spaceId: Id<"spaces">
-): Promise<Id<"knowledgePieces"> | null> {
+    testKnowledgePieceId: Id<"knowledgePieces"> | undefined
+): Id<"knowledgePieces"> | null {
     if (knowledgePieceId) {
         return knowledgePieceId as Id<"knowledgePieces">;
     }
-    const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId });
-    return pieces?.[0]?._id ?? null;
+    if (testKnowledgePieceId) {
+        return testKnowledgePieceId;
+    }
+    return null;
 }
 
 /**
@@ -80,30 +78,20 @@ async function resolveTargetPiece(
  */
 export async function POST(req: NextRequest) {
     try {
-        const { userId, has, getToken } = await auth();
+        const { userId, getToken } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const token = await getToken({ template: "convex" }) ?? await getToken();
-        if (!token) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-        const convex = createConvexClient();
-        convex.setAuth(token);
+        const convex = await createAuthedConvexClient(getToken, "api.tests.feels-hard");
 
-        const hasConversationalAI = has({ feature: "conversational_ai" });
-        if (!hasConversationalAI) {
+        const planStatus = await convex.query(api.planLimits.getPlan, {});
+
+        if (!planStatus.features.conversational_ai) {
             return NextResponse.json({ error: "Upgrade to Pro to use Deep Dive study notes!" }, { status: 403 });
         }
 
-        const isEducator = has({ feature: "unlimited_ai_tests" });
-        const isPro = has({ feature: "pro_tests" });
-        const limit = isEducator ? 150 : isPro ? 50 : 0;
-
-        if (limit === 0) {
-            return NextResponse.json({ error: "You don't have access to Deep Dive study notes. Please upgrade your plan." }, { status: 403 });
-        }
+        const limit = getDeepDiveLimitForTier(planStatus.tier);
 
 
         if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -135,9 +123,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
         }
 
-        const targetPieceId = await resolveTargetPiece(convex, knowledgePieceId, test.spaceId);
+        const targetPieceId = resolveTargetPiece(knowledgePieceId, test.knowledgePieceId);
         if (!targetPieceId) {
-            return NextResponse.json({ error: "No knowledge piece found to append to" }, { status: 404 });
+            return NextResponse.json({ error: "Missing knowledgePieceId for this test context." }, { status: 400 });
         }
 
         const pastMessages = await convex.query(api.testMessages.getForQuestion, {
@@ -161,9 +149,11 @@ export async function POST(req: NextRequest) {
         const response = await ai.models.generateContent({ model, contents: prompt });
         const struggleNote = response.text?.trim() ?? "User had an issue with this topic.";
 
-        await convex.mutation(api.knowledgePieces.appendContent, {
-            id: targetPieceId,
-            content: `---\n📌 Study Note (auto-generated): ${struggleNote}`,
+        await convex.mutation(api.knowledgeNodes.create, {
+            spaceId: test.spaceId,
+            knowledgePieceId: targetPieceId,
+            type: "feels_hard",
+            content: struggleNote,
         });
 
         await convex.mutation(api.deepDives.create, {
@@ -177,6 +167,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, note: struggleNote });
     } catch (err: unknown) {
         console.error("Feels-hard error:", err);
+        if (err instanceof ConvexAuthError) {
+            return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
+        }
         const errorMessage = err instanceof Error ? err.message : "Unknown error";
         return NextResponse.json({ error: errorMessage }, { status: 500 });
     }

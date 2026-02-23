@@ -39,4 +39,31 @@ describe("getServerPlanLimitsForUser", () => {
         expect(limits.maxTestsPerMonth).toBe(10);
         expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
     });
+
+    it("does not infer pro from unrelated substrings like profile/provider", () => {
+        const limits = getServerPlanLimitsForUser("user_123", {
+            profile: "student profile",
+            provider: "clerk-provider",
+        });
+        expect(limits.maxSpaces).toBe(3);
+        expect(limits.maxTestsPerMonth).toBe(10);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
+    });
+
+    it("detects explicit plan metadata values", () => {
+        const limits = getServerPlanLimitsForUser("user_123", {
+            publicMetadata: { plan: "pro" },
+        });
+        expect(limits.maxTestsPerMonth).toBe(100);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(200);
+    });
+
+    it("ignores inherited prototype plan fields", () => {
+        const proto = { plan: "pro" };
+        const identity = Object.create(proto) as Record<string, unknown>;
+        const limits = getServerPlanLimitsForUser("user_123", identity);
+        expect(limits.maxSpaces).toBe(3);
+        expect(limits.maxTestsPerMonth).toBe(10);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
+    });
 });

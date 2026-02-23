@@ -1,22 +1,19 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { getTestLimit } from "../../lib/testLimits";
-
-if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
-    throw new Error("NEXT_PUBLIC_CONVEX_URL is not defined in environment variables");
-}
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL);
+import { createAuthedConvexClient } from "../../lib/convexClientAuth";
 
 export async function createSpaceServerAction(name: string) {
-    const { userId } = await auth();
+    const { userId, getToken } = await auth();
 
     if (!userId) {
         throw new Error("Unauthorized: Please sign in to create a space.");
     }
+
+    const convex = await createAuthedConvexClient(getToken, "actions.spaces.createSpaceServerAction");
 
     const spaceId = await convex.mutation(api.spaces.create, { name, userId });
 
@@ -28,8 +25,9 @@ export async function createTestServerAction(args: {
     type: string;
     questionCount: number;
     topicTitle: string;
+    knowledgePieceId?: string;
 }) {
-    const { userId, has } = await auth();
+    const { userId, has, getToken } = await auth();
     if (!userId) {
         throw new Error("Unauthorized");
     }
@@ -39,12 +37,15 @@ export async function createTestServerAction(args: {
         throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
     }
 
+    const convex = await createAuthedConvexClient(getToken, "actions.spaces.createTestServerAction");
+
     const testId = await convex.mutation(api.tests.createEmptyTest, {
         spaceId: args.spaceId as Id<"spaces">,
         type: args.type,
         questionCount: args.questionCount,
         topicTitle: args.topicTitle,
         userId,
+        knowledgePieceId: args.knowledgePieceId ? (args.knowledgePieceId as Id<"knowledgePieces">) : undefined,
     });
 
 
