@@ -125,18 +125,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
         }
 
+        const targetPieceId = await resolveTargetPiece(knowledgePieceId, test.spaceId);
+        if (!targetPieceId) {
+            return NextResponse.json({ error: "No knowledge piece found to append to" }, { status: 404 });
+        }
+
         await convex.mutation(api.deepDives.create, {
             userId,
             spaceId: test.spaceId,
             questionId: questionId as Id<"questions">,
             maxDives: limit,
         });
-
-
-        const targetPieceId = await resolveTargetPiece(knowledgePieceId, test.spaceId);
-        if (!targetPieceId) {
-            return NextResponse.json({ error: "No knowledge piece found to append to" }, { status: 404 });
-        }
 
         const pastMessages = await convex.query(api.testMessages.getForQuestion, {
             questionId: questionId as Id<"questions">,

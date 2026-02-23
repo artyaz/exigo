@@ -25,6 +25,17 @@ function hashCode(str: string) {
     return hash;
 }
 
+function getUserFacingErrorMessage(error: unknown) {
+    const fallback = "Something went wrong. Please try again.";
+    const message = error instanceof Error ? error.message : fallback;
+
+    if (message.includes("don't have access to test generation") || message.includes("create 0 tests")) {
+        return "Test generation is locked on your current plan. Upgrade to continue.";
+    }
+
+    return message;
+}
+
 function useSpaceData(spaceId: Id<"spaces">, userId: string | null | undefined) {
     const space = useQuery(api.spaces.get, userId ? { spaceId, userId } : "skip");
     const pieces = useQuery(api.knowledgePieces.getForSpace, { spaceId });
@@ -70,6 +81,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const [showTypeDropdown, setShowTypeDropdown] = useState(false);
     const [showTopicPicker, setShowTopicPicker] = useState(false);
     const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
+    const [testGenerateError, setTestGenerateError] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Test card hover
@@ -204,6 +216,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
     const handleTestMe = async () => {
         if (pieces.length === 0) return;
+        setTestGenerateError(null);
         setIsGenerating(true);
         try {
             const topicLabel = selectedTopic
@@ -224,7 +237,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             router.push(`/tests/${testId}`);
         } catch (error) {
             console.error("Failed to create test", error);
-            alert((error as Error).message);
+            setTestGenerateError(getUserFacingErrorMessage(error));
             setIsGenerating(false);
         }
     };
@@ -412,6 +425,15 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                     <p className="text-xs text-red-500/80">Add knowledge first</p>
                                 )}
                             </div>
+
+                            {testGenerateError && (
+                                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white">
+                                    <p className="text-white/90">{testGenerateError}</p>
+                                    <Link href="/pricing" className="mt-1 inline-flex text-xs font-medium text-white/60 hover:text-white/90 transition-colors">
+                                        Open plans
+                                    </Link>
+                                </div>
+                            )}
 
                             {/* Filter / Sort bar */}
                             {spaceTests && spaceTests.length > 0 && (() => {

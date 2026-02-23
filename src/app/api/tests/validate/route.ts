@@ -31,7 +31,7 @@ function validateAIResponse(result: unknown): { isCorrect: boolean; feedback: st
 export async function POST(req: NextRequest) {
 
     try {
-        const { userId } = await auth();
+        const { userId, has } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -71,6 +71,14 @@ export async function POST(req: NextRequest) {
             isCorrect = answer === question.answer;
             aiFeedback = isCorrect ? "Correct answer!" : `Incorrect. The correct answer was: ${question.answer}`;
         } else if (testType === "write") {
+            const hasScholarFeedback = has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" });
+            if (!hasScholarFeedback) {
+                return NextResponse.json(
+                    { error: "AI feedback for written answers is available on Scholar and above. Please upgrade your plan." },
+                    { status: 403 }
+                );
+            }
+
             if (!process.env.GOOGLE_GEMINI_API_KEY) {
                 return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
             }

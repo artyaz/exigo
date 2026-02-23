@@ -30,7 +30,6 @@ const plans = [
             { name: "3 Spaces", included: true },
             { name: "50 Knowledge Pieces / Space", included: true },
             { name: "10 AI Tests / month", included: true },
-            { name: "Basic AI Feedback", included: true },
         ],
         buttonText: "Upgrade to Basic",
         isActive: false,
@@ -45,6 +44,7 @@ const plans = [
         features: [
             { name: "Unlimited Spaces", included: true },
             { name: "100 AI Tests / month", included: true },
+            { name: "Basic AI Feedback", included: true },
             { name: "50 Deep Dive Study Notes", included: true },
             { name: "200 Knowledge Pieces / Space", included: true },
         ],

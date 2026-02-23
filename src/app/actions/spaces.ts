@@ -18,16 +18,13 @@ function getTestLimit(has: (params: { feature: string }) => boolean): number {
 }
 
 export async function createSpaceServerAction(name: string) {
-    const { userId, has } = await auth();
+    const { userId } = await auth();
 
     if (!userId) {
         throw new Error("Unauthorized: Please sign in to create a space.");
     }
 
-    const hasUnlimitedSpaces = has({ feature: "unlimited_spaces" });
-    const maxSpaces = hasUnlimitedSpaces ? Infinity : 3;
-
-    const spaceId = await convex.mutation(api.spaces.create, { name, userId, maxSpaces });
+    const spaceId = await convex.mutation(api.spaces.create, { name, userId });
 
     return spaceId;
 }
@@ -44,6 +41,9 @@ export async function createTestServerAction(args: {
     }
 
     const maxTests = getTestLimit(has);
+    if (maxTests === 0) {
+        throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
+    }
 
     const testId = await convex.mutation(api.tests.createEmptyTest, {
         spaceId: args.spaceId as Id<"spaces">,
@@ -51,10 +51,8 @@ export async function createTestServerAction(args: {
         questionCount: args.questionCount,
         topicTitle: args.topicTitle,
         userId,
-        maxTests,
     });
 
 
     return testId;
 }
-

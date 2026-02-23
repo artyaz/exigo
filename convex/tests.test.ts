@@ -14,6 +14,7 @@ type TestStatus = 'draft' | 'generating' | 'active' | 'completed';
 interface TestRecord {
   _id?: string;
   spaceId: string;
+  userId?: string;
   status: TestStatus;
   config?: {
     type: string;
@@ -33,7 +34,7 @@ interface MockDbContext {
 const createMockDb = (): MockDbContext => ({
   insert: vi.fn(),
   patch: vi.fn(),
-  get: vi.fn(),
+  get: vi.fn(async () => ({ _id: 'test_default', userId: 'user_id' })),
   query: vi.fn(() => ({
     withIndex: vi.fn(() => ({
       collect: vi.fn(),
@@ -58,6 +59,11 @@ const updateStatusHandler = async (
   db: MockDbContext,
   args: { testId: string; userId: string; status: TestStatus }
 ) => {
+  const test = await (db.get as any)(args.testId) as { userId?: string } | null;
+  if (!test) throw new Error('Test not found');
+  if (test.userId !== undefined && test.userId !== args.userId) {
+    throw new Error('Unauthorized access to this test');
+  }
   await (db.patch as any)(args.testId, { status: args.status });
 };
 
@@ -279,6 +285,16 @@ describe('convex/tests - updateStatus mutation logic', () => {
     await expect(
       updateStatusHandler(db, { testId: 'test_1', userId: 'user_id', status: 'active' })
     ).rejects.toThrow('Database patch failed');
+  });
+
+  it('should reject status updates for unauthorized user', async () => {
+    const db = createMockDb();
+    (db.get as any).mockResolvedValue({ _id: 'test_1', userId: 'other_user' });
+
+    await expect(
+      updateStatusHandler(db, { testId: 'test_1', userId: 'user_id', status: 'active' })
+    ).rejects.toThrow('Unauthorized access to this test');
+    expect(db.patch).not.toHaveBeenCalled();
   });
 
   it('should handle non-existent test ID without throwing', async () => {

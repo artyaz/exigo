@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getServerPlanLimitsForUser } from "./planLimits";
 
 export const getForSpace = query({
     args: { spaceId: v.id("spaces") },
@@ -15,7 +16,6 @@ export const add = mutation({
     args: {
         spaceId: v.id("spaces"),
         userId: v.string(),
-        maxPieces: v.number(),
         title: v.optional(v.string()),
         content: v.string(),
         source: v.optional(v.string()),
@@ -31,9 +31,10 @@ export const add = mutation({
             .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
             .collect();
 
+        const serverLimit = getServerPlanLimitsForUser(args.userId).maxKnowledgePiecesPerSpace;
         const projectedTotal = existingPieces.length + 1;
-        if (projectedTotal > args.maxPieces) {
-            throw new Error(`Limit reached: You can only have ${args.maxPieces} knowledge pieces per space on your current plan.`);
+        if (projectedTotal > serverLimit) {
+            throw new Error(`Limit reached: You can only have ${serverLimit} knowledge pieces per space on your current plan.`);
         }
 
         return await ctx.db.insert("knowledgePieces", {
@@ -72,7 +73,6 @@ export const bulkImport = mutation({
     args: {
         spaceId: v.id("spaces"),
         userId: v.string(),
-        maxPieces: v.number(),
         pieces: v.array(
             v.object({
                 title: v.optional(v.string()),
@@ -92,10 +92,11 @@ export const bulkImport = mutation({
             .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
             .collect();
 
+        const serverLimit = getServerPlanLimitsForUser(args.userId).maxKnowledgePiecesPerSpace;
         const nonEmptyIncomingCount = args.pieces.filter((piece) => piece.content.trim() !== "").length;
         const projectedTotal = existingPieces.length + nonEmptyIncomingCount;
-        if (projectedTotal > args.maxPieces) {
-            throw new Error(`Limit reached: Bulk import would exceed the limit of ${args.maxPieces} knowledge pieces per space.`);
+        if (projectedTotal > serverLimit) {
+            throw new Error(`Limit reached: Bulk import would exceed the limit of ${serverLimit} knowledge pieces per space.`);
         }
 
         const ids = [];
@@ -136,4 +137,3 @@ export const appendContent = mutation({
         });
     },
 });
-

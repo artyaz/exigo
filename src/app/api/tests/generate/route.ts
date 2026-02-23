@@ -96,8 +96,7 @@ async function resolveTestId(
     spaceId: string,
     testType: string,
     topicLabel: string,
-    userId: string,
-    maxTests: number
+    userId: string
 ): Promise<{ id: Id<"tests">; existingQuestions: { question: string }[] } | Response> {
 
     if (testId) {
@@ -120,7 +119,6 @@ async function resolveTestId(
         questionCount: 5,
         topicTitle: topicLabel,
         userId,
-        maxTests,
     });
 
 
@@ -201,7 +199,7 @@ export async function POST(req: NextRequest) {
     const firstPiece = selectedPieces[0]!;
     const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
 
-    const testResult = await resolveTestId(testId, spaceId, testType, topicLabel, userId, MAX_TESTS);
+    const testResult = await resolveTestId(testId, spaceId, testType, topicLabel, userId);
     if (testResult instanceof Response) return testResult;
     const { id: activeTestId, existingQuestions } = testResult;
 

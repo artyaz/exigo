@@ -4,7 +4,6 @@ import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { getMaxKnowledgePieces } from "./knowledgeLimits";
 
 if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
     throw new Error("NEXT_PUBLIC_CONVEX_URL is not defined in environment variables");
@@ -12,7 +11,7 @@ if (!process.env.NEXT_PUBLIC_CONVEX_URL) {
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL);
 
 export async function addKnowledgePieceAction(spaceId: string, content: string, title?: string, source?: string) {
-    const { userId, has } = await auth();
+    const { userId } = await auth();
 
     if (!userId) {
         throw new Error("Unauthorized: Please sign in to add knowledge.");
@@ -24,13 +23,9 @@ export async function addKnowledgePieceAction(spaceId: string, content: string, 
         throw new Error("Access denied or space not found");
     }
 
-
-    const maxPieces = getMaxKnowledgePieces(has);
-
     const pieceId = await convex.mutation(api.knowledgePieces.add, {
         spaceId: spaceId as Id<"spaces">,
         userId,
-        maxPieces,
         content,
         title,
         source,
@@ -41,7 +36,7 @@ export async function addKnowledgePieceAction(spaceId: string, content: string, 
 }
 
 export async function bulkImportKnowledgeAction(spaceId: string, pieces: { title?: string; content: string; source?: string }[]) {
-    const { userId, has } = await auth();
+    const { userId } = await auth();
 
     if (!userId) {
         throw new Error("Unauthorized: Please sign in to add knowledge.");
@@ -53,13 +48,9 @@ export async function bulkImportKnowledgeAction(spaceId: string, pieces: { title
         throw new Error("Access denied or space not found");
     }
 
-
-    const maxPieces = getMaxKnowledgePieces(has);
-
     const ids = await convex.mutation(api.knowledgePieces.bulkImport, {
         spaceId: spaceId as Id<"spaces">,
         userId,
-        maxPieces,
         pieces,
     });
 

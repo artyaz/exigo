@@ -1,12 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { getServerPlanLimitsForUser } from "./planLimits";
 
 function getStartOfMonthMs() {
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
-    return startOfMonth.getTime();
+    const now = new Date();
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0);
 }
 
 async function getOwnedSpaceIds(ctx: QueryCtx | MutationCtx, userId: string): Promise<Id<"spaces">[]> {
@@ -60,8 +59,13 @@ async function countForUserThisMonthInternal(ctx: QueryCtx | MutationCtx, userId
 // Status "active": the test is immediately usable — questions are generated
 // asynchronously one-by-one via the /api/tests/generate streaming endpoint.
 export const createEmptyTest = mutation({
-    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), maxTests: v.number(), topicTitle: v.optional(v.string()), userId: v.string() },
+    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), topicTitle: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const maxAllowed = getServerPlanLimitsForUser(args.userId).maxTestsPerMonth;
+        if (maxAllowed === 0) {
+            throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
+        }
+
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
             throw new Error("Space not found");
@@ -73,8 +77,8 @@ export const createEmptyTest = mutation({
 
         const count = await countForUserThisMonthInternal(ctx, args.userId);
 
-        if (count >= args.maxTests) {
-            throw new Error(`Limit reached: You can only create ${args.maxTests} tests per month on your current plan.`);
+        if (count >= maxAllowed) {
+            throw new Error(`Limit reached: You can only create ${maxAllowed} tests per month on your current plan.`);
         }
 
         return await ctx.db.insert("tests", {
