@@ -68,3 +68,20 @@ export const bulkImport = mutation({
         return ids;
     },
 });
+
+export const appendContent = mutation({
+    args: {
+        id: v.id("knowledgePieces"),
+        content: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const piece = await ctx.db.get(args.id);
+        if (!piece) {
+            throw new Error(`Knowledge piece not found for id: ${args.id}`);
+        }
+        await ctx.db.patch(args.id, {
+            content: piece.content + "\n\n" + args.content,
+        });
+    },
+});
+

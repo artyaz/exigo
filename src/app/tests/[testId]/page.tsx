@@ -4,7 +4,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { useState, use, useEffect, useRef } from "react";
+import { useState, use, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Loader2,
@@ -18,6 +18,7 @@ import {
     Send,
     Sparkles,
     CornerDownLeft,
+    AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -33,6 +34,94 @@ function cardHash(id: string, seed: number) {
     let h = seed;
     for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
     return h;
+}
+
+/* ─── Basic markdown renderer for chat messages ─── */
+/**
+ * Parses inline markdown tokens: **bold**, *italic*, `code`.
+ * Uses lookbehind / lookahead so a single * doesn't collide with **.
+ */
+function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
+    const result: ReactNode[] = [];
+    // Order matters: bold (**) before italic (*), then code (`)
+    // Lookaround on the italic branch prevents matching the * in **
+    const tokenRegex = /(\*\*(.+?)\*\*|(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|`(.+?)`)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let partIdx = 0;
+
+    while ((match = tokenRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            result.push(text.slice(lastIndex, match.index));
+        }
+
+        const key = `${keyPrefix}-${partIdx++}`;
+        if (match[2] !== undefined) {
+            // **bold**
+            result.push(
+                <strong key={key} className="font-semibold text-white">
+                    {match[2]}
+                </strong>
+            );
+        } else if (match[3] !== undefined) {
+            // *italic*
+            result.push(
+                <em key={key} className="italic text-white/80">
+                    {match[3]}
+                </em>
+            );
+        } else if (match[4] !== undefined) {
+            // `code`
+            result.push(
+                <code
+                    key={key}
+                    className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-white/90 border border-white/[0.06]"
+                >
+                    {match[4]}
+                </code>
+            );
+        }
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        result.push(text.slice(lastIndex));
+    }
+
+    return result;
+}
+
+/**
+ * Renders basic markdown: bullet lists (* / -), **bold**, *italic*, `code`,
+ * and newlines.
+ */
+function renderMarkdown(text: string): ReactNode[] {
+    const lines = text.split("\n");
+    const result: ReactNode[] = [];
+
+    lines.forEach((line, lineIdx) => {
+        if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
+
+        // Detect bullet-list lines: "* text", "*   text", "- text"
+        const bulletMatch = line.match(/^(\s*)[*\-]\s+(.*)/);
+        if (bulletMatch) {
+            const indent = bulletMatch[1] ?? "";
+            const content = bulletMatch[2] ?? "";
+            result.push(
+                <span key={`li-${lineIdx}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
+                    <span className="text-white/40 select-none shrink-0">•</span>
+                    <span>{renderInlineMarkdown(content, `${lineIdx}`)}</span>
+                </span>
+            );
+            return;
+        }
+
+        // Regular line — just inline formatting
+        result.push(...renderInlineMarkdown(line, `${lineIdx}`));
+    });
+
+    return result;
 }
 
 export default function TestPage({ params }: { params: Promise<{ testId: string }> }) {
@@ -57,6 +146,16 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const [isSendingChat, setIsSendingChat] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const chatInputRef = useRef<HTMLInputElement>(null);
+
+    // Context menu ("Feels hard") state
+    const [contextMenu, setContextMenu] = useState<{
+        x: number;
+        y: number;
+        messageId: string;
+        messageContent: string;
+    } | null>(null);
+    const [feelsHardLoading, setFeelsHardLoading] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
     // Arena dimensions for card positioning
     const arenaRef = useRef<HTMLDivElement>(null);
@@ -228,7 +327,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 const opt = currentQuestion.options[num - 1];
                 if (num >= 1 && num <= 4 && opt) {
                     e.preventDefault();
-                    handleAnswer(currentQuestion._id, opt);
+                    void handleAnswer(currentQuestion._id, opt);
                 }
             }
 
@@ -246,7 +345,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
         setIsEvaluating(prev => ({ ...prev, [questionId]: true }));
 
-        fetch("/api/tests/validate", {
+        void fetch("/api/tests/validate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ questionId, answer, testType: test?.config.type }),
@@ -289,6 +388,70 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         }
     };
 
+    // Context menu handler for right-clicking AI messages
+    const handleMessageContextMenu = useCallback((e: React.MouseEvent, messageId: string, messageContent: string) => {
+        e.preventDefault();
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            messageId,
+            messageContent,
+        });
+    }, []);
+
+    // Close context menu on any click or scroll
+    useEffect(() => {
+        if (!contextMenu) return;
+        const close = () => setContextMenu(null);
+        window.addEventListener("click", close);
+        window.addEventListener("scroll", close, true);
+        return () => {
+            window.removeEventListener("click", close);
+            window.removeEventListener("scroll", close, true);
+        };
+    }, [contextMenu]);
+
+    // Auto-dismiss toast
+    useEffect(() => {
+        if (!toast) return;
+        const timer = setTimeout(() => setToast(null), 3500);
+        return () => clearTimeout(timer);
+    }, [toast]);
+
+    const handleFeelsHard = async (messageContent: string) => {
+        setContextMenu(null);
+        if (!currentQuestionId) return;
+
+        setFeelsHardLoading(messageContent);
+
+        try {
+            const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) || undefined;
+
+            const res = await fetch("/api/tests/feels-hard", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    testId: tId,
+                    questionId: currentQuestionId,
+                    messageContent,
+                    knowledgePieceId,
+                }),
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({})) as { error?: string };
+                throw new Error(errData.error ?? "Failed to save");
+            }
+
+            setToast({ message: "Struggle note added to knowledge base", type: "success" });
+        } catch (e) {
+            console.error("Feels hard failed", e);
+            setToast({ message: e instanceof Error ? e.message : "Failed to save", type: "error" });
+        } finally {
+            setFeelsHardLoading(null);
+        }
+    };
+
     /* ─── Loading ─── */
     if (test === undefined || questions === undefined) {
         return (
@@ -314,7 +477,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const progress = targetQuestionCount > 0 ? Math.min(100, (answeredCount / targetQuestionCount) * 100) : 0;
 
     // Build left stack (answered/past) and right stack (upcoming)
-    const leftCards = questions.filter((_, i) => i < currentIndex);
+    const leftCardsLength = questions.filter((_, i) => i < currentIndex).length;
     const rightCards = questions.filter((_, i) => i > currentIndex);
 
     return (
@@ -380,10 +543,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     animate={{
                                         width: i === currentIndex ? 20 : 8,
                                         backgroundColor:
-                                            i < questions.length && questions[i] && (questions[i]!.userAnswer || answers[questions[i]!._id])
-                                                ? questions[i]!.isCorrect === true
+                                            i < questions.length && questions[i] && (questions[i].userAnswer || answers[questions[i]._id])
+                                                ? questions[i].isCorrect === true
                                                     ? "rgba(74, 222, 128, 0.7)"
-                                                    : questions[i]!.isCorrect === false
+                                                    : questions[i].isCorrect === false
                                                         ? "rgba(248, 113, 113, 0.7)"
                                                         : "rgba(255, 255, 255, 0.4)"
                                                 : i === currentIndex
@@ -655,11 +818,23 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     transition={SPRING_SNAPPY}
                                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                                 >
-                                    <div className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${msg.role === "user"
-                                        ? "bg-white/[0.08] text-white/80 border border-white/[0.06]"
-                                        : "bg-transparent text-white/70 border border-white/[0.06]"
-                                        }`}>
-                                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                                    <div
+                                        className={`relative max-w-[88%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed group/msg ${msg.role === "user"
+                                            ? "bg-white/[0.08] text-white/80 border border-white/[0.06]"
+                                            : "bg-transparent text-white/70 border border-white/[0.06]"
+                                            }`}
+                                        onContextMenu={msg.role === "ai" ? (e) => handleMessageContextMenu(e, msg._id, msg.content) : undefined}
+                                    >
+                                        <p className="whitespace-pre-wrap">{renderMarkdown(msg.content)}</p>
+                                        {/* "Feels hard" loading indicator on this specific message */}
+                                        {feelsHardLoading === msg.content && (
+                                            <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                                                    <span className="text-[10px] text-amber-400 font-medium">Saving...</span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             ))
@@ -700,6 +875,52 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     </div>
                 </div>
             </div>
+
+            {/* ─── Custom context menu ─── */}
+            <AnimatePresence>
+                {contextMenu && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.92 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.92 }}
+                        transition={{ duration: 0.1 }}
+                        className="fixed z-[200] min-w-[180px] rounded-xl border border-white/[0.1] bg-[#1a1a1a]/95 backdrop-blur-xl shadow-2xl overflow-hidden"
+                        style={{ top: contextMenu.y, left: contextMenu.x }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <button
+                            onClick={() => handleFeelsHard(contextMenu.messageContent)}
+                            className="w-full flex items-center gap-2.5 px-4 py-3 text-xs text-left hover:bg-white/[0.06] transition-colors spring-interact"
+                        >
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            <span className="text-white/80 font-medium">Feels hard</span>
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ─── Toast notification ─── */}
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20, x: "-50%" }}
+                        animate={{ opacity: 1, y: 0, x: "-50%" }}
+                        exit={{ opacity: 0, y: 20, x: "-50%" }}
+                        transition={SPRING_SNAPPY}
+                        className={`fixed bottom-6 left-1/2 z-[200] flex items-center gap-2.5 px-5 py-3 rounded-xl border backdrop-blur-xl shadow-2xl text-xs font-medium ${toast.type === "success"
+                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                            : "bg-red-500/10 border-red-500/20 text-red-400"
+                            }`}
+                    >
+                        {toast.type === "success" ? (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                        ) : (
+                            <XCircle className="w-3.5 h-3.5" />
+                        )}
+                        {toast.message}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
