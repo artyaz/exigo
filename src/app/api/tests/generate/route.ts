@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { z } from "zod";
+import { z, type ZodTypeAny } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -34,27 +34,28 @@ const writeQuestionSchema = z.object({
  * The request body must be JSON with `spaceId`, `testType` ("select" or "write"), and optional `testId`. The endpoint:
  * - Retrieves knowledge pieces for the given space.
  * - Optionally uses an existing test (when `testId` is provided`) or creates an empty test.
- * - Prompts an AI model to produce exactly one question in a strict JSON schema (multiple-choice or open-ended).
- * - Streams incremental text deltas to the client as SSE events of type `"delta"`.
- * - On success persists the question and emits a final SSE `"done"` event containing `testId` and `questionId`.
+ * - Prompts an AI model to produce exactly one question in a strict JSON schema(multiple - choice or open - ended).
+ * - Streams incremental text deltas to the client as SSE events of type`"delta"`.
+ * - On success persists the question and emits a final SSE `"done"` event containing `testId` and`questionId`.
  * - Emits an SSE `"error"` event on failure.
  *
- * @param req - Incoming NextRequest whose JSON body contains `{ spaceId: string, testType: "select" | "write", testId?: string }`.
- * @returns A Response whose body is an SSE stream (Content-Type: text/event-stream). The stream emits JSON events:
+ * @param req - Incoming NextRequest whose JSON body contains`{ spaceId: string, testType: "select" | "write", testId?: string }`.
+ * @returns A Response whose body is an SSE stream(Content - Type: text / event - stream).The stream emits JSON events:
  * - `{"type":"delta","text":string}` for incremental model output,
  * - `{"type":"done","testId":string,"questionId":string}` when the question is saved,
  * - `{"type":"error","error":string}` on error.
- * The endpoint also returns 400 responses (JSON error body) when required parameters or knowledge pieces are missing.
+ * The endpoint also returns 400 responses(JSON error body) when required parameters or knowledge pieces are missing.
  */
 
-async function fetchGeminiStream(ai: GoogleGenAI, prompt: string, schema: z.ZodTypeAny) {
+async function fetchGeminiStream(ai: GoogleGenAI, prompt: string, schema: ZodTypeAny) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             return await ai.models.generateContentStream({
-                model: "gemini-2.5-flash",
+                model: "gemini-3.1-pro-preview",
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                     responseJsonSchema: zodToJsonSchema(schema),
                 }
             });

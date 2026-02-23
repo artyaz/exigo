@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useState, use, useEffect, useRef, useCallback, type ReactNode } from "react";
@@ -15,7 +15,6 @@ import {
     ChevronRight,
     BrainCircuit,
     MessageSquare,
-    Send,
     Sparkles,
     CornerDownLeft,
     AlertTriangle,
@@ -104,7 +103,7 @@ function renderMarkdown(text: string): ReactNode[] {
         if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
 
         // Detect bullet-list lines: "* text", "*   text", "- text"
-        const bulletMatch = line.match(/^(\s*)[*\-]\s+(.*)/);
+        const bulletMatch = /^(\s*)[*\-]\s+(.*)/.exec(line);
         if (bulletMatch) {
             const indent = bulletMatch[1] ?? "";
             const content = bulletMatch[2] ?? "";
@@ -135,10 +134,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [isEvaluating, setIsEvaluating] = useState<Record<string, boolean>>({});
     const [isGeneratingNext, setIsGeneratingNext] = useState(false);
-    const [streamingText, setStreamingText] = useState("");
+    const [, setStreamingText] = useState("");
     const [genError, setGenError] = useState<string | null>(null);
     const [retryNonce, setRetryNonce] = useState(0);
-    const [direction, setDirection] = useState(1); // 1 = forward, -1 = backward
+    const [, setDirection] = useState(1); // 1 = forward, -1 = backward
     const [prevQuestionsLength, setPrevQuestionsLength] = useState(0);
 
     // Chat State
@@ -163,8 +162,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const [arenaH, setArenaH] = useState(600);
 
     const targetQuestionCount = test?.config?.questionCount ?? 5;
-    const isCompleted = questions && questions.length >= targetQuestionCount &&
-        questions.every(q => q.userAnswer || answers[q._id]);
     const currentQuestion = questions?.[currentIndex];
 
     // Chat for current question
@@ -179,13 +176,14 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         if (questions && questions.length > prevQuestionsLength) {
             setPrevQuestionsLength(questions.length);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions?.length, prevQuestionsLength]);
 
     // Track arena size
     useEffect(() => {
         if (!arenaRef.current) return;
         const ro = new ResizeObserver(entries => {
-            if (!entries || !entries[0]) return;
+            if (!entries?.[0]) return;
             const { width, height } = entries[0].contentRect;
             setArenaW(width);
             setArenaH(height);
@@ -208,6 +206,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 setCurrentIndex(firstUnanswered);
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, targetQuestionCount]);
 
     useEffect(() => {
@@ -230,7 +229,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
         const abortController = new AbortController();
 
-        (async () => {
+        void (async () => {
             try {
                 const res = await fetch("/api/tests/generate", {
                     method: "POST",
@@ -239,14 +238,14 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         spaceId: test.spaceId,
                         testType: test.config.type,
                         testId: tId,
-                        knowledgePieceId: sessionStorage.getItem(`exigo_test_topic_${tId}`) || undefined,
+                        knowledgePieceId: sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined,
                     }),
                     signal: abortController.signal,
                 });
 
                 if (!res.ok) {
                     const errBody = await res.text().catch(() => "");
-                    const msg = errBody || `Server error (${res.status})`;
+                    const msg = errBody ?? `Server error (${res.status})`;
                     setGenError(msg.includes("429") || msg.includes("quota")
                         ? "API rate limit reached. Please wait a moment and retry."
                         : msg);
@@ -266,17 +265,17 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split("\n\n");
-                    buffer = lines.pop() || "";
+                    buffer = lines.pop() ?? "";
 
                     for (const line of lines) {
                         if (!line.startsWith("data: ")) continue;
                         try {
-                            const payload = JSON.parse(line.slice(6));
+                            const payload = JSON.parse(line.slice(6)) as { type: string; text?: string; error?: string };
                             if (payload.type === "delta") {
-                                setStreamingText(prev => prev + payload.text);
+                                setStreamingText(prev => prev + (payload.text ?? ""));
                             } else if (payload.type === "error") {
                                 hadError = true;
-                                const msg = (payload.error as string) || "Generation failed";
+                                const msg = payload.error ?? "Generation failed";
                                 if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
                                     setGenError("API rate limit reached. Please wait a moment and retry.");
                                 } else {
@@ -300,6 +299,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         })();
 
         return () => abortController.abort();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions?.length, test, tId, targetQuestionCount, retryNonce]);
 
     // Keyboard navigation
@@ -338,6 +338,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, currentIndex, currentQuestion, answers, test]);
 
     const handleAnswer = async (questionId: string, answer: string) => {
@@ -425,7 +426,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         setFeelsHardLoading(messageContent);
 
         try {
-            const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) || undefined;
+            const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined;
 
             const res = await fetch("/api/tests/feels-hard", {
                 method: "POST",
@@ -473,11 +474,9 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         );
     }
 
-    const answeredCount = questions.filter(q => q.userAnswer || answers[q._id]).length;
-    const progress = targetQuestionCount > 0 ? Math.min(100, (answeredCount / targetQuestionCount) * 100) : 0;
+
 
     // Build left stack (answered/past) and right stack (upcoming)
-    const leftCardsLength = questions.filter((_, i) => i < currentIndex).length;
     const rightCards = questions.filter((_, i) => i > currentIndex);
 
     return (
@@ -673,7 +672,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                             {test.config.type === "select" && q.options ? (
                                                 <div className="grid gap-3">
                                                     {q.options.map((opt, i) => {
-                                                        const selectedAnswer = answers[q._id] || q.userAnswer;
+                                                        const selectedAnswer = answers[q._id] ?? q.userAnswer;
                                                         const isSelected = selectedAnswer === opt;
                                                         const isAnswered = !!selectedAnswer;
                                                         const isCorrectAnswer = q.answer === opt;
@@ -701,11 +700,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col gap-4 h-full">
-                                                    {(answers[q._id] || q.userAnswer) ? (
+                                                    {(answers[q._id] ?? q.userAnswer) ? (
                                                         <div className="space-y-4">
                                                             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                                                                 <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Your Answer</p>
-                                                                <p className="text-sm text-white/80 leading-relaxed">{answers[q._id] || q.userAnswer}</p>
+                                                                <p className="text-sm text-white/80 leading-relaxed">{answers[q._id] ?? q.userAnswer}</p>
                                                             </div>
                                                             {q.answer && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Reference Answer</p><p className="text-sm text-white/80 leading-relaxed">{q.answer}</p></div>}
                                                             {q.aiFeedback && <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"><div className="flex items-center gap-2 mb-2"><BrainCircuit className="w-3 h-3 text-white/40" /><p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold">AI Feedback</p></div><p className="text-sm text-white/70 leading-relaxed">{q.aiFeedback}</p></div>}
@@ -713,9 +712,9 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                                     ) : (
                                                         <div className="flex-1 flex flex-col gap-3">
                                                             <textarea id={`answer-${q._id}`} placeholder="Type your answer..." className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]"
-                                                                onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); const el = e.currentTarget; if (el.value.trim()) handleAnswer(q._id, el.value); } }}
+                                                                onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); const el = e.currentTarget; if (el.value.trim()) void handleAnswer(q._id, el.value); } }}
                                                             />
-                                                            <button onClick={() => { const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement; if (el?.value.trim()) handleAnswer(q._id, el.value); }} className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2">
+                                                            <button onClick={() => { const el = document.getElementById(`answer-${q._id}`) as HTMLTextAreaElement; if (el?.value.trim()) void handleAnswer(q._id, el.value); }} className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2">
                                                                 Submit <kbd className="hidden md:inline-flex px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-white/40 border border-white/[0.06]">⌘↵</kbd>
                                                             </button>
                                                         </div>
@@ -852,7 +851,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     {/* Chat input */}
                     <div className="shrink-0 p-4 border-t border-white/[0.06]">
                         <form
-                            onSubmit={e => { e.preventDefault(); handleSendChat(); }}
+                            onSubmit={e => { e.preventDefault(); void handleSendChat(); }}
                             className="relative flex items-center"
                         >
                             <input

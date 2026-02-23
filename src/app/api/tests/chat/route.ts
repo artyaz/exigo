@@ -92,11 +92,15 @@ export async function POST(req: NextRequest) {
         
         [Conversation]${historyPrompt}
 
-        Respond directly and concisely to the student's latest message. Be encouraging but highly accurate. Format your response in plain text or simple markdown.
+        Respond directly and concisely to the student's latest message. Be encouraging but highly accurate. Format your response in plain text.
+        ### OUTPUT FORMAT REQUIREMENTS (STRICT)
+1. Tone: Casual, slightly witty, professional. Use emojis 🧠.
+2. Structure: NO WALLS OF TEXT. Bullet points & bold text.
+3. Keep in mind that the chat window is horizontallysmall, so keep your responses not hard to read in this format.
         `;
 
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: prompt,
         });
 

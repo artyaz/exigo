@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useQuery, useMutation } from "convex/react";
@@ -135,10 +134,10 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content: content.slice(0, 2000) }),
             })
-                .then(res => res.json())
+                .then(res => res.json() as Promise<{ title?: string }>)
                 .then(data => {
                     if (data.title && data.title !== "Untitled") {
-                        updateTitle({ id: pieceId, title: data.title });
+                        void updateTitle({ id: pieceId, title: data.title });
                     }
                 })
                 .catch(() => { /* silent */ });
@@ -167,18 +166,18 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             // Auto-generate titles for each piece
             parts.forEach((part, i) => {
                 if (ids[i]) {
-                    fetch("/api/knowledge/title", {
+                    void fetch("/api/knowledge/title", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ content: part.trim().slice(0, 2000) }),
                     })
-                        .then(res => res.json())
+                        .then(res => res.json() as Promise<{ title?: string }>)
                         .then(data => {
-                            if (data.title && data.title !== "Untitled") {
-                                updateTitle({ id: ids[i] as Id<"knowledgePieces">, title: data.title });
+                            if (data?.title && data.title !== "Untitled") {
+                                void updateTitle({ id: ids[i] as Id<"knowledgePieces">, title: String(data.title) });
                             }
                         })
-                        .catch(() => { });
+                        .catch(() => { /* silent */ });
                 }
             });
 
@@ -195,14 +194,14 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         setIsGenerating(true);
         try {
             const topicLabel = selectedTopic
-                ? (selectedTopic.title || selectedTopic.content.slice(0, 40))
+                ? (selectedTopic.title ?? selectedTopic.content.slice(0, 40))
                 : "Random";
             const testId = await createEmptyTest({
                 spaceId: sId,
                 type: testType,
                 questionCount: 5,
                 topicTitle: topicLabel,
-                userId: userId || "default_user",
+                userId: userId ?? "default_user",
             });
             // Store selected topic for test page to use
             if (selectedTopicId) {
@@ -367,7 +366,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                     <div className="flex-1 min-w-0">
                                                         <p className="font-medium">Pick Topic</p>
                                                         {selectedTopic ? (
-                                                            <p className="text-[11px] text-white/50 mt-0.5 truncate">{selectedTopic.title || selectedTopic.content.slice(0, 40) + "..."}</p>
+                                                            <p className="text-[11px] text-white/50 mt-0.5 truncate">{selectedTopic.title ?? selectedTopic.content.slice(0, 40) + "..."}</p>
                                                         ) : (
                                                             <p className="text-[11px] text-white/30 mt-0.5">Choose a specific knowledge piece</p>
                                                         )}
@@ -387,7 +386,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                         className="flex items-center gap-2 text-xs text-white/40"
                                     >
                                         <Target className="w-3 h-3" />
-                                        <span className="truncate max-w-[200px]">{selectedTopic.title || selectedTopic.content.slice(0, 30) + "..."}</span>
+                                        <span className="truncate max-w-[200px]">{selectedTopic.title ?? selectedTopic.content.slice(0, 30) + "..."}</span>
                                         <button onClick={() => setSelectedTopicId(null)} className="p-0.5 rounded hover:bg-white/10 spring-interact">
                                             <X className="w-3 h-3" />
                                         </button>
@@ -416,7 +415,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                         : -1;
                                     return {
                                         ...test, testQuestions, answeredCount, target, correctCount, wrongCount, progressStatus, performance,
-                                        topicLabel: test.topicTitle || "—",
+                                        topicLabel: test.topicTitle ?? "—",
                                     };
                                 });
 

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     try {
         const ai = getGoogleAI();
         const result = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: `Generate a very short title (2-5 words, no quotes) that describes the main topic of this knowledge piece:\n\n${content.slice(0, 2000)}`,
             config: {
                 maxOutputTokens: 20,

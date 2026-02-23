@@ -3,7 +3,6 @@
 
 import { motion } from "framer-motion";
 import { Check, X, ArrowRight, Zap, Loader2 } from "lucide-react";
-import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useUser, useClerk, useAuth } from "@clerk/nextjs";
 
@@ -153,6 +152,7 @@ export default function PricingPage() {
                                 <div className="p-8 flex flex-col flex-1 relative z-10">
                                     <div className="mb-6">
                                         <h3 className="text-xl font-semibold tracking-tight">{plan.name}</h3>
+                                        <p className="mt-4 text-sm text-white/50">Questions? We&apos;d love to chat.</p>
                                         <p className="mt-2 text-sm text-white/60 leading-relaxed min-h-[60px]">
                                             {plan.description}
                                         </p>
@@ -192,7 +192,7 @@ export default function PricingPage() {
                                     )}
 
                                     <div className="mt-8 pt-8 border-t border-white/10 flex-1">
-                                        <p className="text-sm font-medium tracking-tight text-white mb-4">What's included</p>
+                                        <p className="text-sm font-medium tracking-tight text-white mb-4">What&apos;s included</p>
                                         <ul className="space-y-4">
                                             {plan.features.map((feature) => (
                                                 <li key={feature.name} className="flex gap-3 text-sm">
