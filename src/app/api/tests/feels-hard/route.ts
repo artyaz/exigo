@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 import { getDeepDiveLimitForTier } from "../../../../../shared/planConfig";
 
 interface FeelsHardBody {
@@ -58,10 +58,10 @@ Important:
 - Keep it under 4 sentences.`;
 }
 
-async function resolveTargetPiece(
+function resolveTargetPiece(
     knowledgePieceId: string | undefined,
     testKnowledgePieceId: Id<"knowledgePieces"> | undefined
-): Promise<Id<"knowledgePieces"> | null> {
+): Id<"knowledgePieces"> | null {
     if (knowledgePieceId) {
         return knowledgePieceId as Id<"knowledgePieces">;
     }
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
         }
 
-        const targetPieceId = await resolveTargetPiece(knowledgePieceId, test.knowledgePieceId);
+        const targetPieceId = resolveTargetPiece(knowledgePieceId, test.knowledgePieceId);
         if (!targetPieceId) {
             return NextResponse.json({ error: "Missing knowledgePieceId for this test context." }, { status: 400 });
         }
@@ -167,8 +167,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, note: struggleNote });
     } catch (err: unknown) {
         console.error("Feels-hard error:", err);
-        const isAuthTokenError = err instanceof Error && err.message.includes("Missing Convex template token");
-        if (isAuthTokenError) {
+        if (err instanceof ConvexAuthError) {
             return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
         }
         const errorMessage = err instanceof Error ? err.message : "Unknown error";

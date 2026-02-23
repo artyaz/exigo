@@ -35,7 +35,10 @@ const NODE_TYPES = [
 ];
 
 export default function KnowledgeNodesPage() {
-    const { has } = useAuth();
+    const { isLoaded, has } = useAuth();
+    if (!isLoaded) {
+        return null;
+    }
     const isPro = has ? (has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" })) : false;
 
     return (

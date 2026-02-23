@@ -4,6 +4,13 @@ import { ConvexHttpClient } from "convex/browser";
 
 type GetTokenFn = (options?: { template?: string }) => Promise<string | null>;
 
+export class ConvexAuthError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "ConvexAuthError";
+    }
+}
+
 export function getConvexUrlOrThrow(context: string): string {
     const url = process.env.NEXT_PUBLIC_CONVEX_URL;
     if (!url) {
@@ -15,7 +22,7 @@ export function getConvexUrlOrThrow(context: string): string {
 export async function fetchConvexTemplateTokenOrThrow(getToken: GetTokenFn, context: string): Promise<string> {
     const token = await getToken({ template: "convex" });
     if (!token) {
-        throw new Error(
+        throw new ConvexAuthError(
             `[${context}] Missing Convex template token. Ensure Clerk token template "convex" is configured.`
         );
     }

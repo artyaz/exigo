@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 import { PLAN_LIMIT_CODE } from "../../../../../shared/planConfig";
 
 /**
@@ -27,10 +27,10 @@ function validateAIResponse(result: unknown): { isCorrect: boolean; feedback: st
     return null;
 }
 
-async function resolveTargetPieceId(
+function resolveTargetPieceId(
     explicitKnowledgePieceId: string | undefined,
     testKnowledgePieceId: Id<"knowledgePieces"> | undefined
-): Promise<Id<"knowledgePieces"> | null> {
+): Id<"knowledgePieces"> | null {
     if (explicitKnowledgePieceId) {
         return explicitKnowledgePieceId as Id<"knowledgePieces">;
     }
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
             modelUsedResult = modelUsed;
         }
 
-        const targetKnowledgePieceId = await resolveTargetPieceId(rawBody.knowledgePieceId as string | undefined, test.knowledgePieceId);
+        const targetKnowledgePieceId = resolveTargetPieceId(rawBody.knowledgePieceId as string | undefined, test.knowledgePieceId);
 
         // Update the question
         await convex.mutation(api.questions.updateFeedback, {
@@ -211,8 +211,7 @@ export async function POST(req: NextRequest) {
 
     } catch (err: unknown) {
         console.error(err);
-        const isAuthTokenError = err instanceof Error && err.message.includes("Missing Convex template token");
-        if (isAuthTokenError) {
+        if (err instanceof ConvexAuthError) {
             return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
         }
         const errorMessage = err instanceof Error ? err.message : undefined;

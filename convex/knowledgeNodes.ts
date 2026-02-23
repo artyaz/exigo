@@ -2,8 +2,8 @@ import { ConvexError, v } from "convex/values";
 import { action, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { GoogleGenAI } from "@google/genai";
 import { internal } from "./_generated/api";
-import { getAuthenticatedUserId, getAuthenticatedUserIdForAction } from "./auth";
 import { isProPlan, PLAN_LIMIT_CODE } from "./planLimits";
+import { RESOLUTION_THRESHOLD } from "../shared/planConfig";
 
 // ...
 
@@ -15,12 +15,12 @@ export const create = mutation({
         content: v.string(),
     },
     handler: async (ctx, args) => {
-        const userId = await getAuthenticatedUserId(ctx);
+        const identity = await ctx.auth.getUserIdentity();
+        const userId = identity?.subject;
         if (!userId) {
             throw new Error("Unauthorized access");
         }
 
-        const identity = await ctx.auth.getUserIdentity();
         if (!isProPlan(identity)) {
             console.debug("knowledgeNodes.create plan check failed", { identity });
             throw new ConvexError({
@@ -50,12 +50,12 @@ export const resolve = mutation({
         id: v.id("knowledgeNodes"),
     },
     handler: async (ctx, args) => {
-        const userId = await getAuthenticatedUserId(ctx);
+        const identity = await ctx.auth.getUserIdentity();
+        const userId = identity?.subject;
         if (!userId) {
             throw new Error("Unauthorized access");
         }
 
-        const identity = await ctx.auth.getUserIdentity();
         if (!isProPlan(identity)) {
             throw new ConvexError({
                 code: PLAN_LIMIT_CODE,
@@ -78,7 +78,7 @@ export const resolve = mutation({
         }
 
         const newScore = Math.min(100, node.resolutionScore + 30);
-        const isActive = newScore < 90;
+        const isActive = newScore < RESOLUTION_THRESHOLD;
 
         await ctx.db.patch(args.id, {
             resolutionScore: newScore,
@@ -94,7 +94,8 @@ export const getActiveForPiece = query({
         knowledgePieceId: v.id("knowledgePieces"),
     },
     handler: async (ctx, args) => {
-        const userId = await getAuthenticatedUserId(ctx);
+        const identity = await ctx.auth.getUserIdentity();
+        const userId = identity?.subject;
         if (!userId) {
             throw new Error("Unauthorized access");
         }
@@ -144,9 +145,17 @@ export const generateImprovements = action({
         testId: v.id("tests"),
     },
     handler: async (ctx, args) => {
-        const userId = await getAuthenticatedUserIdForAction(ctx);
+        const identity = await ctx.auth.getUserIdentity();
+        const userId = identity?.subject;
         if (!userId) {
             throw new Error("Unauthorized access");
+        }
+
+        if (!isProPlan(identity)) {
+            throw new ConvexError({
+                code: PLAN_LIMIT_CODE,
+                message: "Knowledge Nodes require a Pro plan. Please upgrade.",
+            });
         }
 
         // Action cannot easily use ctx.db to check ownership unless we query an internal mutation/query.

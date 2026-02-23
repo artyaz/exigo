@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 
 type ChatBody = {
     testId: string;
@@ -13,12 +13,17 @@ type ChatBody = {
 };
 
 function parseChatBody(raw: Record<string, unknown>): ChatBody | null {
-    const testId = raw.testId as string | undefined;
-    const questionId = raw.questionId as string | undefined;
-    const message = raw.message as string | undefined;
+    if (typeof raw.testId !== "string" || typeof raw.questionId !== "string" || typeof raw.message !== "string") {
+        return null;
+    }
+
+    const testId = raw.testId.trim();
+    const questionId = raw.questionId.trim();
+    const message = raw.message.trim();
     if (!testId || !questionId || !message) {
         return null;
     }
+
     return { testId, questionId, message };
 }
 
@@ -160,8 +165,7 @@ export async function POST(req: NextRequest) {
 
     } catch (err: unknown) {
         console.error(err);
-        const isAuthTokenError = err instanceof Error && err.message.includes("Missing Convex template token");
-        if (isAuthTokenError) {
+        if (err instanceof ConvexAuthError) {
             return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
         }
         const errorMessage = err instanceof Error ? err.message : undefined;

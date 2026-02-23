@@ -7,7 +7,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { getTestLimit } from "../../../../lib/testLimits";
-import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 
 const selectQuestionSchema = z.object({
     question: z.string().describe("The question text"),
@@ -124,14 +124,15 @@ async function resolveTestId(
         const existingQuestions = await convex.query(api.questions.getForTest, { testId: testId as Id<"tests"> });
         return { id: testId as Id<"tests">, existingQuestions };
     }
-    const id = await convex.mutation(api.tests.createEmptyTest, {
+    const createArgs = {
         spaceId: spaceId as Id<"spaces">,
         type: testType,
         questionCount: 5,
         topicTitle: topicLabel,
         userId,
-        knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">,
-    });
+        ...(knowledgePieceId ? { knowledgePieceId: knowledgePieceId as Id<"knowledgePieces"> } : {}),
+    };
+    const id = await convex.mutation(api.tests.createEmptyTest, createArgs);
 
 
     return { id, existingQuestions: [] };
@@ -156,7 +157,9 @@ function buildContextPrompt(
             contextPrompt += `${i + 1}. [${node.type.toUpperCase()}] ${node.content}\n`;
         });
         contextPrompt += "\nYou should formulate your question to directly address one of the concepts above if possible.\n";
-    } else if (incorrectQuestions.length > 0) {
+    }
+
+    if (incorrectQuestions.length > 0) {
         contextPrompt += "\n\nThe user previously struggled with the following questions. You CAN ask similar questions to test if they have learned from their mistakes, or create new ones targeting their weak points:\n" +
             incorrectQuestions.map((q, i) => `${i + 1}. Question: ${q.question}\n   User's wrong answer: ${q.userAnswer ?? "N/A"}\n   Correct concept feedback: ${q.aiFeedback ?? "N/A"}`).join("\n\n");
     }
@@ -185,10 +188,10 @@ export async function POST(req: NextRequest) {
     try {
         convex = await createAuthedConvexClient(getToken, "api.tests.generate");
     } catch (error) {
-        const msg = error instanceof Error ? error.message : "Unauthorized";
-        if (msg.includes("Missing Convex template token")) {
+        if (error instanceof ConvexAuthError) {
             return new Response(JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }), { status: 401 });
         }
+        const msg = error instanceof Error ? error.message : "Unauthorized";
         return new Response(JSON.stringify({ error: msg }), { status: 500 });
     }
 

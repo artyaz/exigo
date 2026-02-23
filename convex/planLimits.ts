@@ -55,7 +55,7 @@ function normalizePlanToken(value: unknown): string {
     return String(value ?? "").trim().toLowerCase();
 }
 
-function containsPlanWord(value: string, token: "pro" | "scholar" | "educator"): boolean {
+function containsPlanWord(value: string, token: "basic" | "pro" | "scholar" | "educator"): boolean {
     const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const regex = new RegExp(`\\b${escaped}\\b`);
     return regex.test(value);
@@ -115,7 +115,7 @@ export function getServerPlanLimitsForUser(userId: string, identityLike?: Record
         return PRO_TIER_LIMITS;
     }
 
-    if (plan.includes("basic") || hasFeature(identityLike, "basic_tests") || hasFeature(identityLike, "basic_knowledge")) {
+    if (containsPlanWord(plan, "basic") || hasFeature(identityLike, "basic_tests") || hasFeature(identityLike, "basic_knowledge")) {
         return BASIC_TIER_LIMITS;
     }
 

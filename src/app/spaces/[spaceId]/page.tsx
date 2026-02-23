@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { addKnowledgePieceAction, bulkImportKnowledgeAction } from "../../actions/knowledge";
 import { createTestServerAction } from "../../actions/spaces";
+import { RESOLUTION_THRESHOLD } from "../../../../shared/planConfig";
 
 function hashCode(str: string) {
     let hash = 0;
@@ -1100,7 +1101,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                             {activeNodes.map((node) => {
                                                 const nodeInfo = getNodeTypeInfo(node.type);
                                                 const Icon = nodeInfo.icon;
-                                                const progressPct = Math.round((node.resolutionScore / 90) * 100);
+                                                const progressPct = Math.round((node.resolutionScore / RESOLUTION_THRESHOLD) * 100);
 
                                                 return (
                                                     <div
@@ -1115,7 +1116,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                                 <h4 className="text-xs font-semibold uppercase tracking-widest text-white/80">{nodeInfo.label}</h4>
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="text-[10px] font-mono text-white/30 truncate">
-                                                                        Target: {node.resolutionScore}/90 ({progressPct}%)
+                                                                        Target: {node.resolutionScore}/{RESOLUTION_THRESHOLD} ({progressPct}%)
                                                                     </span>
                                                                 </div>
                                                             </div>

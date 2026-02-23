@@ -134,7 +134,8 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
-    const [localCorrectness, setLocalCorrectness] = useState<Record<string, boolean>>({});
+    const [, setLocalCorrectness] = useState<Record<string, boolean>>({});
+    const localCorrectnessRef = useRef<Record<string, boolean>>({});
     const [isEvaluating, setIsEvaluating] = useState<Record<string, boolean>>({});
     const [isGeneratingNext, setIsGeneratingNext] = useState(false);
     const [, setStreamingText] = useState(""); // value unused; only setter needed
@@ -215,12 +216,21 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     useEffect(() => {
         if (!questions) return;
         setLocalCorrectness((prev) => {
-            const next = { ...prev };
+            let changed = false;
+            let next: Record<string, boolean> | null = null;
             for (const q of questions) {
-                if (q.isCorrect !== undefined) {
+                if (q.isCorrect !== undefined && prev[q._id] !== q.isCorrect) {
+                    next ??= { ...prev };
                     next[q._id] = q.isCorrect;
+                    changed = true;
                 }
             }
+
+            if (!changed || !next) {
+                return prev;
+            }
+
+            localCorrectnessRef.current = next;
             return next;
         });
     }, [questions]);
@@ -380,7 +390,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             }
             const data = await res.json() as { isCorrect?: boolean };
             isCorrect = !!data.isCorrect;
-            setLocalCorrectness(prev => ({ ...prev, [questionId]: isCorrect }));
+            setLocalCorrectness((prev) => {
+                const next = { ...prev, [questionId]: isCorrect };
+                localCorrectnessRef.current = next;
+                return next;
+            });
         } catch (e) {
             requestFailed = true;
             console.error("Answer validation failed", e);
@@ -394,10 +408,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             setIsEvaluating(prev => ({ ...prev, [questionId]: false }));
         }
 
-        const mergedCorrectness: Record<string, boolean> = { ...localCorrectness };
-        if (!requestFailed) {
-            mergedCorrectness[questionId] = isCorrect;
+        if (requestFailed) {
+            return;
         }
+
+        const mergedCorrectness: Record<string, boolean> = { ...localCorrectnessRef.current, [questionId]: isCorrect };
 
         // Auto-advance after brief delay — capture index to prevent stale closure
         const scheduledIndex = currentIndex;
@@ -414,7 +429,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 }, 0);
 
                 const score = correctCount / targetQuestionCount;
-                if (!requestFailed && score >= 0.8 && knowledgePieceId) {
+                if (score >= 0.8 && knowledgePieceId) {
                     // Trigger improvements generation softly in background
                     void generateImprovements({
                         knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">,
