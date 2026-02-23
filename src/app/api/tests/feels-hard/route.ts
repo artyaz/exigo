@@ -77,10 +77,21 @@ async function resolveTargetPiece(
  */
 export async function POST(req: NextRequest) {
     try {
-        const { userId } = await auth();
+        const { userId, has } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const hasConversationalAI = has({ feature: "conversational_ai" });
+        if (!hasConversationalAI) {
+            return NextResponse.json({ error: "Upgrade to Pro to use Deep Dive study notes!" }, { status: 403 });
+        }
+
+        const isEducator = has({ feature: "unlimited_ai_tests" });
+        const isPro = has({ feature: "pro_tests" });
+        const limit = isEducator ? 150 : isPro ? 50 : 0;
+
+
         if (!process.env.GOOGLE_GEMINI_API_KEY) {
             return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
         }
@@ -92,20 +103,32 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
-        if (!question) {
-            return NextResponse.json({ error: "Question not found" }, { status: 404 });
-        }
-
         const test = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
         if (!test) {
             return NextResponse.json({ error: "Test not found" }, { status: 404 });
         }
 
-        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId });
-        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
-            return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+        // Mutation to record creation with atomic limit check
+        // @ts-ignore - new table
+        await convex.mutation(api.deepDives.create, {
+            userId,
+            spaceId: test.spaceId,
+            questionId: questionId as Id<"questions">,
+            maxDives: limit,
+        });
+
+
+        const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
+        if (!question) {
+            return NextResponse.json({ error: "Question not found" }, { status: 404 });
         }
+
+        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId, userId });
+
+        if (!space) {
+            return NextResponse.json({ error: "Unauthorized access or space not found" }, { status: 403 });
+        }
+
 
         const targetPieceId = await resolveTargetPiece(knowledgePieceId, test.spaceId);
         if (!targetPieceId) {
@@ -132,8 +155,10 @@ export async function POST(req: NextRequest) {
 
         await convex.mutation(api.knowledgePieces.appendContent, {
             id: targetPieceId,
+            userId,
             content: `---\n📌 Study Note (auto-generated): ${struggleNote}`,
         });
+
 
         return NextResponse.json({ success: true, note: struggleNote });
     } catch (err: unknown) {

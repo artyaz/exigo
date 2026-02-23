@@ -13,6 +13,8 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { addKnowledgePieceAction, bulkImportKnowledgeAction } from "../../actions/knowledge";
+import { createTestServerAction } from "../../actions/spaces";
 
 function hashCode(str: string) {
     let hash = 0;
@@ -23,13 +25,14 @@ function hashCode(str: string) {
     return hash;
 }
 
-function useSpaceData(spaceId: Id<"spaces">) {
-    const space = useQuery(api.spaces.get, { spaceId });
+function useSpaceData(spaceId: Id<"spaces">, userId: string | null | undefined) {
+    const space = useQuery(api.spaces.get, userId ? { spaceId, userId } : "skip");
     const pieces = useQuery(api.knowledgePieces.getForSpace, { spaceId });
     const spaceTests = useQuery(api.tests.getForSpace, { spaceId });
     const spaceQuestions = useQuery(api.questions.getForSpace, { spaceId });
     return { space, pieces, spaceTests, spaceQuestions };
 }
+
 
 export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId: string }> }) {
     const router = useRouter();
@@ -37,12 +40,11 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const { spaceId } = use(params);
     const sId = spaceId as Id<"spaces">;
 
-    const { space, pieces, spaceTests, spaceQuestions } = useSpaceData(sId);
+    const { space, pieces, spaceTests, spaceQuestions } = useSpaceData(sId, userId);
 
-    const addPiece = useMutation(api.knowledgePieces.add);
+
     const updateTitle = useMutation(api.knowledgePieces.updateTitle);
-    const bulkImport = useMutation(api.knowledgePieces.bulkImport);
-    const createEmptyTest = useMutation(api.tests.createEmptyTest);
+
 
     // Main tabs
     const [mainTab, setMainTab] = useState<"tests" | "knowledge">("tests");
@@ -120,33 +122,36 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         if (!content.trim()) return;
         setIsAdding(true);
 
-        const pieceId = await addPiece({
-            spaceId: sId,
-            title: title.trim() || undefined,
-            content,
-            source: source.trim() || undefined,
-        });
+        try {
+            const pieceId = await addKnowledgePieceAction(sId, content, title.trim() || undefined, source.trim() || undefined);
 
-        // Auto-generate title if not provided
-        if (!title.trim()) {
-            fetch("/api/knowledge/title", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ content: content.slice(0, 2000) }),
-            })
-                .then(res => res.json() as Promise<{ title?: string }>)
-                .then(data => {
-                    if (data.title && data.title !== "Untitled") {
-                        void updateTitle({ id: pieceId, title: data.title });
-                    }
+            // Auto-generate title if not provided
+            if (!title.trim()) {
+                fetch("/api/knowledge/title", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ content: content.slice(0, 2000) }),
                 })
-                .catch(() => { /* silent */ });
-        }
+                    .then(res => res.json() as Promise<{ title?: string }>)
+                    .then(data => {
+                        if (data.title && data.title !== "Untitled") {
+                            void updateTitle({ id: pieceId as Id<"knowledgePieces">, title: data.title, userId: userId ?? "" });
+                        }
 
-        setContent("");
-        setTitle("");
-        setSource("");
-        setIsAdding(false);
+                    })
+                    .catch(() => { /* silent */ });
+            }
+
+            setContent("");
+            setTitle("");
+            setSource("");
+        } catch (err) {
+            console.error("Failed to add piece", err);
+            // We should use a toast here if available, or alert
+            alert((err as Error).message);
+        } finally {
+            setIsAdding(false);
+        }
     };
 
     const handleBulkImport = async (e: React.FormEvent) => {
@@ -161,7 +166,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 content: p.trim(),
                 source: source.trim() || undefined
             }));
-            const ids = await bulkImport({ spaceId: sId, pieces: structuredPieces });
+            const ids = await bulkImportKnowledgeAction(sId, structuredPieces);
 
             // Auto-generate titles for each piece
             parts.forEach((part, i) => {
@@ -174,8 +179,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                         .then(res => res.json() as Promise<{ title?: string }>)
                         .then(data => {
                             if (data?.title && data.title !== "Untitled") {
-                                void updateTitle({ id: ids[i] as Id<"knowledgePieces">, title: String(data.title) });
+                                void updateTitle({ id: ids[i] as Id<"knowledgePieces">, title: String(data.title), userId: userId ?? "" });
                             }
+
                         })
                         .catch(() => { /* silent */ });
                 }
@@ -184,6 +190,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             setBulkContent("");
         } catch (err) {
             console.error("Bulk import failed", err);
+            alert((err as Error).message);
         } finally {
             setIsAdding(false);
         }
@@ -196,13 +203,14 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             const topicLabel = selectedTopic
                 ? (selectedTopic.title ?? selectedTopic.content.slice(0, 40))
                 : "Random";
-            const testId = await createEmptyTest({
+
+            const testId = await createTestServerAction({
                 spaceId: sId,
                 type: testType,
                 questionCount: 5,
                 topicTitle: topicLabel,
-                userId: userId ?? "default_user",
             });
+
             // Store selected topic for test page to use
             if (selectedTopicId) {
                 sessionStorage.setItem(`exigo_test_topic_${testId}`, selectedTopicId);
@@ -210,6 +218,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             router.push(`/tests/${testId}`);
         } catch (error) {
             console.error("Failed to create test", error);
+            alert((error as Error).message);
             setIsGenerating(false);
         }
     };

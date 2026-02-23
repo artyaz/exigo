@@ -10,7 +10,7 @@ import { mutation, query } from "./_generated/server";
 // Status "active": the test is immediately usable — questions are generated
 // asynchronously one-by-one via the /api/tests/generate streaming endpoint.
 export const createEmptyTest = mutation({
-    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), topicTitle: v.optional(v.string()), userId: v.string() },
+    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), maxTests: v.number(), topicTitle: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
@@ -19,6 +19,33 @@ export const createEmptyTest = mutation({
 
         if (space.userId !== args.userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
+        }
+
+        // Atomic check for monthly limit
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const recentTests = await ctx.db
+            .query("tests")
+            .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
+            .collect();
+
+        // Calculate count correctly for user
+        const spaceIds = [...new Set(recentTests.map((t) => t.spaceId))];
+        const spaces = await Promise.all(spaceIds.map((id) => ctx.db.get(id)));
+        const spaceMap = new Map(spaces.filter(Boolean).map((s) => [s!._id, s!]));
+
+        let count = 0;
+        for (const test of recentTests) {
+            const s = spaceMap.get(test.spaceId);
+            if (s && (s.userId === args.userId || s.userId === "default_user")) {
+                count++;
+            }
+        }
+
+        if (count >= args.maxTests) {
+            throw new Error(`Limit reached: You can only create ${args.maxTests} tests per month on your current plan.`);
         }
 
         return await ctx.db.insert("tests", {
@@ -32,6 +59,7 @@ export const createEmptyTest = mutation({
         });
     },
 });
+
 
 // Status "generating": used when the server batch-generates all questions before
 // the test becomes usable. The caller is expected to flip status to "active" once done.
@@ -96,11 +124,20 @@ export const countForUserThisMonth = query({
  * Allowed states: "draft", "generating", "active", or "completed".
  */
 export const updateStatus = mutation({
-    args: { testId: v.id("tests"), status: v.union(v.literal("draft"), v.literal("generating"), v.literal("active"), v.literal("completed")) },
+    args: { testId: v.id("tests"), userId: v.string(), status: v.union(v.literal("draft"), v.literal("generating"), v.literal("active"), v.literal("completed")) },
     handler: async (ctx, args) => {
+        const test = await ctx.db.get(args.testId);
+        if (!test) throw new Error("Test not found");
+
+        const space = await ctx.db.get(test.spaceId);
+        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this test");
+        }
+
         await ctx.db.patch(args.testId, { status: args.status });
     },
 });
+
 
 /**
  * Retrieves all tests mapped to a unique space context.

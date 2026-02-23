@@ -23,15 +23,27 @@ export const countForUser = query({
 });
 
 export const get = query({
-    args: { spaceId: v.id("spaces") },
+    args: { spaceId: v.id("spaces"), userId: v.string() },
     handler: async (ctx, args) => {
-        return await ctx.db.get(args.spaceId);
+        const space = await ctx.db.get(args.spaceId);
+        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) return null;
+        return space;
     },
 });
 
 export const create = mutation({
-    args: { name: v.string(), userId: v.string() },
+    args: { name: v.string(), userId: v.string(), maxSpaces: v.number() },
     handler: async (ctx, args) => {
+        const spaces = await ctx.db
+            .query("spaces")
+            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .collect();
+
+        if (spaces.length >= args.maxSpaces) {
+            throw new Error(`Limit reached: You can only have ${args.maxSpaces} spaces on your current plan.`);
+        }
+
         return await ctx.db.insert("spaces", { name: args.name, userId: args.userId });
     },
 });
+

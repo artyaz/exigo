@@ -71,9 +71,10 @@ async function fetchGeminiStream<T extends z.ZodSchema>(ai: GoogleGenAI, prompt:
 }
 
 function getTestLimit(has: (params: { feature: string }) => boolean): number {
-    if (has({ feature: "unlimited_ai_tests" })) return Infinity;
+    if (has({ feature: "unlimited_ai_tests" })) return 300;
     if (has({ feature: "pro_tests" })) return 100;
-    return 10;
+    if (has({ feature: "basic_tests" })) return 10;
+    return 0;
 }
 
 type KPiece = { _id: Id<"knowledgePieces">; content: string; title?: string };
@@ -95,8 +96,10 @@ async function resolveTestId(
     spaceId: string,
     testType: string,
     topicLabel: string,
-    userId: string
+    userId: string,
+    maxTests: number
 ): Promise<{ id: Id<"tests">; existingQuestions: { question: string }[] } | Response> {
+
     if (testId) {
         const existingTest = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
         if (!existingTest) {
@@ -117,7 +120,10 @@ async function resolveTestId(
         questionCount: 5,
         topicTitle: topicLabel,
         userId,
+        maxTests,
     });
+
+
     return { id, existingQuestions: [] };
 }
 
@@ -170,10 +176,11 @@ export async function POST(req: NextRequest) {
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
 
     // Verify space ownership before accessing data
-    const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces"> });
-    if (!space || (space.userId !== userId && space.userId !== "default_user")) {
-        return new Response(JSON.stringify({ error: "Access denied to this space" }), { status: 403 });
+    const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces">, userId });
+    if (!space) {
+        return new Response(JSON.stringify({ error: "Access denied to this space or space not found" }), { status: 403 });
     }
+
 
     const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
     if (!pieces || pieces.length === 0) {
@@ -187,7 +194,7 @@ export async function POST(req: NextRequest) {
     const firstPiece = selectedPieces[0]!;
     const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
 
-    const testResult = await resolveTestId(testId, spaceId, testType, topicLabel, userId);
+    const testResult = await resolveTestId(testId, spaceId, testType, topicLabel, userId, MAX_TESTS);
     if (testResult instanceof Response) return testResult;
     const { id: activeTestId, existingQuestions } = testResult;
 
@@ -239,6 +246,7 @@ ${knowledgeText}`;
                 const parsedOptions = "options" in parsed ? (parsed as { options: string[] }).options : undefined;
                 const questionId = await convex.mutation(api.questions.create, {
                     testId: activeTestId,
+                    userId,
                     type: testType,
                     question: parsed.question,
                     options: parsedOptions,

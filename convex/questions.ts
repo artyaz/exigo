@@ -4,12 +4,21 @@ import { mutation, query } from "./_generated/server";
 export const create = mutation({
     args: {
         testId: v.id("tests"),
+        userId: v.string(),
         type: v.string(), // "select" | "write"
         question: v.string(),
         options: v.optional(v.array(v.string())),
         answer: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        const test = await ctx.db.get(args.testId);
+        if (!test) throw new Error("Test not found");
+
+        const space = await ctx.db.get(test.spaceId);
+        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this test");
+        }
+
         return await ctx.db.insert("questions", {
             testId: args.testId,
             type: args.type as "select" | "write",
@@ -19,6 +28,7 @@ export const create = mutation({
         });
     },
 });
+
 
 export const getForTest = query({
     args: { testId: v.id("tests") },
@@ -40,11 +50,23 @@ export const get = query({
 export const updateFeedback = mutation({
     args: {
         questionId: v.id("questions"),
+        userId: v.string(),
         isCorrect: v.boolean(),
         aiFeedback: v.string(),
         userAnswer: v.string(),
     },
     handler: async (ctx, args) => {
+        const question = await ctx.db.get(args.questionId);
+        if (!question) throw new Error("Question not found");
+
+        const test = await ctx.db.get(question.testId);
+        if (!test) throw new Error("Test not found");
+
+        const space = await ctx.db.get(test.spaceId);
+        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this question");
+        }
+
         await ctx.db.patch(args.questionId, {
             isCorrect: args.isCorrect,
             aiFeedback: args.aiFeedback,
@@ -52,6 +74,7 @@ export const updateFeedback = mutation({
         });
     },
 });
+
 
 export const getForSpace = query({
     args: { spaceId: v.id("spaces") },
