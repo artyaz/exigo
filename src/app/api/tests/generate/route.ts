@@ -4,7 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { z, type ZodTypeAny } from "zod";
+import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -47,15 +47,14 @@ const writeQuestionSchema = z.object({
  * The endpoint also returns 400 responses(JSON error body) when required parameters or knowledge pieces are missing.
  */
 
-async function fetchGeminiStream(ai: GoogleGenAI, prompt: string, schema: ZodTypeAny) {
+async function fetchGeminiStream<T extends z.ZodSchema>(ai: GoogleGenAI, prompt: string, schema: T) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             return await ai.models.generateContentStream({
-                model: "gemini-3.1-pro-preview",
+                model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
                     responseJsonSchema: zodToJsonSchema(schema),
                 }
             });
@@ -169,6 +168,13 @@ export async function POST(req: NextRequest) {
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
+
+    // Verify space ownership before accessing data
+    const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces"> });
+    if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+        return new Response(JSON.stringify({ error: "Access denied to this space" }), { status: 403 });
+    }
+
     const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
     if (!pieces || pieces.length === 0) {
         return new Response(JSON.stringify({ error: "No knowledge pieces" }), { status: 400 });

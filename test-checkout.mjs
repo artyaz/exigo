@@ -1,7 +1,5 @@
 import 'dotenv/config';
 
-import 'dotenv/config';
-
 if (!process.env.CLERK_SECRET_KEY) {
     console.error("Error: CLERK_SECRET_KEY is missing from environment variables.");
     process.exit(1);
@@ -22,7 +20,11 @@ try {
 
     if (!response.ok) {
         let errBody = "Failed to parse error response";
-        try { errBody = await response.text(); } catch (e) { }
+        try {
+            errBody = await response.text();
+        } catch (e) {
+            console.warn("Failed to read error response body:", e);
+        }
         console.error(`HTTP error! status: ${response.status}, body: ${errBody}`);
         process.exit(1);
     }

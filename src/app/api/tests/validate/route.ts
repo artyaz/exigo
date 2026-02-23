@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
         const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
         if (!question) return NextResponse.json({ error: "Question not found" }, { status: 404 });
 
+        let modelUsedResult: string | undefined;
         let isCorrect = false;
         let aiFeedback = "Correct!";
 
@@ -82,16 +83,31 @@ export async function POST(req: NextRequest) {
         Respond STRICTLY with a JSON object: {"isCorrect": true/false, "feedback": "Brief 1 sentence explanation of why, or praise if correct"}
       `;
 
-            const response = await ai.models.generateContent({
-                model: "gemini-3-flash-preview",
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                }
-            });
+            // Enhanced model selection with fallback strategy
+            const primaryModel = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+            const fallbackModel = "gemini-1.5-flash";
+            let modelUsed = primaryModel;
+            let response;
 
             try {
-                const parsed = JSON.parse(response.text ?? "{}") as unknown;
+                response = await ai.models.generateContent({
+                    model: primaryModel,
+                    contents: prompt,
+                    config: { responseMimeType: "application/json" }
+                });
+            } catch (err: unknown) {
+                console.error(`Primary model (${primaryModel}) failed, trying fallback (${fallbackModel}):`, err);
+                modelUsed = fallbackModel;
+                response = await ai.models.generateContent({
+                    model: fallbackModel,
+                    contents: prompt,
+                    config: { responseMimeType: "application/json" }
+                });
+            }
+
+            try {
+                const responseText = response.text ?? "{}";
+                const parsed = JSON.parse(responseText) as unknown;
                 const validated = validateAIResponse(parsed);
 
                 if (validated) {
@@ -102,10 +118,12 @@ export async function POST(req: NextRequest) {
                     aiFeedback = "Failed to parse AI feedback format.";
                 }
             } catch (e) {
-                console.error(e);
+                console.error("AI validation parse error:", e);
                 isCorrect = false;
                 aiFeedback = "Failed to parse AI outcome.";
             }
+
+            modelUsedResult = modelUsed;
         }
 
         // Update the question
@@ -116,7 +134,15 @@ export async function POST(req: NextRequest) {
             userAnswer: answer,
         });
 
-        return NextResponse.json({ isCorrect, aiFeedback });
+        const responseBody: { isCorrect: boolean; aiFeedback: string; _meta?: { modelUsed: string } } = {
+            isCorrect,
+            aiFeedback,
+        };
+        if (modelUsedResult) {
+            responseBody._meta = { modelUsed: modelUsedResult };
+        }
+
+        return NextResponse.json(responseBody);
 
     } catch (err: unknown) {
         console.error(err);

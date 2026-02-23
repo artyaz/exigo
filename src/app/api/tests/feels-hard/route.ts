@@ -126,7 +126,8 @@ export async function POST(req: NextRequest) {
             conversationContext
         );
 
-        const response = await ai.models.generateContent({ model: "gemini-3-flash-preview", contents: prompt });
+        const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+        const response = await ai.models.generateContent({ model, contents: prompt });
         const struggleNote = response.text?.trim() ?? "User had an issue with this topic.";
 
         await convex.mutation(api.knowledgePieces.appendContent, {

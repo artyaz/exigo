@@ -96,11 +96,13 @@ export async function POST(req: NextRequest) {
         ### OUTPUT FORMAT REQUIREMENTS (STRICT)
 1. Tone: Casual, slightly witty, professional. Use emojis 🧠.
 2. Structure: NO WALLS OF TEXT. Bullet points & bold text.
-3. Keep in mind that the chat window is horizontallysmall, so keep your responses not hard to read in this format.
+3. Keep in mind that the chat window is horizontally small, so keep your responses not hard to read in this format.
         `;
 
+        // Default model; override via GEMINI_MODEL env var
+        const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model,
             contents: prompt,
         });
 

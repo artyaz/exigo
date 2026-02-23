@@ -42,9 +42,9 @@ function cardHash(id: string, seed: number) {
  */
 function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
     const result: ReactNode[] = [];
-    // Order matters: bold (**) before italic (*), then code (`)
-    // Lookaround on the italic branch prevents matching the * in **
-    const tokenRegex = /(\*\*(.+?)\*\*|(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|`(.+?)`)/g;
+    // Order matters: match bold (**text**) or code (`text`) before italic (*text*).
+    // This avoids lookbehind/lookahead which breaks on older Safari.
+    const tokenRegex = /(\*\*(.+?)\*\*|`(.+?)`|\*([^*]+?)\*)/g;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
     let partIdx = 0;
@@ -63,21 +63,21 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
                 </strong>
             );
         } else if (match[3] !== undefined) {
-            // *italic*
-            result.push(
-                <em key={key} className="italic text-white/80">
-                    {match[3]}
-                </em>
-            );
-        } else if (match[4] !== undefined) {
             // `code`
             result.push(
                 <code
                     key={key}
                     className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-white/90 border border-white/[0.06]"
                 >
-                    {match[4]}
+                    {match[3]}
                 </code>
+            );
+        } else if (match[4] !== undefined) {
+            // *italic* (captured without lookbehind)
+            result.push(
+                <em key={key} className="italic text-white/80">
+                    {match[4]}
+                </em>
             );
         }
 
@@ -245,7 +245,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
                 if (!res.ok) {
                     const errBody = await res.text().catch(() => "");
-                    const msg = errBody ?? `Server error (${res.status})`;
+                    const msg = errBody.trim() ? errBody : `Server error (${res.status})`;
                     setGenError(msg.includes("429") || msg.includes("quota")
                         ? "API rate limit reached. Please wait a moment and retry."
                         : msg);
@@ -419,11 +419,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         return () => clearTimeout(timer);
     }, [toast]);
 
-    const handleFeelsHard = async (messageContent: string) => {
+    const handleFeelsHard = async (messageId: string, messageContent: string) => {
         setContextMenu(null);
         if (!currentQuestionId) return;
 
-        setFeelsHardLoading(messageContent);
+        setFeelsHardLoading(messageId);
 
         try {
             const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined;
@@ -826,7 +826,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     >
                                         <p className="whitespace-pre-wrap">{renderMarkdown(msg.content)}</p>
                                         {/* "Feels hard" loading indicator on this specific message */}
-                                        {feelsHardLoading === msg.content && (
+                                        {feelsHardLoading === msg._id && (
                                             <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center backdrop-blur-sm">
                                                 <div className="flex items-center gap-2">
                                                     <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
@@ -888,7 +888,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         onClick={(e) => e.stopPropagation()}
                     >
                         <button
-                            onClick={() => handleFeelsHard(contextMenu.messageContent)}
+                            onClick={() => handleFeelsHard(contextMenu.messageId, contextMenu.messageContent)}
                             className="w-full flex items-center gap-2.5 px-4 py-3 text-xs text-left hover:bg-white/[0.06] transition-colors spring-interact"
                         >
                             <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
