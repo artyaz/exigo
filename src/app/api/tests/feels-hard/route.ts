@@ -6,7 +6,9 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+function createConvexClient() {
+    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+}
 
 interface FeelsHardBody {
     testId?: string;
@@ -60,6 +62,7 @@ Important:
 }
 
 async function resolveTargetPiece(
+    convex: ConvexHttpClient,
     knowledgePieceId: string | undefined,
     spaceId: Id<"spaces">
 ): Promise<Id<"knowledgePieces"> | null> {
@@ -77,10 +80,32 @@ async function resolveTargetPiece(
  */
 export async function POST(req: NextRequest) {
     try {
-        const { userId } = await auth();
+        const { userId, has, getToken } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        const token = await getToken({ template: "convex" }) ?? await getToken();
+        if (!token) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const convex = createConvexClient();
+        convex.setAuth(token);
+
+        const hasConversationalAI = has({ feature: "conversational_ai" });
+        if (!hasConversationalAI) {
+            return NextResponse.json({ error: "Upgrade to Pro to use Deep Dive study notes!" }, { status: 403 });
+        }
+
+        const isEducator = has({ feature: "unlimited_ai_tests" });
+        const isPro = has({ feature: "pro_tests" });
+        const limit = isEducator ? 150 : isPro ? 50 : 0;
+
+        if (limit === 0) {
+            return NextResponse.json({ error: "You don't have access to Deep Dive study notes. Please upgrade your plan." }, { status: 403 });
+        }
+
+
         if (!process.env.GOOGLE_GEMINI_API_KEY) {
             return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
         }
@@ -92,27 +117,33 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
-        if (!question) {
-            return NextResponse.json({ error: "Question not found" }, { status: 404 });
-        }
-
         const test = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
         if (!test) {
             return NextResponse.json({ error: "Test not found" }, { status: 404 });
         }
 
-        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId });
-        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
-            return NextResponse.json({ error: "Unauthorized access" }, { status: 403 });
+        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId, userId });
+        if (!space) {
+            return NextResponse.json({ error: "Unauthorized access or space not found" }, { status: 403 });
         }
 
-        const targetPieceId = await resolveTargetPiece(knowledgePieceId, test.spaceId);
+        const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
+        if (!question) {
+            return NextResponse.json({ error: "Question not found" }, { status: 404 });
+        }
+        if (String(question.testId) !== testId) {
+            return NextResponse.json({ error: "Question does not belong to this test" }, { status: 400 });
+        }
+
+        const targetPieceId = await resolveTargetPiece(convex, knowledgePieceId, test.spaceId);
         if (!targetPieceId) {
             return NextResponse.json({ error: "No knowledge piece found to append to" }, { status: 404 });
         }
 
-        const pastMessages = await convex.query(api.testMessages.getForQuestion, { questionId: questionId as Id<"questions"> });
+        const pastMessages = await convex.query(api.testMessages.getForQuestion, {
+            questionId: questionId as Id<"questions">,
+            userId,
+        });
         const conversationContext = pastMessages
             .map((m) => `${m.role === "user" ? "Student" : "AI Tutor"}: ${m.content}`)
             .join("\n") || "No prior conversation.";
@@ -134,6 +165,14 @@ export async function POST(req: NextRequest) {
             id: targetPieceId,
             content: `---\n📌 Study Note (auto-generated): ${struggleNote}`,
         });
+
+        await convex.mutation(api.deepDives.create, {
+            userId,
+            spaceId: test.spaceId,
+            questionId: questionId as Id<"questions">,
+            maxDives: limit,
+        });
+
 
         return NextResponse.json({ success: true, note: struggleNote });
     } catch (err: unknown) {

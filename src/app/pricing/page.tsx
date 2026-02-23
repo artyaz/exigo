@@ -8,18 +8,33 @@ import { useUser, useClerk, useAuth } from "@clerk/nextjs";
 
 const plans = [
     {
-        name: "Starter",
-        price: "Free",
-        description: "Three entire workspaces. Because let's be honest, you'll probably abandon two of them by Tuesday.",
+        name: "Free",
+        price: "$0",
+        description: "The intellectual equivalent of a junk drawer. Good for starting out.",
         features: [
             { name: "3 Spaces", included: true },
-            { name: "10 AI Tests / month", included: true },
-            { name: "Basic AI Feedback", included: true },
-            { name: "Conversational AI", included: false },
+            { name: "20 Knowledge Pieces / Space", included: true },
+            { name: "Basic Storage", included: true },
+            { name: "AI Testing", included: false },
         ],
         buttonText: "Current Plan",
-        isActive: true, // Will be overridden by actual logic if user has higher tier
+        isActive: true,
         highlight: false,
+    },
+    {
+        name: "Basic",
+        price: "$2",
+        period: "/mo",
+        description: "For the serious-ish student. Just enough to actually start learning.",
+        features: [
+            { name: "3 Spaces", included: true },
+            { name: "50 Knowledge Pieces / Space", included: true },
+            { name: "10 AI Tests / month", included: true },
+        ],
+        buttonText: "Upgrade to Basic",
+        isActive: false,
+        highlight: true,
+        href: "/upgrade?plan=basic"
     },
     {
         name: "Pro Scholar",
@@ -29,25 +44,25 @@ const plans = [
         features: [
             { name: "Unlimited Spaces", included: true },
             { name: "100 AI Tests / month", included: true },
-            { name: "Conversational AI (Deep Dives)", included: true },
-            { name: "50 Knowledge Sources / Space", included: true },
+            { name: "Basic AI Feedback", included: true },
+            { name: "50 Deep Dive Study Notes", included: true },
+            { name: "200 Knowledge Pieces / Space", included: true },
         ],
         buttonText: "Upgrade to Pro",
         isActive: false,
-        highlight: true,
-        // Replace this with the actual Clerk checkout link or logic
+        highlight: false,
         href: "/upgrade?plan=pro"
     },
     {
         name: "Educator",
         price: "$19",
         period: "/mo",
-        description: "Infinite workspaces. Perfect for when your ambition wildly outpaces your actual free time.",
+        description: "Infinite workspaces. High priority and unlimited conversational context.",
         features: [
             { name: "Unlimited Spaces", included: true },
-            { name: "Unlimited AI Tests & Context", included: true },
+            { name: "300 AI Tests / month", included: true },
+            { name: "150 Deep Dive Study Notes", included: true },
             { name: "Unlimited Conversational AI", included: true },
-            { name: "Priority AI Generation Queue", included: true },
         ],
         buttonText: "Upgrade to Educator",
         isActive: false,
@@ -64,7 +79,9 @@ export default function PricingPage() {
 
     const isEducator = has ? has({ feature: "unlimited_ai_tests" }) : false;
     const isPro = has ? has({ feature: "pro_tests" }) : false;
-    const currentPlan = isEducator ? "Educator" : isPro ? "Pro Scholar" : "Starter";
+    const isBasic = has ? has({ feature: "basic_tests" }) : false;
+    const currentPlan = isEducator ? "Educator" : isPro ? "Pro Scholar" : isBasic ? "Basic" : "Free";
+
 
     // Keyboard shortcut for Pro upgrade (simulate press)
     useEffect(() => {
@@ -121,7 +138,8 @@ export default function PricingPage() {
                     </motion.p>
                 </header>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
+
                     {plans.map((plan, i) => {
                         const isHovered = hoveredCard === i;
                         const isCurrentPlan = plan.name === currentPlan;

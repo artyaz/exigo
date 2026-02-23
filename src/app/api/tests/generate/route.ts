@@ -6,6 +6,7 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { getTestLimit } from "../../../../lib/testLimits";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -70,12 +71,6 @@ async function fetchGeminiStream<T extends z.ZodSchema>(ai: GoogleGenAI, prompt:
     throw new Error("Failed to get stream after retries");
 }
 
-function getTestLimit(has: (params: { feature: string }) => boolean): number {
-    if (has({ feature: "unlimited_ai_tests" })) return Infinity;
-    if (has({ feature: "pro_tests" })) return 100;
-    return 10;
-}
-
 type KPiece = { _id: Id<"knowledgePieces">; content: string; title?: string };
 
 function selectKnowledgePieces(pieces: KPiece[], knowledgePieceId?: string): KPiece[] | Response {
@@ -97,6 +92,7 @@ async function resolveTestId(
     topicLabel: string,
     userId: string
 ): Promise<{ id: Id<"tests">; existingQuestions: { question: string }[] } | Response> {
+
     if (testId) {
         const existingTest = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
         if (!existingTest) {
@@ -118,6 +114,8 @@ async function resolveTestId(
         topicTitle: topicLabel,
         userId,
     });
+
+
     return { id, existingQuestions: [] };
 }
 
@@ -159,6 +157,13 @@ export async function POST(req: NextRequest) {
     }
 
     const MAX_TESTS = getTestLimit(has);
+    if (MAX_TESTS === 0) {
+        return new Response(JSON.stringify({
+            error: "Access Denied",
+            message: "You don't have access to test generation. Please upgrade your plan."
+        }), { status: 403 });
+    }
+
     const testsThisMonth = await convex.query(api.tests.countForUserThisMonth, { userId });
     if (testsThisMonth >= MAX_TESTS) {
         return new Response(JSON.stringify({
@@ -170,10 +175,11 @@ export async function POST(req: NextRequest) {
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
 
     // Verify space ownership before accessing data
-    const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces"> });
-    if (!space || (space.userId !== userId && space.userId !== "default_user")) {
-        return new Response(JSON.stringify({ error: "Access denied to this space" }), { status: 403 });
+    const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces">, userId });
+    if (!space) {
+        return new Response(JSON.stringify({ error: "Access denied to this space or space not found" }), { status: 403 });
     }
+
 
     const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
     if (!pieces || pieces.length === 0) {
@@ -239,6 +245,7 @@ ${knowledgeText}`;
                 const parsedOptions = "options" in parsed ? (parsed as { options: string[] }).options : undefined;
                 const questionId = await convex.mutation(api.questions.create, {
                     testId: activeTestId,
+                    userId,
                     type: testType,
                     question: parsed.question,
                     options: parsedOptions,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
@@ -27,19 +28,14 @@ function validateAIResponse(result: unknown): { isCorrect: boolean; feedback: st
     return null;
 }
 
-/**
- * Handle POST requests that evaluate a student's answer and update the question's feedback.
- *
- * Parses the request body for `questionId`, `answer`, and `testType`. For `select` tests it compares
- * the submitted answer to the stored answer; for `write` tests it performs an AI evaluation and
- * derives correctness and brief feedback. The function updates the question's stored feedback and
- * returns the evaluation outcome.
- *
- * @returns JSON containing `{ isCorrect, aiFeedback }` on success, or `{ error }` with an error message on failure.
- *          Uses HTTP 400 for missing fields, 404 if the question is not found, and 500 for server-side errors.
- */
 export async function POST(req: NextRequest) {
+
     try {
+        const { userId, has } = await auth();
+        if (!userId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
         const rawBody = await req.json() as Record<string, unknown>;
         const questionId = rawBody.questionId as string | undefined;
         const answer = rawBody.answer as string | undefined;
@@ -54,9 +50,18 @@ export async function POST(req: NextRequest) {
         }
 
         // Validate active question directly
-
         const question = await convex.query(api.questions.get, { questionId: questionId as Id<"questions"> });
         if (!question) return NextResponse.json({ error: "Question not found" }, { status: 404 });
+
+        // Verify ownership via space
+        const test = await convex.query(api.tests.get, { testId: question.testId });
+        if (!test) return NextResponse.json({ error: "Test not found" }, { status: 404 });
+
+        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId, userId });
+        if (!space) {
+            return NextResponse.json({ error: "Unauthorized access or space not found" }, { status: 403 });
+        }
+
 
         let modelUsedResult: string | undefined;
         let isCorrect = false;
@@ -66,6 +71,14 @@ export async function POST(req: NextRequest) {
             isCorrect = answer === question.answer;
             aiFeedback = isCorrect ? "Correct answer!" : `Incorrect. The correct answer was: ${question.answer}`;
         } else if (testType === "write") {
+            const hasScholarFeedback = has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" });
+            if (!hasScholarFeedback) {
+                return NextResponse.json(
+                    { error: "AI feedback for written answers is available on Scholar and above. Please upgrade your plan." },
+                    { status: 403 }
+                );
+            }
+
             if (!process.env.GOOGLE_GEMINI_API_KEY) {
                 return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
             }
@@ -129,10 +142,12 @@ export async function POST(req: NextRequest) {
         // Update the question
         await convex.mutation(api.questions.updateFeedback, {
             questionId: questionId as Id<"questions">,
+            userId,
             isCorrect,
             aiFeedback,
             userAnswer: answer,
         });
+
 
         const responseBody: { isCorrect: boolean; aiFeedback: string; _meta?: { modelUsed: string } } = {
             isCorrect,

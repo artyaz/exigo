@@ -42,4 +42,9 @@ export default defineSchema({
         role: v.union(v.literal("user"), v.literal("ai")),
         content: v.string(),
     }).index("by_question", ["questionId"]),
+    deepDives: defineTable({
+        userId: v.string(),
+        spaceId: v.id("spaces"),
+        questionId: v.id("questions"),
+    }).index("by_user", ["userId"]),
 });

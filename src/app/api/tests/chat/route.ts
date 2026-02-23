@@ -54,13 +54,17 @@ export async function POST(req: NextRequest) {
         if (!test) {
             return NextResponse.json({ error: "Test not found" }, { status: 404 });
         }
-        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId });
-        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
-            return NextResponse.json({ error: "Unauthorized access to this test's space" }, { status: 403 });
+        const space = await convex.query(api.spaces.get, { spaceId: test.spaceId, userId });
+        if (!space) {
+            return NextResponse.json({ error: "Unauthorized access or space not found" }, { status: 403 });
         }
 
+
         // 2. Fetch past messages for this question to maintain conversation history
-        const pastMessages = await convex.query(api.testMessages.getForQuestion, { questionId: questionId as Id<"questions"> });
+        const pastMessages = await convex.query(api.testMessages.getForQuestion, {
+            questionId: questionId as Id<"questions">,
+            userId,
+        });
 
         // 3. Save User Message to DB
         await convex.mutation(api.testMessages.send, {
@@ -68,6 +72,7 @@ export async function POST(req: NextRequest) {
             questionId: questionId as Id<"questions">,
             role: "user",
             content: message,
+            userId,
         });
 
         // 4. Construct Gemini Prompt
@@ -114,7 +119,10 @@ export async function POST(req: NextRequest) {
             questionId: questionId as Id<"questions">,
             role: "ai",
             content: aiResponseText,
+            userId,
         });
+
+
 
         return NextResponse.json({ success: true, aiResponseText });
 

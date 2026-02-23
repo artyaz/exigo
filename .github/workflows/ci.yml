@@ -37,6 +37,9 @@ jobs:
         # Runs `next lint` and `tsc --noEmit` defined in package.json
         run: npm run check
 
+      - name: Run Tests with Coverage
+        run: npm run test:coverage
+
       - name: SonarQube Analysis
         uses: SonarSource/sonarqube-scan-action@0303d6b62e310685c0e34d0b9cde218036885c4d # v5.0.0
         env:
@@ -47,5 +50,6 @@ jobs:
             -Dsonar.organization=artyaz
             -Dsonar.projectKey=artyaz_exigo
             -Dsonar.sources=.
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
             -Dsonar.coverage.exclusions="**/generated/**"
             -Dsonar.exclusions="**/generated/**"

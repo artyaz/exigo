@@ -8,7 +8,10 @@
  * @module
  */
 
+import type * as auth from "../auth.js";
+import type * as deepDives from "../deepDives.js";
 import type * as knowledgePieces from "../knowledgePieces.js";
+import type * as planLimits from "../planLimits.js";
 import type * as questions from "../questions.js";
 import type * as spaces from "../spaces.js";
 import type * as testMessages from "../testMessages.js";
@@ -21,7 +24,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
+  deepDives: typeof deepDives;
   knowledgePieces: typeof knowledgePieces;
+  planLimits: typeof planLimits;
   questions: typeof questions;
   spaces: typeof spaces;
   testMessages: typeof testMessages;

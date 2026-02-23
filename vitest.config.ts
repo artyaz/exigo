@@ -7,6 +7,13 @@ export default defineConfig({
     environment: 'node',
     include: ['**/*.test.ts', '**/*.spec.ts'],
     exclude: ['node_modules', 'generated', 'convex/_generated', '.next'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      reportsDirectory: './coverage',
+      include: ['convex/**/*.ts', 'src/**/*.ts'],
+      exclude: ['convex/_generated/**', 'generated/**', '**/*.test.ts', '**/*.spec.ts'],
+    },
   },
   resolve: {
     alias: {

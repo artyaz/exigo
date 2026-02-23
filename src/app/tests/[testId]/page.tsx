@@ -20,6 +20,7 @@ import {
     AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 
 /* ─── spring presets ─── */
 const SPRING_SNAPPY = { type: "spring" as const, stiffness: 500, damping: 30 };
@@ -126,6 +127,7 @@ function renderMarkdown(text: string): ReactNode[] {
 export default function TestPage({ params }: { params: Promise<{ testId: string }> }) {
     const { testId } = use(params);
     const tId = testId as Id<"tests">;
+    const { userId } = useAuth();
 
     const test = useQuery(api.tests.get, { testId: tId });
     const questions = useQuery(api.questions.getForTest, { testId: tId });
@@ -168,7 +170,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const currentQuestionId = currentQuestion?._id;
     const testMessages = useQuery(
         api.testMessages.getForQuestion,
-        currentQuestionId ? { questionId: currentQuestionId } : "skip"
+        currentQuestionId && userId ? { questionId: currentQuestionId, userId } : "skip"
     );
 
     // Detect new question appearing (for animation)

@@ -1,5 +1,63 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { getServerPlanLimitsForUser } from "./planLimits";
+
+function getStartOfMonthMs() {
+    const now = new Date();
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0);
+}
+
+async function getOwnedSpaceIds(ctx: QueryCtx | MutationCtx, userId: string): Promise<Id<"spaces">[]> {
+    const [userSpaces, defaultSpaces] = await Promise.all([
+        ctx.db
+            .query("spaces")
+            .withIndex("by_user", (q) => q.eq("userId", userId))
+            .collect(),
+        ctx.db
+            .query("spaces")
+            .withIndex("by_user", (q) => q.eq("userId", "default_user"))
+            .collect(),
+    ]);
+
+    return [...new Set([...userSpaces, ...defaultSpaces].map((space) => space._id))];
+}
+
+async function countTestsForSpacesSince(
+    ctx: QueryCtx | MutationCtx,
+    spaceIds: Id<"spaces">[],
+    createdAfterMs: number
+) {
+    if (spaceIds.length === 0) {
+        return 0;
+    }
+
+    const testsBySpace = await Promise.all(
+        spaceIds.map((spaceId) =>
+            ctx.db
+                .query("tests")
+                .withIndex("by_space", (q) => q.eq("spaceId", spaceId))
+                .filter((q) => q.gte(q.field("_creationTime"), createdAfterMs))
+                .collect()
+        )
+    );
+
+    return testsBySpace.reduce((sum, tests) => sum + tests.length, 0);
+}
+
+async function countForUserThisMonthInternal(ctx: QueryCtx | MutationCtx, userId: string) {
+    const spaceIds = await getOwnedSpaceIds(ctx, userId);
+    return await countTestsForSpacesSince(ctx, spaceIds, getStartOfMonthMs());
+}
+
+async function getAuthenticatedUser(ctx: QueryCtx | MutationCtx) {
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+    if (!userId) {
+        throw new Error("Unauthorized");
+    }
+    return { userId, identity };
+}
 
 /**
  * Initializes a new test generation request for a given space.
@@ -12,13 +70,29 @@ import { mutation, query } from "./_generated/server";
 export const createEmptyTest = mutation({
     args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), topicTitle: v.optional(v.string()), userId: v.string() },
     handler: async (ctx, args) => {
+        const { userId, identity } = await getAuthenticatedUser(ctx);
+        if (args.userId !== userId) {
+            throw new Error("Unauthorized");
+        }
+
+        const maxAllowed = getServerPlanLimitsForUser(userId, identity).maxTestsPerMonth;
+        if (maxAllowed === 0) {
+            throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
+        }
+
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
             throw new Error("Space not found");
         }
 
-        if (space.userId !== args.userId && space.userId !== "default_user") {
+        if (space.userId !== userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
+        }
+
+        const count = await countForUserThisMonthInternal(ctx, userId);
+
+        if (count >= maxAllowed) {
+            throw new Error(`Limit reached: You can only create ${maxAllowed} tests per month on your current plan.`);
         }
 
         return await ctx.db.insert("tests", {
@@ -33,18 +107,34 @@ export const createEmptyTest = mutation({
     },
 });
 
+
 // Status "generating": used when the server batch-generates all questions before
 // the test becomes usable. The caller is expected to flip status to "active" once done.
 export const create = mutation({
     args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.optional(v.number()), userId: v.string() },
     handler: async (ctx, args) => {
+        const { userId, identity } = await getAuthenticatedUser(ctx);
+        if (args.userId !== userId) {
+            throw new Error("Unauthorized");
+        }
+
+        const maxAllowed = getServerPlanLimitsForUser(userId, identity).maxTestsPerMonth;
+        if (maxAllowed === 0) {
+            throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
+        }
+
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
             throw new Error("Space not found");
         }
 
-        if (space.userId !== args.userId && space.userId !== "default_user") {
+        if (space.userId !== userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
+        }
+
+        const count = await countForUserThisMonthInternal(ctx, userId);
+        if (count >= maxAllowed) {
+            throw new Error(`Limit reached: You can only create ${maxAllowed} tests per month on your current plan.`);
         }
 
         return await ctx.db.insert("tests", {
@@ -64,30 +154,7 @@ export const create = mutation({
 export const countForUserThisMonth = query({
     args: { userId: v.string() },
     handler: async (ctx, args) => {
-        // Since we don't have a direct index spanning from spaces to tests by userId,
-        // we'll filter tests that belong to spaces owned by this user, created this month.
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-
-        const allTests = await ctx.db
-            .query("tests")
-            .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
-            .collect();
-
-        // Hydrate spaces to ensure they belong to this userId
-        const spaceIds = [...new Set(allTests.map((t) => t.spaceId))];
-        const spaces = await Promise.all(spaceIds.map((id) => ctx.db.get(id)));
-        const spaceMap = new Map(spaces.filter(Boolean).map((s) => [s!._id, s!]));
-
-        let count = 0;
-        for (const test of allTests) {
-            const space = spaceMap.get(test.spaceId);
-            if (space && (space.userId === args.userId || space.userId === "default_user")) {
-                count++;
-            }
-        }
-        return count;
+        return await countForUserThisMonthInternal(ctx, args.userId);
     },
 });
 
@@ -98,9 +165,20 @@ export const countForUserThisMonth = query({
 export const updateStatus = mutation({
     args: { testId: v.id("tests"), status: v.union(v.literal("draft"), v.literal("generating"), v.literal("active"), v.literal("completed")) },
     handler: async (ctx, args) => {
+        const { userId } = await getAuthenticatedUser(ctx);
+
+        const test = await ctx.db.get(args.testId);
+        if (!test) throw new Error("Test not found");
+
+        const space = await ctx.db.get(test.spaceId);
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this test");
+        }
+
         await ctx.db.patch(args.testId, { status: args.status });
     },
 });
+
 
 /**
  * Retrieves all tests mapped to a unique space context.
@@ -111,6 +189,12 @@ export const updateStatus = mutation({
 export const getForSpace = query({
     args: { spaceId: v.id("spaces") },
     handler: async (ctx, args) => {
+        const { userId } = await getAuthenticatedUser(ctx);
+        const space = await ctx.db.get(args.spaceId);
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this space");
+        }
+
         return await ctx.db
             .query("tests")
             .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
@@ -154,7 +238,18 @@ export const listAll = query({
 export const get = query({
     args: { testId: v.id("tests") },
     handler: async (ctx, args) => {
-        return await ctx.db.get(args.testId);
+        const { userId } = await getAuthenticatedUser(ctx);
+        const test = await ctx.db.get(args.testId);
+        if (!test) {
+            return null;
+        }
+
+        const space = await ctx.db.get(test.spaceId);
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+            throw new Error("Unauthorized access to this test");
+        }
+
+        return test;
     },
 });
 
@@ -179,13 +274,28 @@ export const createWithQuestions = mutation({
         })),
     },
     handler: async (ctx, args) => {
+        const { userId, identity } = await getAuthenticatedUser(ctx);
+        if (args.userId !== userId) {
+            throw new Error("Unauthorized");
+        }
+
+        const maxAllowed = getServerPlanLimitsForUser(userId, identity).maxTestsPerMonth;
+        if (maxAllowed === 0) {
+            throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
+        }
+
         const space = await ctx.db.get(args.spaceId);
         if (!space) {
             throw new Error("Space not found");
         }
 
-        if (space.userId !== args.userId && space.userId !== "default_user") {
+        if (space.userId !== userId && space.userId !== "default_user") {
             throw new Error("Unauthorized access to this space");
+        }
+
+        const count = await countForUserThisMonthInternal(ctx, userId);
+        if (count >= maxAllowed) {
+            throw new Error(`Limit reached: You can only create ${maxAllowed} tests per month on your current plan.`);
         }
 
         const testId = await ctx.db.insert("tests", {
