@@ -57,4 +57,4 @@ This project is optimized and configured to be hosted natively on [Vercel](https
 
 ## License
 
-This project is proprietary. All rights reserved. No part of this software may be used, copied, or distributed without the express written permission of the author. See the [LICENSE](./LICENSE) file for more details.
+This project is exclusively owned by the author. All rights reserved. No part of this software may be used, copied, or distributed without the express written permission of the author. See the [LICENSE](./LICENSE) file for more details.
