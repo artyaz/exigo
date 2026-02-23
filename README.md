@@ -52,3 +52,9 @@ This project is optimized and configured to be hosted natively on [Vercel](https
 4. Every Pull Request will automatically generate a unique **Preview Deployment** link so you can preview changes before merging them.
 
 > **Environment Variables**: Make sure to copy all the required keys from `.env.example` into your Vercel Project's Settings -> Environment Variables. This includes your database connection URLs (`DATABASE_URL`), `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_CONVEX_URL`, and `GOOGLE_GEMINI_API_KEY`.
+
+---
+
+## License
+
+This project is exclusively owned by the author. All rights reserved. No part of this software may be used, copied, or distributed without the express written permission of the author. See the [LICENSE](./LICENSE) file for more details.
