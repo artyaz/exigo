@@ -19,7 +19,12 @@ export async function addKnowledgePieceAction(spaceId: string, content: string, 
         throw new Error("Unauthorized: Please sign in to add knowledge.");
     }
 
-    const token = await getToken({ template: "convex" }) ?? await getToken();
+    let token: string | null = null;
+    try {
+        token = await getToken({ template: "convex" });
+    } catch {
+        token = await getToken();
+    }
     if (!token) {
         throw new Error("Unauthorized: Missing Convex auth token.");
     }
@@ -51,7 +56,12 @@ export async function bulkImportKnowledgeAction(spaceId: string, pieces: { title
         throw new Error("Unauthorized: Please sign in to add knowledge.");
     }
 
-    const token = await getToken({ template: "convex" }) ?? await getToken();
+    let token: string | null = null;
+    try {
+        token = await getToken({ template: "convex" });
+    } catch {
+        token = await getToken();
+    }
     if (!token) {
         throw new Error("Unauthorized: Missing Convex auth token.");
     }

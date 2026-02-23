@@ -6,7 +6,9 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+function createConvexClient() {
+    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+}
 
 /**
  * Helper to securely validate incoming AI evaluation shape
@@ -28,13 +30,41 @@ function validateAIResponse(result: unknown): { isCorrect: boolean; feedback: st
     return null;
 }
 
-export async function POST(req: NextRequest) {
+async function resolveTargetPieceId(
+    convex: ConvexHttpClient,
+    explicitKnowledgePieceId: string | undefined,
+    testKnowledgePieceId: Id<"knowledgePieces"> | undefined,
+    spaceId: Id<"spaces">
+): Promise<Id<"knowledgePieces"> | null> {
+    if (explicitKnowledgePieceId) {
+        return explicitKnowledgePieceId as Id<"knowledgePieces">;
+    }
+    if (testKnowledgePieceId) {
+        return testKnowledgePieceId;
+    }
+    const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId });
+    return pieces?.[0]?._id ?? null;
+}
 
+export async function POST(req: NextRequest) {
     try {
-        const { userId, has } = await auth();
+        const { userId, getToken } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        let token: string | null = null;
+        try {
+            token = await getToken({ template: "convex" });
+        } catch {
+            token = await getToken();
+        }
+        if (!token) {
+            return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
+        }
+
+        const convex = createConvexClient();
+        convex.setAuth(token);
 
         const rawBody = await req.json() as Record<string, unknown>;
         const questionId = rawBody.questionId as string | undefined;
@@ -71,8 +101,8 @@ export async function POST(req: NextRequest) {
             isCorrect = answer === question.answer;
             aiFeedback = isCorrect ? "Correct answer!" : `Incorrect. The correct answer was: ${question.answer}`;
         } else if (testType === "write") {
-            const hasScholarFeedback = has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" });
-            if (!hasScholarFeedback) {
+            const planStatus = await convex.query(api.planLimits.getPlan, {});
+            if (planStatus.tier === "free") {
                 return NextResponse.json(
                     { error: "AI feedback for written answers is available on Scholar and above. Please upgrade your plan." },
                     { status: 403 }
@@ -139,6 +169,13 @@ export async function POST(req: NextRequest) {
             modelUsedResult = modelUsed;
         }
 
+        const targetKnowledgePieceId = await resolveTargetPieceId(
+            convex,
+            rawBody.knowledgePieceId as string | undefined,
+            test.knowledgePieceId,
+            test.spaceId
+        );
+
         // Update the question
         await convex.mutation(api.questions.updateFeedback, {
             questionId: questionId as Id<"questions">,
@@ -147,6 +184,35 @@ export async function POST(req: NextRequest) {
             aiFeedback,
             userAnswer: answer,
         });
+
+        // Focus Area logic (Attempt for all, backend will enforce Pro plan)
+        try {
+            if (isCorrect && question.knowledgeNodeId) {
+                // Resolve the node
+                await convex.mutation(api.knowledgeNodes.resolve, {
+                    id: question.knowledgeNodeId,
+                });
+            } else if (!isCorrect && targetKnowledgePieceId) {
+                // Spawn a new struggle node
+                let struggleNote = `Failed on: "${question.question}".`;
+                if (aiFeedback && aiFeedback !== "Incorrect.") {
+                    struggleNote += ` Feedback: ${aiFeedback}`;
+                }
+
+                await convex.mutation(api.knowledgeNodes.create, {
+                    spaceId: test.spaceId,
+                    knowledgePieceId: targetKnowledgePieceId,
+                    type: "struggle",
+                    content: struggleNote,
+                });
+            }
+        } catch (planError: unknown) {
+            const message = planError instanceof Error ? planError.message : String(planError);
+            // Silently ignore if it's just a plan limit error
+            if (!message.includes("Pro plan")) {
+                console.error("Knowledge Node mutation failed:", planError);
+            }
+        }
 
 
         const responseBody: { isCorrect: boolean; aiFeedback: string; _meta?: { modelUsed: string } } = {

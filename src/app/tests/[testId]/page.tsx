@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useQuery } from "convex/react";
+import { useQuery, useAction } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useState, use, useEffect, useRef, useCallback, type ReactNode } from "react";
@@ -129,8 +129,8 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const tId = testId as Id<"tests">;
     const { userId } = useAuth();
 
-    const test = useQuery(api.tests.get, { testId: tId });
-    const questions = useQuery(api.questions.getForTest, { testId: tId });
+    const test = useQuery(api.tests.get, userId ? { testId: tId } : "skip");
+    const questions = useQuery(api.questions.getForTest, userId ? { testId: tId } : "skip");
 
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -343,18 +343,28 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, currentIndex, currentQuestion, answers, test]);
 
+    const generateImprovements = useAction(api.knowledgeNodes.generateImprovements);
+
     const handleAnswer = async (questionId: string, answer: string) => {
         if (!answer.trim()) return;
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
         setIsEvaluating(prev => ({ ...prev, [questionId]: true }));
 
-        void fetch("/api/tests/validate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ questionId, answer, testType: test?.config.type }),
-        }).finally(() => {
+        const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined;
+        let isCorrect = false;
+        try {
+            const res = await fetch("/api/tests/validate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ questionId, answer, testType: test?.config.type, knowledgePieceId }),
+            });
+            if (res.ok) {
+                const data = await res.json() as { isCorrect?: boolean };
+                isCorrect = !!data.isCorrect;
+            }
+        } finally {
             setIsEvaluating(prev => ({ ...prev, [questionId]: false }));
-        });
+        }
 
         // Auto-advance after brief delay — capture index to prevent stale closure
         const scheduledIndex = currentIndex;
@@ -362,6 +372,23 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             if (questions && scheduledIndex === currentIndex && scheduledIndex < questions.length - 1) {
                 setDirection(1);
                 setCurrentIndex(prev => prev + 1);
+            } else if (questions && scheduledIndex === questions.length - 1 && scheduledIndex === targetQuestionCount - 1) {
+                // Last question answered! Let's compute score.
+                let correctCount = isCorrect ? 1 : 0;
+                questions.forEach(q => {
+                    if (q._id !== questionId && q.isCorrect === true) {
+                        correctCount++;
+                    }
+                });
+
+                const score = correctCount / targetQuestionCount;
+                if (score >= 0.8 && knowledgePieceId) {
+                    // Trigger improvements generation softly in background
+                    void generateImprovements({
+                        knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">,
+                        testId: tId
+                    }).catch((err: unknown) => console.error("Failed to generate improvements", err));
+                }
             }
         }, 600);
     };
@@ -578,6 +605,8 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         const offset = idx - currentIndex;
                         const isLeft = offset < 0;
                         const absOffset = Math.abs(offset);
+                        const isNodeGuided = Boolean(q.knowledgeNodeId);
+                        const isPieceGuided = Boolean(test.knowledgePieceId);
 
                         if (!isActive && absOffset > STACK_VISIBLE) return null;
 
@@ -650,9 +679,23 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
                                         <div className="shrink-0 px-8 pt-7 pb-5 border-b border-white/[0.04]">
                                             <div className="flex items-center justify-between mb-4">
-                                                <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-semibold">
-                                                    Question {idx + 1}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-semibold">
+                                                        Question {idx + 1}
+                                                    </span>
+                                                    {isNodeGuided && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-emerald-400/25 bg-emerald-400/10 text-[10px] font-medium text-emerald-200/90">
+                                                            <BrainCircuit className="w-3 h-3" />
+                                                            Node-guided
+                                                        </span>
+                                                    )}
+                                                    {!isNodeGuided && isPieceGuided && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.04] text-[10px] font-medium text-white/55">
+                                                            <Sparkles className="w-3 h-3" />
+                                                            Piece-guided
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="flex items-center gap-2">
                                                     {q.isCorrect === true && (
                                                         <div className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-green-400/20">

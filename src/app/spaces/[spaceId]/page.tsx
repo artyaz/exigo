@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
     ArrowLeft, Plus, Upload, BrainCircuit, Loader2, BookOpen,
     CheckCircle2, Clock, Zap, ChevronRight, ChevronDown, FileText, ListChecks, PenLine,
-    X, Shuffle, Target, ArrowDown, ArrowUp
+    X, Shuffle, Target, ArrowDown, ArrowUp, TrendingUp, AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -38,9 +38,9 @@ function getUserFacingErrorMessage(error: unknown) {
 
 function useSpaceData(spaceId: Id<"spaces">, userId: string | null | undefined) {
     const space = useQuery(api.spaces.get, userId ? { spaceId, userId } : "skip");
-    const pieces = useQuery(api.knowledgePieces.getForSpace, { spaceId });
-    const spaceTests = useQuery(api.tests.getForSpace, { spaceId });
-    const spaceQuestions = useQuery(api.questions.getForSpace, { spaceId });
+    const pieces = useQuery(api.knowledgePieces.getForSpace, userId ? { spaceId } : "skip");
+    const spaceTests = useQuery(api.tests.getForSpace, userId ? { spaceId } : "skip");
+    const spaceQuestions = useQuery(api.questions.getForSpace, userId ? { spaceId } : "skip");
     return { space, pieces, spaceTests, spaceQuestions };
 }
 
@@ -87,6 +87,10 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     // Test card hover
     const [hoveredTestId, setHoveredTestId] = useState<string | null>(null);
     const [testMousePos, setTestMousePos] = useState({ x: 0, y: 0 });
+
+    // Knowledge Viewer
+    const [viewingPieceId, setViewingPieceId] = useState<string | null>(null);
+    const activeNodes = useQuery(api.knowledgeNodes.getActiveForPiece, (userId && viewingPieceId) ? { knowledgePieceId: viewingPieceId as Id<"knowledgePieces"> } : "skip");
 
     // Sort & filter
     const [sortBy, setSortBy] = useState<"date" | "status" | "questions" | "performance">("date");
@@ -228,6 +232,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 type: testType,
                 questionCount: 5,
                 topicTitle: topicLabel,
+                knowledgePieceId: selectedTopicId ?? undefined,
             });
 
             // Store selected topic for test page to use
@@ -898,12 +903,22 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 ) : (
                                     <div className="grid gap-3">
                                         {pieces.slice().reverse().map((piece) => (
-                                            <div key={piece._id} className="glass-card rounded-xl p-4 hover:bg-white/5 transition-colors">
+                                            <div
+                                                key={piece._id}
+                                                onClick={() => setViewingPieceId(String(piece._id))}
+                                                className="glass-card rounded-xl p-4 hover:bg-white/5 transition-colors cursor-pointer relative group"
+                                            >
                                                 {piece.title && (
-                                                    <p className="text-xs text-white/50 font-semibold uppercase tracking-widest mb-1.5">{piece.title}</p>
+                                                    <p className="text-xs text-white/50 font-semibold uppercase tracking-widest mb-1.5 pr-24">{piece.title}</p>
                                                 )}
                                                 <p className="text-secondary text-sm leading-relaxed whitespace-pre-wrap line-clamp-4">{piece.content}</p>
                                                 {piece.source && <p className="text-xs text-tertiary mt-2 font-mono truncate">Src: <span className="text-secondary">{piece.source}</span></p>}
+                                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="px-2 py-1 rounded-md bg-white/5 text-white/40 border border-white/10 flex items-center gap-1.5 text-[10px] uppercase font-semibold tracking-widest hover:text-white hover:bg-white/10 transition-colors">
+                                                        <BrainCircuit className="w-3 h-3" />
+                                                        Nodes
+                                                    </div>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -999,6 +1014,107 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                     Clear selection
                                 </button>
                                 <div className="flex items-center gap-2 text-white/20">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono">Esc</kbd>
+                                    <span className="text-[10px]">Close</span>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* ─── Knowledge Node Viewer Modal ─── */}
+            <AnimatePresence>
+                {viewingPieceId && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                        onClick={() => setViewingPieceId(null)}
+                    >
+                        {/* Backdrop */}
+                        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+
+                        {/* Modal */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="relative w-full max-w-lg max-h-[85vh] glass-card rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden"
+                        >
+                            {/* Modal header */}
+                            <div className="shrink-0 px-6 py-4 border-b border-white/[0.06] flex items-center justify-between bg-white/[0.02]">
+                                <div className="flex items-center gap-3">
+                                    <BrainCircuit className="w-4 h-4 text-white/40" />
+                                    <h3 className="text-sm font-semibold text-primary tracking-tight">Knowledge Nodes</h3>
+                                    {activeNodes !== undefined && (
+                                        <span className="text-[10px] font-mono text-tertiary bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">{activeNodes.length}</span>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={() => setViewingPieceId(null)}
+                                    className="p-1.5 rounded-lg hover:bg-white/10 spring-interact text-white/40 hover:text-white"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            {/* Node list */}
+                            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                {activeNodes === undefined ? (
+                                    <div className="flex justify-center p-12">
+                                        <Loader2 className="w-6 h-6 animate-spin text-white/20" />
+                                    </div>
+                                ) : activeNodes.length === 0 ? (
+                                    <div className="text-center flex flex-col items-center gap-3 p-12 opacity-50">
+                                        <CheckCircle2 className="w-8 h-8 opacity-50" />
+                                        <p className="text-sm">No active focus areas. You&apos;re doing great.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid gap-3">
+                                        {activeNodes.map((node) => {
+                                            const nodeInfo = node.type === "feels_hard"
+                                                ? { label: "Feels Hard", icon: AlertTriangle, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20" }
+                                                : node.type === "struggle"
+                                                    ? { label: "Struggle Area", icon: Target, color: "text-rose-400", bg: "bg-rose-500/10", border: "border-rose-500/20" }
+                                                    : { label: "Improvement", icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20" };
+
+                                            const Icon = nodeInfo.icon;
+
+                                            return (
+                                                <div
+                                                    key={node._id}
+                                                    className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-start gap-4"
+                                                >
+                                                    <div className={`p-2 rounded-lg border shrink-0 ${nodeInfo.bg} ${nodeInfo.border} ${nodeInfo.color}`}>
+                                                        <Icon className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between mb-1.5">
+                                                            <h4 className="text-xs font-semibold uppercase tracking-widest text-white/80">{nodeInfo.label}</h4>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-mono text-white/30 truncate">Target: {node.resolutionScore}/90%</span>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-sm text-white/60 leading-relaxed whitespace-pre-wrap">{node.content}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Modal footer */}
+                            <div className="shrink-0 px-6 py-3 border-t border-white/[0.06] flex items-center justify-between bg-black/50">
+                                <p className="text-xs text-white/30 truncate max-w-[250px]">
+                                    Nodes are generated by your interactions and resolve as you test accurately.
+                                </p>
+                                <div className="flex items-center gap-2 text-white/20 shrink-0">
                                     <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono">Esc</kbd>
                                     <span className="text-[10px]">Close</span>
                                 </div>

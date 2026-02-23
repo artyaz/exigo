@@ -85,25 +85,25 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const token = await getToken({ template: "convex" }) ?? await getToken();
+        let token: string | null = null;
+        try {
+            token = await getToken({ template: "convex" });
+        } catch {
+            token = await getToken();
+        }
         if (!token) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
         const convex = createConvexClient();
         convex.setAuth(token);
 
-        const hasConversationalAI = has({ feature: "conversational_ai" });
-        if (!hasConversationalAI) {
+        const planStatus = await convex.query(api.planLimits.getPlan, {});
+
+        if (!planStatus.features.conversational_ai) {
             return NextResponse.json({ error: "Upgrade to Pro to use Deep Dive study notes!" }, { status: 403 });
         }
 
-        const isEducator = has({ feature: "unlimited_ai_tests" });
-        const isPro = has({ feature: "pro_tests" });
-        const limit = isEducator ? 150 : isPro ? 50 : 0;
-
-        if (limit === 0) {
-            return NextResponse.json({ error: "You don't have access to Deep Dive study notes. Please upgrade your plan." }, { status: 403 });
-        }
+        const limit = planStatus.tier === "educator" ? 150 : 50;
 
 
         if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -161,9 +161,11 @@ export async function POST(req: NextRequest) {
         const response = await ai.models.generateContent({ model, contents: prompt });
         const struggleNote = response.text?.trim() ?? "User had an issue with this topic.";
 
-        await convex.mutation(api.knowledgePieces.appendContent, {
-            id: targetPieceId,
-            content: `---\n📌 Study Note (auto-generated): ${struggleNote}`,
+        await convex.mutation(api.knowledgeNodes.create, {
+            spaceId: test.spaceId,
+            knowledgePieceId: targetPieceId,
+            type: "feels_hard",
+            content: struggleNote,
         });
 
         await convex.mutation(api.deepDives.create, {

@@ -6,7 +6,9 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+function createConvexClient() {
+    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+}
 
 /**
  * Handle a POST chat request: validate inputs, persist the user's message, generate an AI tutor reply using Google Gemini, persist the AI reply, and return the AI response.
@@ -15,13 +17,27 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
  */
 export async function POST(req: NextRequest) {
     try {
-        const { userId, has } = await auth();
+        const { userId, has, getToken } = await auth();
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const hasConversationalAI = has({ feature: "conversational_ai" });
-        if (!hasConversationalAI) {
+        let token: string | null = null;
+        try {
+            token = await getToken({ template: "convex" });
+        } catch {
+            token = await getToken();
+        }
+        if (!token) {
+            return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
+        }
+
+        const convex = createConvexClient();
+        convex.setAuth(token);
+
+        const planStatus = await convex.query(api.planLimits.getPlan, {});
+
+        if (!planStatus.features.conversational_ai) {
             return NextResponse.json({ error: "Upgrade to Pro to chat further about answers!" }, { status: 403 });
         }
 

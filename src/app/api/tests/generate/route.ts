@@ -8,7 +8,9 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { getTestLimit } from "../../../../lib/testLimits";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+function createConvexClient() {
+    return new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+}
 
 const selectQuestionSchema = z.object({
     question: z.string().describe("The question text"),
@@ -86,11 +88,13 @@ function selectKnowledgePieces(pieces: KPiece[], knowledgePieceId?: string): KPi
 }
 
 async function resolveTestId(
+    convex: ConvexHttpClient,
     testId: string | undefined,
     spaceId: string,
     testType: string,
     topicLabel: string,
-    userId: string
+    userId: string,
+    knowledgePieceId?: string
 ): Promise<{ id: Id<"tests">; existingQuestions: { question: string }[] } | Response> {
 
     if (testId) {
@@ -113,6 +117,7 @@ async function resolveTestId(
         questionCount: 5,
         topicTitle: topicLabel,
         userId,
+        knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">,
     });
 
 
@@ -121,14 +126,24 @@ async function resolveTestId(
 
 function buildContextPrompt(
     existingQuestions: { question: string }[],
-    incorrectQuestions: { question: string; userAnswer?: string; aiFeedback?: string }[]
+    incorrectQuestions: { question: string; userAnswer?: string; aiFeedback?: string }[],
+    activeNodes: { _id: Id<"knowledgeNodes">, type: string, content: string }[]
 ): string {
     let contextPrompt = "";
     if (existingQuestions.length > 0) {
         contextPrompt += "\n\nCRITICAL: Do NOT ask questions similar to the following previously generated questions in this test:\n" +
             existingQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n");
     }
-    if (incorrectQuestions.length > 0) {
+
+    if (activeNodes.length > 0) {
+        // Pick a node probabilistically (for now, simply favor struggle nodes over improvement, or pick one randomly)
+        // A robust choice is to just pass the nodes and ask AI to focus on them.
+        contextPrompt += "\n\nThe student has specific learning focus areas (Knowledge Nodes). PLEASE PRIORITIZE testing these concepts:\n";
+        activeNodes.forEach((node, i) => {
+            contextPrompt += `${i + 1}. [${node.type.toUpperCase()}] ${node.content}\n`;
+        });
+        contextPrompt += "\nYou should formulate your question to directly address one of the concepts above if possible.\n";
+    } else if (incorrectQuestions.length > 0) {
         contextPrompt += "\n\nThe user previously struggled with the following questions. You CAN ask similar questions to test if they have learned from their mistakes, or create new ones targeting their weak points:\n" +
             incorrectQuestions.map((q, i) => `${i + 1}. Question: ${q.question}\n   User's wrong answer: ${q.userAnswer ?? "N/A"}\n   Correct concept feedback: ${q.aiFeedback ?? "N/A"}`).join("\n\n");
     }
@@ -151,10 +166,23 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: "Invalid testType — must be 'select' or 'write'" }), { status: 400 });
     }
 
-    const { userId, has } = await auth();
+    const { userId, has, getToken } = await auth();
     if (!userId) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
+
+    let token: string | null = null;
+    try {
+        token = await getToken({ template: "convex" });
+    } catch {
+        token = await getToken();
+    }
+    if (!token) {
+        return new Response(JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }), { status: 401 });
+    }
+
+    const convex = createConvexClient();
+    convex.setAuth(token);
 
     const MAX_TESTS = getTestLimit(has);
     if (MAX_TESTS === 0) {
@@ -193,7 +221,7 @@ export async function POST(req: NextRequest) {
     const firstPiece = selectedPieces[0]!;
     const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
 
-    const testResult = await resolveTestId(testId, spaceId, testType, topicLabel, userId);
+    const testResult = await resolveTestId(convex, testId, spaceId, testType, topicLabel, userId, knowledgePieceId);
     if (testResult instanceof Response) return testResult;
     const { id: activeTestId, existingQuestions } = testResult;
 
@@ -202,8 +230,40 @@ export async function POST(req: NextRequest) {
         topicTitle: topicLabel
     });
 
+    let activeNodes: { _id: Id<"knowledgeNodes">, type: string, content: string }[] = [];
+    const isPro = has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" });
+    if (knowledgePieceId && isPro) {
+        activeNodes = await convex.query(api.knowledgeNodes.getActiveForPiece, {
+            knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">
+        });
+    }
+
+    // Give higher probability to nodes. We can randomly pick one node to be the absolute focus.
+    let focusedNodeId: Id<"knowledgeNodes"> | undefined = undefined;
+    if (activeNodes.length > 0) {
+        // 70% chance to focus on a specific node, otherwise feed all of them.
+        if (Math.random() < 0.7) {
+            const weights = activeNodes.map(n => n.type === "struggle" ? 2 : 1);
+            const totalWeight = weights.reduce((a, b) => a + b, 0);
+            let rand = Math.random() * totalWeight;
+            let selectedNode = activeNodes[0];
+            for (let i = 0; i < activeNodes.length; i++) {
+                if (rand < weights[i]!) {
+                    selectedNode = activeNodes[i];
+                    break;
+                }
+                rand -= weights[i]!;
+            }
+            if (selectedNode) {
+                focusedNodeId = selectedNode._id;
+                activeNodes = [selectedNode]; // Only pass this one to the prompt
+            }
+        }
+    }
+
+
     const knowledgeText = selectedPieces.map(p => p.content).join("\n\n---\n\n");
-    const contextPrompt = buildContextPrompt(existingQuestions, incorrectQuestions);
+    const contextPrompt = buildContextPrompt(existingQuestions, incorrectQuestions, activeNodes);
 
     const prompt = `You are an expert educator. Generate EXACTLY ONE tricky, conceptual question (no simple definitions; focus on "why" and edge cases) based ONLY on the following knowledge pieces.
 
@@ -250,6 +310,7 @@ ${knowledgeText}`;
                     question: parsed.question,
                     options: parsedOptions,
                     answer: parsed.answer,
+                    knowledgeNodeId: focusedNodeId,
                 });
 
                 // Send the final event

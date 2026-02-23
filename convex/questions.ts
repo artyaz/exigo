@@ -9,6 +9,7 @@ export const create = mutation({
         question: v.string(),
         options: v.optional(v.array(v.string())),
         answer: v.optional(v.string()),
+        knowledgeNodeId: v.optional(v.id("knowledgeNodes")),
     },
     handler: async (ctx, args) => {
         const test = await ctx.db.get(args.testId);
@@ -25,6 +26,7 @@ export const create = mutation({
             question: args.question,
             options: args.options,
             answer: args.answer,
+            knowledgeNodeId: args.knowledgeNodeId,
         });
     },
 });

@@ -46,7 +46,11 @@ async function countTestsForSpacesSince(
 }
 
 async function countForUserThisMonthInternal(ctx: QueryCtx | MutationCtx, userId: string) {
-    const spaceIds = await getOwnedSpaceIds(ctx, userId);
+    const userSpaces = await ctx.db
+        .query("spaces")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect();
+    const spaceIds = userSpaces.map((space) => space._id);
     return await countTestsForSpacesSince(ctx, spaceIds, getStartOfMonthMs());
 }
 
@@ -68,14 +72,15 @@ async function getAuthenticatedUser(ctx: QueryCtx | MutationCtx) {
 // Status "active": the test is immediately usable — questions are generated
 // asynchronously one-by-one via the /api/tests/generate streaming endpoint.
 export const createEmptyTest = mutation({
-    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), topicTitle: v.optional(v.string()), userId: v.string() },
+    args: { spaceId: v.id("spaces"), type: v.string(), questionCount: v.number(), topicTitle: v.optional(v.string()), userId: v.string(), knowledgePieceId: v.optional(v.id("knowledgePieces")) },
     handler: async (ctx, args) => {
         const { userId, identity } = await getAuthenticatedUser(ctx);
         if (args.userId !== userId) {
             throw new Error("Unauthorized");
         }
 
-        const maxAllowed = getServerPlanLimitsForUser(userId, identity).maxTestsPerMonth;
+        const limits = getServerPlanLimitsForUser(userId, identity);
+        const maxAllowed = limits.maxTestsPerMonth;
         if (maxAllowed === 0) {
             throw new Error("You don't have access to test generation on your current plan. Please upgrade to continue.");
         }
@@ -92,7 +97,7 @@ export const createEmptyTest = mutation({
         const count = await countForUserThisMonthInternal(ctx, userId);
 
         if (count >= maxAllowed) {
-            throw new Error(`Limit reached: You can only create ${maxAllowed} tests per month on your current plan.`);
+            throw new Error(`Limit reached: You have created ${count} tests this month. Your current plan limit is ${maxAllowed}. Please upgrade for more!`);
         }
 
         return await ctx.db.insert("tests", {
@@ -103,6 +108,7 @@ export const createEmptyTest = mutation({
                 type: args.type,
                 questionCount: args.questionCount,
             },
+            knowledgePieceId: args.knowledgePieceId,
         });
     },
 });
@@ -189,7 +195,10 @@ export const updateStatus = mutation({
 export const getForSpace = query({
     args: { spaceId: v.id("spaces") },
     handler: async (ctx, args) => {
-        const { userId } = await getAuthenticatedUser(ctx);
+        const identity = await ctx.auth.getUserIdentity();
+        const userId = identity?.subject;
+        if (!userId) return [];
+
         const space = await ctx.db.get(args.spaceId);
         if (!space || (space.userId !== userId && space.userId !== "default_user")) {
             throw new Error("Unauthorized access to this space");
@@ -238,7 +247,10 @@ export const listAll = query({
 export const get = query({
     args: { testId: v.id("tests") },
     handler: async (ctx, args) => {
-        const { userId } = await getAuthenticatedUser(ctx);
+        const identity = await ctx.auth.getUserIdentity();
+        const userId = identity?.subject;
+        if (!userId) return null;
+
         const test = await ctx.db.get(args.testId);
         if (!test) {
             return null;

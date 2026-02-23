@@ -12,6 +12,15 @@ export default defineSchema({
         content: v.string(),
         source: v.optional(v.string()), // Might be file name or url
     }).index("by_space", ["spaceId"]),
+    knowledgeNodes: defineTable({
+        spaceId: v.id("spaces"),
+        knowledgePieceId: v.id("knowledgePieces"),
+        type: v.union(v.literal("struggle"), v.literal("improvement"), v.literal("feels_hard")),
+        content: v.string(),
+        resolutionScore: v.number(), // 0 to 100
+        isActive: v.boolean(),
+    }).index("by_space", ["spaceId"])
+        .index("by_piece", ["knowledgePieceId"]),
     tests: defineTable({
         spaceId: v.id("spaces"),
         topicTitle: v.optional(v.string()),
@@ -25,7 +34,9 @@ export default defineSchema({
             type: v.string(), // "select" or "write"
             questionCount: v.optional(v.number()),
         }),
-    }).index("by_space", ["spaceId"]),
+        knowledgePieceId: v.optional(v.id("knowledgePieces")),
+    }).index("by_space", ["spaceId"])
+        .index("by_piece", ["knowledgePieceId"]),
     questions: defineTable({
         testId: v.id("tests"),
         type: v.union(v.literal("select"), v.literal("write")),
@@ -35,6 +46,7 @@ export default defineSchema({
         userAnswer: v.optional(v.string()), // User's answer
         isCorrect: v.optional(v.boolean()),
         aiFeedback: v.optional(v.string()),
+        knowledgeNodeId: v.optional(v.id("knowledgeNodes")),
     }).index("by_test", ["testId"]),
     testMessages: defineTable({
         testId: v.id("tests"),
