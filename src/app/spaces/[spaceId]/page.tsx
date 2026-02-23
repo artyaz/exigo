@@ -17,8 +17,8 @@ import { useAuth } from "@clerk/nextjs";
 function hashCode(str: string) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) - hash) + str.charCodeAt(i);
-        hash |= 0;
+        hash = ((hash << 5) - hash) + (str.codePointAt(i) ?? 0);
+        hash = Math.trunc(hash);
     }
     return hash;
 }
@@ -53,12 +53,12 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const [title, setTitle] = useState("");
     const [source, setSource] = useState("");
     const [bulkContent, setBulkContent] = useState("");
-    const [delimiter, setDelimiter] = useState("\\n\\n");
+    const [delimiter, setDelimiter] = useState(String.raw`\n\n`);
     const [isAdding, setIsAdding] = useState(false);
 
     // Test generation
     const [testType, setTestType] = useState<"select" | "write">(() => {
-        if (typeof window !== "undefined") {
+        if (typeof globalThis.window !== "undefined") {
             const stored = localStorage.getItem("exigo_test_type");
             if (stored === "select" || stored === "write") return stored;
         }
@@ -154,7 +154,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         if (!bulkContent.trim()) return;
         setIsAdding(true);
         try {
-            const escaped = delimiter.replace(/\\n/g, '\n').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const escaped = delimiter.replaceAll('\n', '\n').replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
             const splitRegex = new RegExp(escaped);
             const parts = bulkContent.split(splitRegex).filter(p => p.trim().length > 0);
             const structuredPieces = parts.map(p => ({
@@ -407,9 +407,14 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                     const target = test.config?.questionCount ?? 5;
                                     const correctCount = testQuestions.filter(q => q.isCorrect === true).length;
                                     const wrongCount = testQuestions.filter(q => q.isCorrect === false).length;
-                                    const progressStatus = answeredCount >= target ? "done" as const
-                                        : answeredCount > 0 ? "in_progress" as const
-                                            : "new" as const;
+                                    let progressStatus: "done" | "in_progress" | "new";
+                                    if (answeredCount >= target) {
+                                        progressStatus = "done";
+                                    } else if (answeredCount > 0) {
+                                        progressStatus = "in_progress";
+                                    } else {
+                                        progressStatus = "new";
+                                    }
                                     const performance = answeredCount > 0
                                         ? correctCount / answeredCount
                                         : -1;
@@ -420,7 +425,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 });
 
                                 // Unique topics for filter
-                                const uniqueTopics = [...new Set(enriched.map(t => t.topicLabel))].sort();
+                                const uniqueTopics = [...new Set(enriched.map(t => t.topicLabel))].sort((a, b) => a.localeCompare(b));
 
                                 // Apply filters
                                 let filtered = enriched;

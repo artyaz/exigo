@@ -64,7 +64,7 @@ export default function PricingPage() {
 
     const isEducator = has ? has({ feature: "unlimited_ai_tests" }) : false;
     const isPro = has ? has({ feature: "pro_tests" }) : false;
-    const currentPlan = isEducator ? "Educator" : (isPro ? "Pro Scholar" : "Starter");
+    const currentPlan = isEducator ? "Educator" : isPro ? "Pro Scholar" : "Starter";
 
     // Keyboard shortcut for Pro upgrade (simulate press)
     useEffect(() => {
@@ -75,8 +75,8 @@ export default function PricingPage() {
                 openUserProfile();
             }
         };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
+        globalThis.addEventListener("keydown", handleKeyDown);
+        return () => globalThis.removeEventListener("keydown", handleKeyDown);
     }, [openUserProfile]);
 
     if (!isLoaded) {

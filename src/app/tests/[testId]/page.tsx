@@ -31,7 +31,7 @@ const STACK_VISIBLE = 3;
 /** Deterministic hash for pseudo-random card offsets */
 function cardHash(id: string, seed: number) {
     let h = seed;
-    for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+    for (let i = 0; i < id.length; i++) h = Math.trunc(((h << 5) - h + (id.codePointAt(i) ?? 0)));
     return h;
 }
 
@@ -103,7 +103,7 @@ function renderMarkdown(text: string): ReactNode[] {
         if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
 
         // Detect bullet-list lines: "* text", "*   text", "- text"
-        const bulletMatch = /^(\s*)[*\-]\s+(.*)/.exec(line);
+        const bulletMatch = /^(\s*)[*-]\s+(.*)/.exec(line);
         if (bulletMatch) {
             const indent = bulletMatch[1] ?? "";
             const content = bulletMatch[2] ?? "";
@@ -134,10 +134,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const [answers, setAnswers] = useState<Record<string, string>>({});
     const [isEvaluating, setIsEvaluating] = useState<Record<string, boolean>>({});
     const [isGeneratingNext, setIsGeneratingNext] = useState(false);
-    const [, setStreamingText] = useState("");
+    const [, setStreamingText] = useState(""); // value unused; only setter needed
     const [genError, setGenError] = useState<string | null>(null);
     const [retryNonce, setRetryNonce] = useState(0);
-    const [, setDirection] = useState(1); // 1 = forward, -1 = backward
+    const [, setDirection] = useState(1); // value unused; only setter needed
     const [prevQuestionsLength, setPrevQuestionsLength] = useState(0);
 
     // Chat State
@@ -323,7 +323,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
             // Number keys for select questions
             if (test?.config.type === "select" && currentQuestion.options && !answers[currentQuestion._id] && !currentQuestion.userAnswer) {
-                const num = parseInt(e.key);
+                const num = Number.parseInt(e.key);
                 const opt = currentQuestion.options[num - 1];
                 if (num >= 1 && num <= 4 && opt) {
                     e.preventDefault();
@@ -333,11 +333,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
             // Escape to go back
             if (e.key === "Escape") {
-                window.history.back();
+                globalThis.history.back();
             }
         };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
+        globalThis.addEventListener("keydown", handleKeyDown);
+        return () => globalThis.removeEventListener("keydown", handleKeyDown);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, currentIndex, currentQuestion, answers, test]);
 
@@ -404,11 +404,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     useEffect(() => {
         if (!contextMenu) return;
         const close = () => setContextMenu(null);
-        window.addEventListener("click", close);
-        window.addEventListener("scroll", close, true);
+        globalThis.addEventListener("click", close);
+        globalThis.addEventListener("scroll", close, true);
         return () => {
-            window.removeEventListener("click", close);
-            window.removeEventListener("scroll", close, true);
+            globalThis.removeEventListener("click", close);
+            globalThis.removeEventListener("scroll", close, true);
         };
     }, [contextMenu]);
 

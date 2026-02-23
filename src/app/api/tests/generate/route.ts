@@ -71,6 +71,73 @@ async function fetchGeminiStream(ai: GoogleGenAI, prompt: string, schema: ZodTyp
     throw new Error("Failed to get stream after retries");
 }
 
+function getTestLimit(has: (params: { feature: string }) => boolean): number {
+    if (has({ feature: "unlimited_ai_tests" })) return Infinity;
+    if (has({ feature: "pro_tests" })) return 100;
+    return 10;
+}
+
+type KPiece = { _id: Id<"knowledgePieces">; content: string; title?: string };
+
+function selectKnowledgePieces(pieces: KPiece[], knowledgePieceId?: string): KPiece[] | Response {
+    if (knowledgePieceId) {
+        const target = pieces.find(p => String(p._id) === knowledgePieceId);
+        if (!target) {
+            return new Response(JSON.stringify({ error: "Knowledge piece not found" }), { status: 404 });
+        }
+        return [target];
+    }
+    // Using Math.random is safe here for non-cryptographic knowledge piece selection.
+    return [pieces[Math.floor(Math.random() * pieces.length)]!];
+}
+
+async function resolveTestId(
+    testId: string | undefined,
+    spaceId: string,
+    testType: string,
+    topicLabel: string,
+    userId: string
+): Promise<{ id: Id<"tests">; existingQuestions: { question: string }[] } | Response> {
+    if (testId) {
+        const existingTest = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
+        if (!existingTest) {
+            return new Response(JSON.stringify({ error: "Test not found" }), { status: 404 });
+        }
+        if (String(existingTest.spaceId) !== spaceId) {
+            return new Response(JSON.stringify({ error: "Test does not belong to this space" }), { status: 400 });
+        }
+        if (existingTest.config.type !== testType) {
+            return new Response(JSON.stringify({ error: "Test type mismatch" }), { status: 400 });
+        }
+        const existingQuestions = await convex.query(api.questions.getForTest, { testId: testId as Id<"tests"> });
+        return { id: testId as Id<"tests">, existingQuestions };
+    }
+    const id = await convex.mutation(api.tests.createEmptyTest, {
+        spaceId: spaceId as Id<"spaces">,
+        type: testType,
+        questionCount: 5,
+        topicTitle: topicLabel,
+        userId,
+    });
+    return { id, existingQuestions: [] };
+}
+
+function buildContextPrompt(
+    existingQuestions: { question: string }[],
+    incorrectQuestions: { question: string; userAnswer?: string; aiFeedback?: string }[]
+): string {
+    let contextPrompt = "";
+    if (existingQuestions.length > 0) {
+        contextPrompt += "\n\nCRITICAL: Do NOT ask questions similar to the following previously generated questions in this test:\n" +
+            existingQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n");
+    }
+    if (incorrectQuestions.length > 0) {
+        contextPrompt += "\n\nThe user previously struggled with the following questions. You CAN ask similar questions to test if they have learned from their mistakes, or create new ones targeting their weak points:\n" +
+            incorrectQuestions.map((q, i) => `${i + 1}. Question: ${q.question}\n   User's wrong answer: ${q.userAnswer ?? "N/A"}\n   Correct concept feedback: ${q.aiFeedback ?? "N/A"}`).join("\n\n");
+    }
+    return contextPrompt;
+}
+
 export async function POST(req: NextRequest) {
     const rawBody = await req.json() as Record<string, unknown>;
     const spaceId = rawBody.spaceId as string;
@@ -92,15 +159,8 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
 
-    const hasUnlimitedTests = has({ feature: "unlimited_ai_tests" });
-    const hasProTests = has({ feature: "pro_tests" });
-
-    // Determine limit
-    const MAX_TESTS = hasUnlimitedTests ? Infinity : (hasProTests ? 100 : 10);
-
-    // Check count for user this month
+    const MAX_TESTS = getTestLimit(has);
     const testsThisMonth = await convex.query(api.tests.countForUserThisMonth, { userId });
-
     if (testsThisMonth >= MAX_TESTS) {
         return new Response(JSON.stringify({
             error: "Limit Reached",
@@ -110,55 +170,20 @@ export async function POST(req: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
     const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
-
     if (!pieces || pieces.length === 0) {
         return new Response(JSON.stringify({ error: "No knowledge pieces" }), { status: 400 });
     }
 
-    // Select knowledge piece(s): specific one, or random
-    type KPiece = (typeof pieces)[number];
-    let selectedPieces: KPiece[];
-    if (knowledgePieceId) {
-        const target = pieces.find(p => String(p._id) === knowledgePieceId);
-        if (!target) {
-            return new Response(JSON.stringify({ error: "Knowledge piece not found" }), { status: 404 });
-        }
-        selectedPieces = [target];
-    } else {
-        // Random selection: pick one random piece
-        // Using Math.random is safe here for non-cryptographic knowledge piece selection.
-        selectedPieces = [pieces[Math.floor(Math.random() * pieces.length)]!];
-    }
+    const selectedResult = selectKnowledgePieces(pieces, knowledgePieceId);
+    if (selectedResult instanceof Response) return selectedResult;
+    const selectedPieces = selectedResult;
 
     const firstPiece = selectedPieces[0]!;
     const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
 
-    let existingQuestions: { question: string }[] = [];
-    let activeTestId: Id<"tests">;
-
-    if (testId) {
-        // Verify test belongs to this space and matches requested type
-        const existingTest = await convex.query(api.tests.get, { testId: testId as Id<"tests"> });
-        if (!existingTest) {
-            return new Response(JSON.stringify({ error: "Test not found" }), { status: 404 });
-        }
-        if (String(existingTest.spaceId) !== spaceId) {
-            return new Response(JSON.stringify({ error: "Test does not belong to this space" }), { status: 400 });
-        }
-        if (existingTest.config.type !== testType) {
-            return new Response(JSON.stringify({ error: "Test type mismatch" }), { status: 400 });
-        }
-        activeTestId = testId as Id<"tests">;
-        existingQuestions = await convex.query(api.questions.getForTest, { testId: activeTestId });
-    } else {
-        activeTestId = await convex.mutation(api.tests.createEmptyTest, {
-            spaceId: spaceId as Id<"spaces">,
-            type: testType,
-            questionCount: 5,
-            topicTitle: topicLabel,
-            userId: userId,
-        });
-    }
+    const testResult = await resolveTestId(testId, spaceId, testType, topicLabel, userId);
+    if (testResult instanceof Response) return testResult;
+    const { id: activeTestId, existingQuestions } = testResult;
 
     const incorrectQuestions = await convex.query(api.questions.getIncorrectForTopic, {
         spaceId: spaceId as Id<"spaces">,
@@ -166,16 +191,7 @@ export async function POST(req: NextRequest) {
     });
 
     const knowledgeText = selectedPieces.map(p => p.content).join("\n\n---\n\n");
-    let contextPrompt = "";
-    if (existingQuestions.length > 0) {
-        contextPrompt += "\n\nCRITICAL: Do NOT ask questions similar to the following previously generated questions in this test:\n" +
-            existingQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n");
-    }
-
-    if (incorrectQuestions.length > 0) {
-        contextPrompt += "\n\nThe user previously struggled with the following questions. You CAN ask similar questions to test if they have learned from their mistakes, or create new ones targeting their weak points:\n" +
-            incorrectQuestions.map((q, i) => `${i + 1}. Question: ${q.question}\n   User's wrong answer: ${q.userAnswer ?? "N/A"}\n   Correct concept feedback: ${q.aiFeedback ?? "N/A"}`).join("\n\n");
-    }
+    const contextPrompt = buildContextPrompt(existingQuestions, incorrectQuestions);
 
     const prompt = `You are an expert educator. Generate EXACTLY ONE tricky, conceptual question (no simple definitions; focus on "why" and edge cases) based ONLY on the following knowledge pieces.
 
