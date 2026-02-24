@@ -53,14 +53,19 @@ export const get = query({
 export const create = mutation({
     args: { name: v.string(), userId: v.string() },
     handler: async (ctx, args) => {
+        console.log("MUTATION: spaces.create started", { args });
         const identity = await ctx.auth.getUserIdentity();
         const authenticatedUserId = identity?.subject;
         
+        console.log("MUTATION: identity check", { authenticatedUserId, argsUserId: args.userId });
+
         if (!authenticatedUserId) {
+            console.error("MUTATION: No authenticatedUserId found");
             throw new Error("Unauthorized: No identity found in Convex.");
         }
         
         if (authenticatedUserId !== args.userId) {
+            console.error("MUTATION: userId mismatch", { auth: authenticatedUserId, args: args.userId });
             throw new Error(`Unauthorized: Identity mismatch. Auth: ${authenticatedUserId}, Args: ${args.userId}`);
         }
 
@@ -75,9 +80,12 @@ export const create = mutation({
         console.log(`[Space Creation] User: ${args.userId}, Tier Limit: ${serverLimit}, Current Count: ${currentCount}`);
 
         if (serverLimit !== Infinity && currentCount >= serverLimit) {
+            console.warn("MUTATION: limit reached", { currentCount, serverLimit });
             throw new Error(`Limit reached: You can only have ${serverLimit} spaces on your current plan.`);
         }
 
-        return await ctx.db.insert("spaces", { name: args.name, userId: args.userId });
+        const id = await ctx.db.insert("spaces", { name: args.name, userId: args.userId });
+        console.log("MUTATION: space created", { id });
+        return id;
     },
 });

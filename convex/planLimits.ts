@@ -143,29 +143,32 @@ export function getServerPlanLimitsForUser(userId: string, identityLike?: Record
     if (!identityLike) return FREE_TIER_LIMITS;
 
     const detectedTier = detectPlanTier(identityLike);
+    const signals = collectPlanSignalValues(identityLike);
 
     const isEducator =
         detectedTier === "educator" ||
         hasFeature(identityLike, "unlimited_ai_tests") ||
         hasFeature(identityLike, "unlimited_knowledge");
 
-    if (isEducator) {
-        return EDUCATOR_TIER_LIMITS;
-    }
-
     const isPro =
         detectedTier === "pro" ||
         hasFeature(identityLike, "pro_tests") ||
         hasFeature(identityLike, "pro_knowledge");
 
-    if (isPro) {
-        return PRO_TIER_LIMITS;
-    }
-
     const isBasic =
         detectedTier === "basic" ||
         hasFeature(identityLike, "basic_tests") ||
         hasFeature(identityLike, "basic_knowledge");
+
+    console.log(`[Plan Detection] User: ${userId}, Tier: ${detectedTier}, Educator: ${isEducator}, Pro: ${isPro}, Basic: ${isBasic}, Signals:`, signals);
+
+    if (isEducator) {
+        return EDUCATOR_TIER_LIMITS;
+    }
+
+    if (isPro) {
+        return PRO_TIER_LIMITS;
+    }
 
     if (isBasic) {
         return BASIC_TIER_LIMITS;
