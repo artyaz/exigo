@@ -32,112 +32,92 @@ const FREE_TIER_LIMITS: ServerPlanLimits = {
 };
 
 const PLAN_KEYS = ["plan", "tier", "subscriptionPlan", "subscriptionTier"] as const;
+const PLAN_FEATURE_FLAGS = [
+    "unlimited_ai_tests",
+    "unlimited_knowledge",
+    "pro_tests",
+    "pro_knowledge",
+    "basic_tests",
+    "basic_knowledge"
+] as const;
 
 type DetectedTier = "free" | "basic" | "pro" | "educator" | null;
 
 export { DEEP_DIVE_LIMITS_BY_TIER, getDeepDiveLimitForTier };
 export { PLAN_LIMIT_CODE };
 
-function deepFindAll(obj: unknown, key: string, visited = new Set<object>()): unknown[] {
-    if (!obj || typeof obj !== "object") {
-        return [];
-    }
-
-    const record = obj as Record<string, unknown>;
-    if (visited.has(record)) {
-        return [];
-    }
-    visited.add(record);
-
-    const found: unknown[] = [];
-    if (Object.prototype.hasOwnProperty.call(record, key)) {
-        found.push(record[key]);
-    }
-
-    for (const value of Object.values(record)) {
-        found.push(...deepFindAll(value, key, visited));
-    }
-
-    return found;
-}
-
+/**
+ * Robustly checks for a feature flag in the user identity metadata.
+ * Restricts search to standard Clerk metadata locations to avoid false positives.
+ */
 export function hasFeature(identity: Record<string, unknown>, feature: string): boolean {
-    const values = deepFindAll(identity, feature);
-    return values.some((value) => value === true || value === "true" || value === 1 || value === "1");
+    const searchTargets = [
+        identity,
+        identity.publicMetadata,
+        identity.privateMetadata,
+        identity.unsafeMetadata,
+        (identity.organization as any)?.publicMetadata,
+        (identity.organization as any)?.privateMetadata,
+        (identity.organization as any)?.unsafeMetadata,
+    ];
+
+    for (const target of searchTargets) {
+        if (target && typeof target === "object") {
+            const val = (target as Record<string, unknown>)[feature];
+            if (val === true || val === "true" || val === 1 || val === "1") {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 function normalizePlanToken(value: unknown): string {
     return String(value ?? "").trim().toLowerCase();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null;
-}
-
-function getOwn(record: Record<string, unknown>, key: string): unknown {
-    return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
-}
-
 function collectPlanSignalValues(identityLike: Record<string, unknown>): unknown[] {
     const values: unknown[] = [];
 
-    const pushPlanKeys = (candidate: unknown) => {
-        if (!isRecord(candidate)) return;
+    const addValues = (target: any) => {
+        if (!target || typeof target !== "object") return;
         for (const key of PLAN_KEYS) {
-            const raw = getOwn(candidate, key);
-            if (raw !== undefined) {
-                values.push(raw);
+            if (Object.prototype.hasOwnProperty.call(target, key)) {
+                values.push(target[key]);
             }
         }
     };
 
-    // Top-level identity fields.
-    pushPlanKeys(identityLike);
-    // Common metadata locations used with Clerk.
-    pushPlanKeys(getOwn(identityLike, "publicMetadata"));
-    pushPlanKeys(getOwn(identityLike, "privateMetadata"));
-    pushPlanKeys(getOwn(identityLike, "unsafeMetadata"));
-
-    const organization = getOwn(identityLike, "organization");
-    if (isRecord(organization)) {
-        pushPlanKeys(organization);
-        pushPlanKeys(getOwn(organization, "publicMetadata"));
-        pushPlanKeys(getOwn(organization, "privateMetadata"));
-        pushPlanKeys(getOwn(organization, "unsafeMetadata"));
+    addValues(identityLike);
+    addValues(identityLike.publicMetadata);
+    addValues(identityLike.privateMetadata);
+    addValues(identityLike.unsafeMetadata);
+    
+    const org = identityLike.organization as any;
+    if (org) {
+        addValues(org);
+        addValues(org.publicMetadata);
+        addValues(org.privateMetadata);
+        addValues(org.unsafeMetadata);
     }
 
     return values;
 }
 
-function tokenizePlanValue(value: unknown): string[] {
-    return normalizePlanToken(value)
-        .split(/[^a-z0-9]+/)
-        .filter(Boolean);
-}
-
-function hasAnyToken(tokens: string[], candidates: string[]): boolean {
-    return candidates.some((candidate) => tokens.includes(candidate));
-}
-
 function detectPlanTier(identityLike: Record<string, unknown>): DetectedTier {
     const planValues = collectPlanSignalValues(identityLike);
-    const tokens = planValues.flatMap((value) => tokenizePlanValue(value));
+    
+    const isMatch = (candidates: string[]) => {
+        return planValues.some(val => {
+            const normalized = normalizePlanToken(val);
+            return candidates.some(c => normalized.includes(c));
+        });
+    };
 
-    if (hasAnyToken(tokens, ["educator", "teacher"])) {
-        return "educator";
-    }
-
-    if (hasAnyToken(tokens, ["pro", "scholar", "premium", "plus"])) {
-        return "pro";
-    }
-
-    if (hasAnyToken(tokens, ["basic", "starter"])) {
-        return "basic";
-    }
-
-    if (hasAnyToken(tokens, ["free"])) {
-        return "free";
-    }
+    if (isMatch(["educator", "teacher"])) return "educator";
+    if (isMatch(["pro", "scholar", "premium", "plus"])) return "pro";
+    if (isMatch(["basic", "starter"])) return "basic";
+    if (isMatch(["free"])) return "free";
 
     return null;
 }
@@ -210,24 +190,27 @@ export const getPlan = query({
             };
         }
 
-        const limits = getServerPlanLimitsForUser(identity.subject, identity);
-        const detectedTier = detectPlanTier(identity);
+        // Cast to Record<string, unknown> for helper functions
+        const identityLike = identity as unknown as Record<string, unknown>;
+
+        const limits = getServerPlanLimitsForUser(identity.subject, identityLike);
+        const detectedTier = detectPlanTier(identityLike);
 
         const isEducator =
             detectedTier === "educator" ||
-            hasFeature(identity, "unlimited_ai_tests") ||
-            hasFeature(identity, "unlimited_knowledge");
+            hasFeature(identityLike, "unlimited_ai_tests") ||
+            hasFeature(identityLike, "unlimited_knowledge");
 
         const isPro =
             isEducator ||
             detectedTier === "pro" ||
-            hasFeature(identity, "pro_tests") ||
-            hasFeature(identity, "pro_knowledge");
+            hasFeature(identityLike, "pro_tests") ||
+            hasFeature(identityLike, "pro_knowledge");
 
         const isBasic =
             detectedTier === "basic" ||
-            hasFeature(identity, "basic_tests") ||
-            hasFeature(identity, "basic_knowledge");
+            hasFeature(identityLike, "basic_tests") ||
+            hasFeature(identityLike, "basic_knowledge");
 
         let tier: "free" | "basic" | "pro" | "educator" = "free";
         if (isEducator) {
