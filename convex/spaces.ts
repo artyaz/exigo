@@ -66,6 +66,9 @@ export const create = mutation({
         const currentCount = spaces.length;
 
         const serverLimit = getServerPlanLimitsForUser(args.userId, identity).maxSpaces;
+        
+        console.log(`[Space Creation] User: ${args.userId}, Tier Limit: ${serverLimit}, Current Count: ${currentCount}`);
+
         if (serverLimit !== Infinity && currentCount >= serverLimit) {
             throw new Error(`Limit reached: You can only have ${serverLimit} spaces on your current plan.`);
         }

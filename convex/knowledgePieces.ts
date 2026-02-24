@@ -39,6 +39,9 @@ export const add = mutation({
         const identity = await ctx.auth.getUserIdentity();
         const serverLimit = getServerPlanLimitsForUser(userId, identity).maxKnowledgePiecesPerSpace;
         const projectedTotal = existingPieces.length + 1;
+
+        console.log(`[Knowledge Piece Addition] User: ${userId}, Space: ${args.spaceId}, Tier Limit: ${serverLimit}, Current Pieces: ${existingPieces.length}`);
+
         if (serverLimit !== Infinity && projectedTotal > serverLimit) {
             throw new Error(`Limit reached: You can only have ${serverLimit} knowledge pieces per space on your current plan.`);
         }
@@ -110,6 +113,9 @@ export const bulkImport = mutation({
         const serverLimit = getServerPlanLimitsForUser(userId, identity).maxKnowledgePiecesPerSpace;
         const nonEmptyIncomingCount = args.pieces.filter((piece) => piece.content.trim() !== "").length;
         const projectedTotal = existingPieces.length + nonEmptyIncomingCount;
+
+        console.log(`[Knowledge Piece Bulk Import] User: ${userId}, Space: ${args.spaceId}, Incoming: ${nonEmptyIncomingCount}, Current: ${existingPieces.length}, Tier Limit: ${serverLimit}`);
+
         if (serverLimit !== Infinity && projectedTotal > serverLimit) {
             throw new Error(`Limit reached: Bulk import would exceed the limit of ${serverLimit} knowledge pieces per space.`);
         }
