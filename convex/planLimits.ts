@@ -47,7 +47,7 @@ const PLAN_FEATURE_FLAGS = [
     "basic_knowledge"
 ] as const;
 
-type DetectedTier = "free" | "basic" | "pro" | "educator" | null;
+type DetectedTier = "free" | "basic" | "pro" | "educator" | "limited" | null;
 
 export { DEEP_DIVE_LIMITS_BY_TIER, getDeepDiveLimitForTier };
 export { PLAN_LIMIT_CODE };
@@ -224,13 +224,17 @@ export const getPlan = query({
             hasFeature(identityLike, "basic_tests") ||
             hasFeature(identityLike, "basic_knowledge");
 
-        let tier: "free" | "basic" | "pro" | "educator" = "free";
+        const isLimited = detectedTier === "limited";
+
+        let tier: "free" | "basic" | "pro" | "educator" | "limited" = "free";
         if (isEducator) {
             tier = "educator";
         } else if (isPro) {
             tier = "pro";
         } else if (isBasic) {
             tier = "basic";
+        } else if (isLimited) {
+            tier = "limited";
         }
 
         return {
