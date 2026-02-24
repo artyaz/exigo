@@ -86,7 +86,7 @@ export const createEmptyTest = mutation({
             throw new Error("Space not found");
         }
 
-        if (space.userId !== userId && space.userId !== "default_user") {
+        if (space.userId !== userId) {
             throw new Error("Unauthorized access to this space");
         }
 
@@ -130,7 +130,7 @@ export const create = mutation({
             throw new Error("Space not found");
         }
 
-        if (space.userId !== userId && space.userId !== "default_user") {
+        if (space.userId !== userId) {
             throw new Error("Unauthorized access to this space");
         }
 
@@ -173,7 +173,7 @@ export const updateStatus = mutation({
         if (!test) throw new Error("Test not found");
 
         const space = await ctx.db.get(test.spaceId);
-        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+        if (!space || space.userId !== userId) {
             throw new Error("Unauthorized access to this test");
         }
 
@@ -196,7 +196,7 @@ export const getForSpace = query({
         if (!userId) return [];
 
         const space = await ctx.db.get(args.spaceId);
-        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+        if (!space || space.userId !== userId) {
             throw new Error("Unauthorized access to this space");
         }
 
@@ -217,7 +217,7 @@ export const listAll = query({
         const enriched = await Promise.all(
             tests.map(async (test) => {
                 const space = await ctx.db.get(test.spaceId);
-                if (!space || (space.userId !== args.userId && space.userId !== "default_user")) return null;
+                if (!space || space.userId !== args.userId) return null;
                 const questions = await ctx.db
                     .query("questions")
                     .withIndex("by_test", (q) => q.eq("testId", test._id))
@@ -253,7 +253,7 @@ export const get = query({
         }
 
         const space = await ctx.db.get(test.spaceId);
-        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+        if (!space || space.userId !== userId) {
             throw new Error("Unauthorized access to this test");
         }
 
@@ -297,7 +297,7 @@ export const createWithQuestions = mutation({
             throw new Error("Space not found");
         }
 
-        if (space.userId !== userId && space.userId !== "default_user") {
+        if (space.userId !== userId) {
             throw new Error("Unauthorized access to this space");
         }
 

@@ -31,6 +31,12 @@ const FREE_TIER_LIMITS: ServerPlanLimits = {
     maxKnowledgePiecesPerSpace: 20,
 };
 
+const LIMITED_TIER_LIMITS: ServerPlanLimits = {
+    maxSpaces: 0,
+    maxTestsPerMonth: 0,
+    maxKnowledgePiecesPerSpace: 0,
+};
+
 const PLAN_KEYS = ["plan", "tier", "subscriptionPlan", "subscriptionTier"] as const;
 const PLAN_FEATURE_FLAGS = [
     "unlimited_ai_tests",
@@ -117,6 +123,7 @@ function detectPlanTier(identityLike: Record<string, unknown>): DetectedTier {
     if (isMatch(["educator", "teacher"])) return "educator";
     if (isMatch(["pro", "scholar", "premium", "plus"])) return "pro";
     if (isMatch(["basic", "starter"])) return "basic";
+    if (isMatch(["limited", "restricted"])) return "limited";
     if (isMatch(["free"])) return "free";
 
     return null;
@@ -160,8 +167,6 @@ export function getServerPlanLimitsForUser(userId: string, identityLike?: Record
         hasFeature(identityLike, "basic_tests") ||
         hasFeature(identityLike, "basic_knowledge");
 
-    console.log(`[Plan Detection] User: ${userId}, Tier: ${detectedTier}, Educator: ${isEducator}, Pro: ${isPro}, Basic: ${isBasic}, Signals:`, signals);
-
     if (isEducator) {
         return EDUCATOR_TIER_LIMITS;
     }
@@ -172,6 +177,10 @@ export function getServerPlanLimitsForUser(userId: string, identityLike?: Record
 
     if (isBasic) {
         return BASIC_TIER_LIMITS;
+    }
+
+    if (detectedTier === "limited") {
+        return LIMITED_TIER_LIMITS;
     }
 
     return FREE_TIER_LIMITS;

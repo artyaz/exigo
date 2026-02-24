@@ -48,7 +48,7 @@ async function createSpaceHandler(ctx: any, args: { name: string, userId: string
     const currentCount = mockSpaces.length;
 
     const serverLimit = getServerPlanLimitsForUser(args.userId, identity).maxSpaces;
-    if (serverLimit !== Infinity && currentCount >= serverLimit) {
+    if (serverLimit !== UNLIMITED_LIMIT && currentCount >= serverLimit) {
         throw new Error(`Limit reached: You can only have ${serverLimit} spaces on your current plan.`);
     }
 
@@ -63,7 +63,7 @@ async function addKnowledgePieceHandler(ctx: any, args: { spaceId: any, content:
     }
 
     const space = await ctx.db.get(args.spaceId);
-    if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+    if (!space || space.userId !== userId) {
         throw new Error("Unauthorized access to this space");
     }
 
@@ -73,7 +73,7 @@ async function addKnowledgePieceHandler(ctx: any, args: { spaceId: any, content:
 
     const serverLimit = getServerPlanLimitsForUser(userId, identity).maxKnowledgePiecesPerSpace;
     const projectedTotal = existingPieces.length + 1;
-    if (serverLimit !== Infinity && projectedTotal > serverLimit) {
+    if (serverLimit !== UNLIMITED_LIMIT && projectedTotal > serverLimit) {
         throw new Error(`Limit reached: You can only have ${serverLimit} knowledge pieces per space on your current plan.`);
     }
 
@@ -97,7 +97,7 @@ async function createEmptyTestHandler(ctx: any, args: { spaceId: any, userId: st
     }
 
     const space = await ctx.db.get(args.spaceId);
-    if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+    if (!space || space.userId !== userId) {
         throw new Error("Unauthorized access to this space");
     }
 
@@ -125,7 +125,7 @@ async function bulkImportHandler(ctx: any, args: { spaceId: any, pieces: any[] }
     }
 
     const space = await ctx.db.get(args.spaceId);
-    if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+    if (!space || space.userId !== userId) {
         throw new Error("Unauthorized access to this space");
     }
 
@@ -137,7 +137,7 @@ async function bulkImportHandler(ctx: any, args: { spaceId: any, pieces: any[] }
     const nonEmptyIncomingCount = args.pieces.filter((piece) => piece.content.trim() !== "").length;
     const projectedTotal = existingPieces.length + nonEmptyIncomingCount;
     
-    if (serverLimit !== Infinity && projectedTotal > serverLimit) {
+    if (serverLimit !== UNLIMITED_LIMIT && projectedTotal > serverLimit) {
         throw new Error(`Limit reached: Bulk import would exceed the limit of ${serverLimit} knowledge pieces per space.`);
     }
 
@@ -236,6 +236,19 @@ describe('Convex Limit Enforcement & Security', () => {
     });
 
     describe('Test Generation Limits', () => {
+        it('throws exact error for plan with 0 tests allowed', async () => {
+            const userId = 'user_limited';
+            const ctx = createMockCtx(userId, { publicMetadata: { plan: 'limited' } });
+            
+            // Mock empty tests
+            const mockCollect = vi.fn().mockResolvedValue([]);
+            (ctx.db.query as any).mockReturnValue({ withIndex: () => ({ collect: mockCollect }) });
+            
+            await expect(
+                createEmptyTestHandler(ctx, { spaceId: 'any_space' as any, userId, type: 'select', questionCount: 5 })
+            ).rejects.toThrow("You don't have access to test generation on your current plan.");
+        });
+
         it('blocks creating a test when at the limit (free plan)', async () => {
             const ctx = createMockCtx('user_free');
             ctx.db.get.mockResolvedValue({ userId: 'user_free' });
