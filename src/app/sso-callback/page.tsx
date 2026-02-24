@@ -15,8 +15,8 @@ export default function SSOCallback() {
                 <AuthenticateWithRedirectCallback
                     signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
                     signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
-                    signInFallbackRedirectUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL || "/spaces"}
-                    signUpFallbackRedirectUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL || "/spaces"}
+                    signInFallbackRedirectUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL ?? "/spaces"}
+                    signUpFallbackRedirectUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL ?? "/spaces"}
                     continueSignUpUrl="/sign-up"
                     verifyEmailAddressUrl="/sign-up"
                     verifyPhoneNumberUrl="/sign-up"
