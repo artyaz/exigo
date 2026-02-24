@@ -31,6 +31,7 @@ export function AuthLayout({ children, title, subtitle }: { children: ReactNode,
                         <p className="text-secondary text-sm">{subtitle}</p>
                     </div>
                     {children}
+                    <div id="clerk-captcha" className="mt-2" />
                 </div>
             </div>
         </div>

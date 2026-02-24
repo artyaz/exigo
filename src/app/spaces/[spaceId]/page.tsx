@@ -16,6 +16,14 @@ import { useAuth } from "@clerk/nextjs";
 import { addKnowledgePieceAction, bulkImportKnowledgeAction } from "../../actions/knowledge";
 import { createTestServerAction } from "../../actions/spaces";
 import { RESOLUTION_THRESHOLD } from "../../../../shared/planConfig";
+import {
+    appearsToBeCsvWithWrongHeaders,
+    parseCsvKnowledgePieces,
+    parseDelimiterKnowledgePieces,
+    type BulkImportPiece,
+} from "~/lib/bulkImportParser";
+
+const MAX_BULK_UPLOAD_BYTES = 9 * 1024 * 1024;
 
 function hashCode(str: string) {
     let hash = 0;
@@ -77,7 +85,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const [content, setContent] = useState("");
     const [title, setTitle] = useState("");
     const [source, setSource] = useState("");
-    const [bulkContent, setBulkContent] = useState("");
+    const [bulkFileName, setBulkFileName] = useState("");
+    const [bulkFileContent, setBulkFileContent] = useState("");
     const [delimiter, setDelimiter] = useState(String.raw`\n\n`);
     const [isAdding, setIsAdding] = useState(false);
 
@@ -95,6 +104,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
     const [testGenerateError, setTestGenerateError] = useState<string | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const bulkFileInputRef = useRef<HTMLInputElement>(null);
 
     // Test card hover
     const [hoveredTestId, setHoveredTestId] = useState<string | null>(null);
@@ -185,27 +195,64 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         }
     };
 
+    const handleBulkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) {
+            setBulkFileName("");
+            setBulkFileContent("");
+            return;
+        }
+
+        if (file.size > MAX_BULK_UPLOAD_BYTES) {
+            setBulkFileName("");
+            setBulkFileContent("");
+            if (bulkFileInputRef.current) {
+                bulkFileInputRef.current.value = "";
+            }
+            alert("File is too large. Maximum supported upload size is 9 MB.");
+            return;
+        }
+
+        try {
+            const text = await file.text();
+            setBulkFileName(file.name);
+            setBulkFileContent(text);
+        } catch (error) {
+            console.error("Failed to read bulk import file", error);
+            setBulkFileName("");
+            setBulkFileContent("");
+            if (bulkFileInputRef.current) {
+                bulkFileInputRef.current.value = "";
+            }
+            alert("Could not read selected file. Please try another file.");
+        }
+    };
+
     const handleBulkImport = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!bulkContent.trim()) return;
+        if (!bulkFileContent.trim()) return;
         setIsAdding(true);
         try {
-            const escaped = delimiter.replaceAll('\n', '\n').replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-            const splitRegex = new RegExp(escaped);
-            const parts = bulkContent.split(splitRegex).filter(p => p.trim().length > 0);
-            const structuredPieces = parts.map(p => ({
-                content: p.trim(),
-                source: source.trim() || undefined
-            }));
+            const resolvedSource = source.trim() || undefined;
+            const csvPieces = parseCsvKnowledgePieces(bulkFileContent, resolvedSource);
+            if (!csvPieces && appearsToBeCsvWithWrongHeaders(bulkFileContent)) {
+                throw new Error('CSV format is invalid. Expected headers: Content,Name');
+            }
+
+            const structuredPieces: BulkImportPiece[] = csvPieces ?? parseDelimiterKnowledgePieces(bulkFileContent, delimiter, resolvedSource);
+            if (structuredPieces.length === 0) {
+                throw new Error("No importable knowledge pieces found.");
+            }
+
             const ids = await bulkImportKnowledgeAction(sId, structuredPieces);
 
-            // Auto-generate titles for each piece
-            parts.forEach((part, i) => {
-                if (ids[i]) {
+            // Auto-generate titles only for entries that did not provide a title.
+            structuredPieces.forEach((piece, i) => {
+                if (ids[i] && !piece.title?.trim()) {
                     void fetch("/api/knowledge/title", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ content: part.trim().slice(0, 2000) }),
+                        body: JSON.stringify({ content: piece.content.slice(0, 2000) }),
                     })
                         .then(res => res.json() as Promise<{ title?: string }>)
                         .then(data => {
@@ -221,7 +268,11 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 }
             });
 
-            setBulkContent("");
+            setBulkFileName("");
+            setBulkFileContent("");
+            if (bulkFileInputRef.current) {
+                bulkFileInputRef.current.value = "";
+            }
         } catch (err) {
             console.error("Bulk import failed", err);
             alert((err as Error).message);
@@ -235,22 +286,24 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         setTestGenerateError(null);
         setIsGenerating(true);
         try {
-            const topicLabel = selectedTopic
-                ? (selectedTopic.title ?? selectedTopic.content.slice(0, 40))
-                : "Random";
+            const selectedTopicInPieces = pieces.find(p => String(p._id) === selectedTopicId);
+            const resolvedTopic = selectedTopicInPieces ?? pieces[Math.floor(Math.random() * pieces.length)];
+            if (!resolvedTopic) {
+                throw new Error("No topic available for test generation.");
+            }
+            const resolvedTopicId = String(resolvedTopic._id);
+            const topicLabel = resolvedTopic.title ?? resolvedTopic.content.slice(0, 40);
 
             const testId = await createTestServerAction({
                 spaceId: sId,
                 type: testType,
                 questionCount: 5,
                 topicTitle: topicLabel,
-                knowledgePieceId: selectedTopicId ?? undefined,
+                knowledgePieceId: resolvedTopicId,
             });
 
             // Store selected topic for test page to use
-            if (selectedTopicId) {
-                sessionStorage.setItem(`exigo_test_topic_${testId}`, selectedTopicId);
-            }
+            sessionStorage.setItem(`exigo_test_topic_${testId}`, resolvedTopicId);
             router.push(`/tests/${testId}`);
         } catch (error) {
             console.error("Failed to create test", error);
@@ -865,7 +918,23 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                             onSubmit={handleBulkImport}
                                             className="space-y-4"
                                         >
-                                            <p className="text-secondary text-xs">Paste text and split by delimiter.</p>
+                                            <p className="text-secondary text-xs">
+                                                Upload a text or CSV file. CSV format must use headers: <span className="text-primary">Content,Name</span>.
+                                            </p>
+                                            <div className="space-y-2">
+                                                <input
+                                                    ref={bulkFileInputRef}
+                                                    type="file"
+                                                    accept=".csv,.txt,.md,text/csv,text/plain"
+                                                    className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl px-4 py-2.5 focus-ring spring-interact text-sm file:mr-3 file:border-0 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-black hover:file:opacity-90"
+                                                    onChange={handleBulkFileChange}
+                                                />
+                                                {bulkFileName && (
+                                                    <p className="text-[11px] text-white/50 truncate">
+                                                        Selected file: <span className="text-white/75">{bulkFileName}</span>
+                                                    </p>
+                                                )}
+                                            </div>
                                             <div className="flex gap-3">
                                                 <input
                                                     type="text"
@@ -882,14 +951,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                                     onChange={e => setSource(e.target.value)}
                                                 />
                                             </div>
-                                            <textarea
-                                                placeholder="Paste text here..."
-                                                className="w-full bg-neutral-950 border border-white/10 text-primary rounded-xl p-4 focus-ring spring-interact min-h-[200px] resize-y text-sm placeholder:text-neutral-600"
-                                                value={bulkContent}
-                                                onChange={e => setBulkContent(e.target.value)}
-                                            />
                                             <button
-                                                disabled={isAdding || !bulkContent.trim()}
+                                                disabled={isAdding || !bulkFileContent.trim()}
                                                 type="submit"
                                                 className="w-full bg-white text-black font-medium py-3 rounded-xl spring-interact flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90 text-sm"
                                             >

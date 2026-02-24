@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { getMaxKnowledgePieces } from "./knowledgeLimits";
+import { UNLIMITED_LIMIT } from "../../../shared/planConfig";
 
 describe("getMaxKnowledgePieces", () => {
-    it("returns Infinity for unlimited tier", () => {
+    it("returns UNLIMITED_LIMIT for unlimited tier", () => {
         const has = ({ feature }: { feature: string }) => feature === "unlimited_knowledge";
-        expect(getMaxKnowledgePieces(has)).toBe(Infinity);
+        expect(getMaxKnowledgePieces(has)).toBe(UNLIMITED_LIMIT);
     });
 
     it("returns 200 for pro tier", () => {

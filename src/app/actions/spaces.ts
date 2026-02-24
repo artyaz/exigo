@@ -13,6 +13,8 @@ export async function createSpaceServerAction(name: string) {
         throw new Error("Unauthorized: Please sign in to create a space.");
     }
 
+    console.log(`[Action: Create Space] User: ${userId}, Space Name: ${name}`);
+
     const convex = await createAuthedConvexClient(getToken, "actions.spaces.createSpaceServerAction");
 
     const spaceId = await convex.mutation(api.spaces.create, { name, userId });
