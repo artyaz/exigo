@@ -45,7 +45,7 @@ function fallbackTitleFromContent(content: string): string {
 export async function POST(req: NextRequest) {
     const { content } = await req.json() as { content: string };
 
-    if (!content?.trim()) {
+    if (typeof content !== "string" || !content.trim()) {
         return new Response(JSON.stringify({ error: "Missing content" }), { status: 400 });
     }
 

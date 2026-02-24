@@ -286,11 +286,12 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         setTestGenerateError(null);
         setIsGenerating(true);
         try {
-            const resolvedTopic = selectedTopic ?? pieces[Math.floor(Math.random() * pieces.length)];
+            const selectedTopicInPieces = pieces.find(p => String(p._id) === selectedTopicId);
+            const resolvedTopic = selectedTopicInPieces ?? pieces[Math.floor(Math.random() * pieces.length)];
             if (!resolvedTopic) {
                 throw new Error("No topic available for test generation.");
             }
-            const resolvedTopicId = selectedTopicId ?? String(resolvedTopic._id);
+            const resolvedTopicId = String(resolvedTopic._id);
             const topicLabel = resolvedTopic.title ?? resolvedTopic.content.slice(0, 40);
 
             const testId = await createTestServerAction({

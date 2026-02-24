@@ -251,7 +251,7 @@ export default function PricingPage() {
 
     const currentTier = getCurrentTier(has);
 
-    const dynamicPlans = plansQuery.data
+    const dynamicPlans = (plansQuery.data ?? [])
         .filter((plan) => {
             const p = plan as unknown as ClerkPlanLite;
             return p.forPayerType === "user" && p.publiclyVisible;

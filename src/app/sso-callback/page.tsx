@@ -13,20 +13,18 @@ export default function SSOCallback() {
                 <p className="text-neutral-400 font-medium animate-pulse">Completing authentication...</p>
 
                 <AuthenticateWithRedirectCallback
-                    signInUrl="/sign-in"
-                    signUpUrl="/sign-up"
-                    signInForceRedirectUrl="/spaces"
-                    signInFallbackRedirectUrl="/spaces"
-                    signUpForceRedirectUrl="/spaces"
-                    signUpFallbackRedirectUrl="/spaces"
+                    signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
+                    signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
+                    signInFallbackRedirectUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL || "/spaces"}
+                    signUpFallbackRedirectUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL || "/spaces"}
                     continueSignUpUrl="/sign-up"
                     verifyEmailAddressUrl="/sign-up"
                     verifyPhoneNumberUrl="/sign-up"
                     firstFactorUrl="/sign-in"
                     secondFactorUrl="/sign-in"
                     resetPasswordUrl="/sign-in"
-                    redirectUrl="/spaces"
                 />
+                <div id="clerk-captcha" />
             </div>
         </div>
     );

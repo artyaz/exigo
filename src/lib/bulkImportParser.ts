@@ -114,11 +114,8 @@ export function parseDelimiterKnowledgePieces(text: string, delimiter: string, s
     const parsedDelimiter = decodeVisibleEscapes(delimiter);
     if (!parsedDelimiter) return [];
 
-    const escapedDelimiter = parsedDelimiter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const splitRegex = new RegExp(escapedDelimiter);
-
     return text
-        .split(splitRegex)
+        .split(parsedDelimiter)
         .map((piece) => piece.trim())
         .filter((piece) => piece.length > 0)
         .map((content) => ({

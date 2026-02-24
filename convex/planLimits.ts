@@ -1,5 +1,5 @@
 import { query } from "./_generated/server";
-import { DEEP_DIVE_LIMITS_BY_TIER, getDeepDiveLimitForTier, PLAN_LIMIT_CODE } from "../shared/planConfig";
+import { DEEP_DIVE_LIMITS_BY_TIER, getDeepDiveLimitForTier, PLAN_LIMIT_CODE, UNLIMITED_LIMIT } from "../shared/planConfig";
 
 export type ServerPlanLimits = {
     maxSpaces: number;
@@ -14,15 +14,15 @@ const BASIC_TIER_LIMITS: ServerPlanLimits = {
 };
 
 const PRO_TIER_LIMITS: ServerPlanLimits = {
-    maxSpaces: Number.MAX_SAFE_INTEGER,
+    maxSpaces: UNLIMITED_LIMIT,
     maxTestsPerMonth: 100,
     maxKnowledgePiecesPerSpace: 200,
 };
 
 const EDUCATOR_TIER_LIMITS: ServerPlanLimits = {
-    maxSpaces: Number.MAX_SAFE_INTEGER,
+    maxSpaces: UNLIMITED_LIMIT,
     maxTestsPerMonth: 300,
-    maxKnowledgePiecesPerSpace: Number.MAX_SAFE_INTEGER,
+    maxKnowledgePiecesPerSpace: UNLIMITED_LIMIT,
 };
 
 const FREE_TIER_LIMITS: ServerPlanLimits = {
@@ -200,7 +200,14 @@ export const getPlan = query({
     handler: async (ctx) => {
         const identity = await ctx.auth.getUserIdentity();
         if (!identity) {
-            return { tier: "free", limits: FREE_TIER_LIMITS, features: { conversational_ai: false } };
+            return {
+                tier: "free",
+                limits: FREE_TIER_LIMITS,
+                features: {
+                    conversational_ai: false,
+                    deep_dive_limit: getDeepDiveLimitForTier("free"),
+                }
+            };
         }
 
         const limits = getServerPlanLimitsForUser(identity.subject, identity);

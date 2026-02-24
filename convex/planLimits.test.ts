@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getServerPlanLimitsForUser } from "./planLimits";
+import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 describe("getServerPlanLimitsForUser", () => {
     it("returns finite, server-side limits", () => {
@@ -22,9 +23,9 @@ describe("getServerPlanLimitsForUser", () => {
 
     it("returns educator limits when unlimited feature is present", () => {
         const limits = getServerPlanLimitsForUser("user_123", { unlimited_ai_tests: true });
-        expect(limits.maxSpaces).toBe(Number.MAX_SAFE_INTEGER);
+        expect(limits.maxSpaces).toBe(UNLIMITED_LIMIT);
         expect(limits.maxTestsPerMonth).toBe(300);
-        expect(limits.maxKnowledgePiecesPerSpace).toBe(Number.MAX_SAFE_INTEGER);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(UNLIMITED_LIMIT);
     });
 
     it("reads nested metadata flags", () => {
@@ -80,7 +81,7 @@ describe("getServerPlanLimitsForUser", () => {
         const limits = getServerPlanLimitsForUser("user_123", {
             publicMetadata: { subscriptionTier: "pro_scholar" },
         });
-        expect(limits.maxSpaces).toBe(Number.MAX_SAFE_INTEGER);
+        expect(limits.maxSpaces).toBe(UNLIMITED_LIMIT);
         expect(limits.maxTestsPerMonth).toBe(100);
         expect(limits.maxKnowledgePiecesPerSpace).toBe(200);
     });

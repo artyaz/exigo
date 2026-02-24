@@ -2,6 +2,7 @@ export type PlanTier = "free" | "basic" | "pro" | "educator";
 
 export const PLAN_LIMIT_CODE = "PLAN_LIMIT_PRO_REQUIRED";
 export const RESOLUTION_THRESHOLD = 90;
+export const UNLIMITED_LIMIT = Infinity;
 
 export const DEEP_DIVE_LIMITS_BY_TIER: Record<PlanTier, number> = {
     free: 0,

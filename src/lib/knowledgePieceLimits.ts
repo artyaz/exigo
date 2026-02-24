@@ -1,6 +1,8 @@
+import { UNLIMITED_LIMIT } from "../../shared/planConfig";
+
 export function getKnowledgePieceLimit(has: (params: { feature: string }) => boolean): number {
     if (has({ feature: "unlimited_knowledge" }) || has({ feature: "unlimited_ai_tests" })) {
-        return Number.MAX_SAFE_INTEGER;
+        return UNLIMITED_LIMIT;
     }
 
     if (has({ feature: "pro_knowledge" }) || has({ feature: "pro_tests" })) {

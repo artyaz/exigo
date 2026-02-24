@@ -10,6 +10,7 @@ import Link from "next/link";
 import { RedirectToSignIn, SignedIn, SignedOut, UserButton, useAuth } from "@clerk/nextjs";
 import { USER_BUTTON_APPEARANCE } from "~/lib/clerk-shared";
 import { createSpaceServerAction } from "~/app/actions/spaces";
+import { useRef, useEffect } from "react";
 
 export default function SpacesPage() {
     const { userId, isLoaded } = useAuth();
@@ -18,6 +19,27 @@ export default function SpacesPage() {
     const [isCreating, setIsCreating] = useState(false);
     const [newSpaceName, setNewSpaceName] = useState("");
     const [error, setError] = useState<string | null>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+                // If focus is in an editable element, don't hijack
+                if (
+                    document.activeElement instanceof HTMLInputElement ||
+                    document.activeElement instanceof HTMLTextAreaElement ||
+                    (document.activeElement instanceof HTMLElement && document.activeElement.isContentEditable)
+                ) {
+                    return;
+                }
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -79,6 +101,7 @@ export default function SpacesPage() {
                             <form onSubmit={handleCreate} className="flex gap-4">
                                 <div className="relative flex-1 group">
                                     <input
+                                        ref={searchInputRef}
                                         type="text"
                                         placeholder="E.g., Biology 101, JavaScript Basics..."
                                         className="w-full bg-neutral-950 border border-white/10 rounded-xl px-4 py-3 focus-ring spring-interact text-sm text-primary placeholder:text-neutral-600"
