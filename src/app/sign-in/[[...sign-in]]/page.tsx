@@ -30,6 +30,7 @@ export default function SignInPage() {
                 strategy: "oauth_google",
                 redirectUrl: "/sso-callback",
                 redirectUrlComplete: "/spaces",
+                continueSignIn: true,
             });
         } catch (err: unknown) {
             setError(formatErrorMessage(err) ?? "An error occurred during Google Sign In");
@@ -90,9 +91,6 @@ export default function SignInPage() {
                             icon={Lock}
                         />
                     </div>
-
-                    <div id="clerk-captcha"></div>
-
                     <AuthSubmitButton isLoading={isLoading}>
                         Sign In
                         <ArrowRight className="h-5 w-5" />

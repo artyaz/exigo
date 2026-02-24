@@ -31,91 +31,163 @@ const FREE_TIER_LIMITS: ServerPlanLimits = {
     maxKnowledgePiecesPerSpace: 20,
 };
 
+const PLAN_KEYS = ["plan", "tier", "subscriptionPlan", "subscriptionTier"] as const;
+
+type DetectedTier = "free" | "basic" | "pro" | "educator" | null;
+
 export { DEEP_DIVE_LIMITS_BY_TIER, getDeepDiveLimitForTier };
 export { PLAN_LIMIT_CODE };
 
-function deepFind(obj: unknown, key: string): unknown {
-    if (!obj || typeof obj !== "object") return undefined;
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        return (obj as Record<string, unknown>)[key];
+function deepFindAll(obj: unknown, key: string, visited = new Set<object>()): unknown[] {
+    if (!obj || typeof obj !== "object") {
+        return [];
     }
-    for (const k of Object.keys(obj)) {
-        const found = deepFind((obj as Record<string, unknown>)[k], key);
-        if (found !== undefined) return found;
+
+    const record = obj as Record<string, unknown>;
+    if (visited.has(record)) {
+        return [];
     }
-    return undefined;
+    visited.add(record);
+
+    const found: unknown[] = [];
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+        found.push(record[key]);
+    }
+
+    for (const value of Object.values(record)) {
+        found.push(...deepFindAll(value, key, visited));
+    }
+
+    return found;
 }
 
 export function hasFeature(identity: Record<string, unknown>, feature: string): boolean {
-    const value = deepFind(identity, feature);
-    return value === true || value === "true";
+    const values = deepFindAll(identity, feature);
+    return values.some((value) => value === true || value === "true" || value === 1 || value === "1");
 }
 
 function normalizePlanToken(value: unknown): string {
     return String(value ?? "").trim().toLowerCase();
 }
 
-function containsPlanWord(value: string, token: "basic" | "pro" | "scholar" | "educator"): boolean {
-    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const regex = new RegExp(`\\b${escaped}\\b`);
-    return regex.test(value);
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
 }
 
-function universalPlanCheck(identityLike: Record<string, unknown>): boolean {
-    const explicitPlanValues = [
-        deepFind(identityLike, "plan"),
-        deepFind(identityLike, "tier"),
-        deepFind(identityLike, "subscription"),
-        deepFind(identityLike, "subscriptionPlan"),
-        deepFind(identityLike, "subscriptionTier"),
-    ];
+function getOwn(record: Record<string, unknown>, key: string): unknown {
+    return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+}
 
-    for (const raw of explicitPlanValues) {
-        const value = normalizePlanToken(raw);
-        if (!value) continue;
-        if (containsPlanWord(value, "pro") || containsPlanWord(value, "scholar") || containsPlanWord(value, "educator")) {
-            return true;
+function collectPlanSignalValues(identityLike: Record<string, unknown>): unknown[] {
+    const values: unknown[] = [];
+
+    const pushPlanKeys = (candidate: unknown) => {
+        if (!isRecord(candidate)) return;
+        for (const key of PLAN_KEYS) {
+            const raw = getOwn(candidate, key);
+            if (raw !== undefined) {
+                values.push(raw);
+            }
         }
+    };
+
+    // Top-level identity fields.
+    pushPlanKeys(identityLike);
+    // Common metadata locations used with Clerk.
+    pushPlanKeys(getOwn(identityLike, "publicMetadata"));
+    pushPlanKeys(getOwn(identityLike, "privateMetadata"));
+    pushPlanKeys(getOwn(identityLike, "unsafeMetadata"));
+
+    const organization = getOwn(identityLike, "organization");
+    if (isRecord(organization)) {
+        pushPlanKeys(organization);
+        pushPlanKeys(getOwn(organization, "publicMetadata"));
+        pushPlanKeys(getOwn(organization, "privateMetadata"));
+        pushPlanKeys(getOwn(organization, "unsafeMetadata"));
     }
 
-    return false;
+    return values;
+}
+
+function tokenizePlanValue(value: unknown): string[] {
+    return normalizePlanToken(value)
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean);
+}
+
+function hasAnyToken(tokens: string[], candidates: string[]): boolean {
+    return candidates.some((candidate) => tokens.includes(candidate));
+}
+
+function detectPlanTier(identityLike: Record<string, unknown>): DetectedTier {
+    const planValues = collectPlanSignalValues(identityLike);
+    const tokens = planValues.flatMap((value) => tokenizePlanValue(value));
+
+    if (hasAnyToken(tokens, ["educator", "teacher"])) {
+        return "educator";
+    }
+
+    if (hasAnyToken(tokens, ["pro", "scholar", "premium", "plus"])) {
+        return "pro";
+    }
+
+    if (hasAnyToken(tokens, ["basic", "starter"])) {
+        return "basic";
+    }
+
+    if (hasAnyToken(tokens, ["free"])) {
+        return "free";
+    }
+
+    return null;
 }
 
 export function isProPlan(identityLike?: Record<string, unknown> | null): boolean {
     if (!identityLike) return false;
 
-    // 1. Check for specific features first (high priority)
-    if (hasFeature(identityLike, "pro_tests") ||
+    if (
+        hasFeature(identityLike, "pro_tests") ||
         hasFeature(identityLike, "pro_knowledge") ||
         hasFeature(identityLike, "unlimited_ai_tests") ||
-        hasFeature(identityLike, "unlimited_knowledge")) {
+        hasFeature(identityLike, "unlimited_knowledge")
+    ) {
         return true;
     }
 
-    // 2. Scan entire identity object for plan keywords
-    return universalPlanCheck(identityLike);
+    const detectedTier = detectPlanTier(identityLike);
+    return detectedTier === "pro" || detectedTier === "educator";
 }
 
 export function getServerPlanLimitsForUser(userId: string, identityLike?: Record<string, unknown> | null): ServerPlanLimits {
     void userId;
     if (!identityLike) return FREE_TIER_LIMITS;
 
-    const plan = normalizePlanToken(deepFind(identityLike, "plan"));
+    const detectedTier = detectPlanTier(identityLike);
 
-    if (containsPlanWord(plan, "educator") || hasFeature(identityLike, "unlimited_ai_tests") || hasFeature(identityLike, "unlimited_knowledge")) {
+    const isEducator =
+        detectedTier === "educator" ||
+        hasFeature(identityLike, "unlimited_ai_tests") ||
+        hasFeature(identityLike, "unlimited_knowledge");
+
+    if (isEducator) {
         return EDUCATOR_TIER_LIMITS;
     }
 
-    if (containsPlanWord(plan, "pro") || containsPlanWord(plan, "scholar") || hasFeature(identityLike, "pro_tests") || hasFeature(identityLike, "pro_knowledge")) {
+    const isPro =
+        detectedTier === "pro" ||
+        hasFeature(identityLike, "pro_tests") ||
+        hasFeature(identityLike, "pro_knowledge");
+
+    if (isPro) {
         return PRO_TIER_LIMITS;
     }
 
-    // Final fallback: if isProPlan says true but we haven't matched specific educator flags, give Pro limits
-    if (isProPlan(identityLike)) {
-        return PRO_TIER_LIMITS;
-    }
+    const isBasic =
+        detectedTier === "basic" ||
+        hasFeature(identityLike, "basic_tests") ||
+        hasFeature(identityLike, "basic_knowledge");
 
-    if (containsPlanWord(plan, "basic") || hasFeature(identityLike, "basic_tests") || hasFeature(identityLike, "basic_knowledge")) {
+    if (isBasic) {
         return BASIC_TIER_LIMITS;
     }
 
@@ -127,24 +199,43 @@ export const getPlan = query({
     args: {},
     handler: async (ctx) => {
         const identity = await ctx.auth.getUserIdentity();
-        if (!identity) return { tier: "free", limits: FREE_TIER_LIMITS, features: { conversational_ai: false } };
+        if (!identity) {
+            return { tier: "free", limits: FREE_TIER_LIMITS, features: { conversational_ai: false } };
+        }
 
         const limits = getServerPlanLimitsForUser(identity.subject, identity);
-        const isPro = isProPlan(identity);
-        const planStr = normalizePlanToken(deepFind(identity, "plan"));
-        const isEducator = containsPlanWord(planStr, "educator") || hasFeature(identity, "unlimited_ai_tests");
-        let tier: "free" | "pro" | "educator" = "free";
+        const detectedTier = detectPlanTier(identity);
+
+        const isEducator =
+            detectedTier === "educator" ||
+            hasFeature(identity, "unlimited_ai_tests") ||
+            hasFeature(identity, "unlimited_knowledge");
+
+        const isPro =
+            isEducator ||
+            detectedTier === "pro" ||
+            hasFeature(identity, "pro_tests") ||
+            hasFeature(identity, "pro_knowledge");
+
+        const isBasic =
+            detectedTier === "basic" ||
+            hasFeature(identity, "basic_tests") ||
+            hasFeature(identity, "basic_knowledge");
+
+        let tier: "free" | "basic" | "pro" | "educator" = "free";
         if (isEducator) {
             tier = "educator";
         } else if (isPro) {
             tier = "pro";
+        } else if (isBasic) {
+            tier = "basic";
         }
 
         return {
             tier,
             limits,
             features: {
-                conversational_ai: isPro || isEducator,
+                conversational_ai: isPro,
                 deep_dive_limit: getDeepDiveLimitForTier(tier),
             }
         };

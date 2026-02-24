@@ -33,6 +33,7 @@ export default function SignUpPage() {
                 strategy: "oauth_google",
                 redirectUrl: "/sso-callback",
                 redirectUrlComplete: "/spaces",
+                continueSignUp: true,
             });
         } catch (err: unknown) {
             setError(formatErrorMessage(err) ?? "An error occurred during Google Sign Up");
@@ -115,9 +116,6 @@ export default function SignUpPage() {
                                 icon={Lock}
                             />
                         </div>
-
-                        <div id="clerk-captcha"></div>
-
                         <AuthSubmitButton isLoading={isLoading}>
                             Sign Up
                             <ArrowRight className="h-5 w-5" />

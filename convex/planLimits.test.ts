@@ -66,4 +66,31 @@ describe("getServerPlanLimitsForUser", () => {
         expect(limits.maxTestsPerMonth).toBe(10);
         expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
     });
+
+    it("does not infer pro from generic subscription strings", () => {
+        const limits = getServerPlanLimitsForUser("user_123", {
+            subscription: "pro",
+        });
+        expect(limits.maxSpaces).toBe(3);
+        expect(limits.maxTestsPerMonth).toBe(10);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
+    });
+
+    it("supports explicit subscription tiers", () => {
+        const limits = getServerPlanLimitsForUser("user_123", {
+            publicMetadata: { subscriptionTier: "pro_scholar" },
+        });
+        expect(limits.maxSpaces).toBe(Number.MAX_SAFE_INTEGER);
+        expect(limits.maxTestsPerMonth).toBe(100);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(200);
+    });
+
+    it("does not infer paid tier from unrelated nested tier keys", () => {
+        const limits = getServerPlanLimitsForUser("user_123", {
+            risk: { tier: "pro" },
+        });
+        expect(limits.maxSpaces).toBe(3);
+        expect(limits.maxTestsPerMonth).toBe(10);
+        expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
+    });
 });
