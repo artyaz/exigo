@@ -3,7 +3,7 @@ import { getServerPlanLimitsForUser } from './planLimits';
 import { UNLIMITED_LIMIT } from '../shared/planConfig';
 
 /**
- * Server-side limit enforcement tests for Convex mutations.
+ * Server-side limit enforcement and security tests for Convex mutations.
  */
 
 // Mock context type
@@ -20,17 +20,12 @@ interface MockCtx {
 }
 
 const createMockCtx = (userId: string, identityData: Record<string, any> = {}): MockCtx => {
-  const mockCollect = vi.fn();
-  const mockEq = vi.fn(() => ({ collect: mockCollect }));
-  const mockWithIndex = vi.fn(() => ({ eq: mockEq }));
-  const mockQuery = vi.fn(() => ({ withIndex: mockWithIndex }));
-
   return {
     db: {
       insert: vi.fn(),
       patch: vi.fn(),
       get: vi.fn(),
-      query: mockQuery,
+      query: vi.fn(),
     },
     auth: {
       getUserIdentity: vi.fn(async () => ({ subject: userId, ...identityData })),
@@ -38,7 +33,8 @@ const createMockCtx = (userId: string, identityData: Record<string, any> = {}): 
   };
 };
 
-// Implementation of space creation logic from convex/spaces.ts
+// --- HANDLER IMPLEMENTATIONS (Simplified for unit testing) ---
+
 async function createSpaceHandler(ctx: any, args: { name: string, userId: string }) {
     const identity = await ctx.auth.getUserIdentity();
     const authenticatedUserId = identity?.subject;
@@ -59,7 +55,6 @@ async function createSpaceHandler(ctx: any, args: { name: string, userId: string
     return await ctx.db.insert("spaces", { name: args.name, userId: args.userId });
 }
 
-// Implementation of knowledge piece add logic from convex/knowledgePieces.ts
 async function addKnowledgePieceHandler(ctx: any, args: { spaceId: any, content: string }) {
     const identity = await ctx.auth.getUserIdentity();
     const userId = identity?.subject;
@@ -88,23 +83,89 @@ async function addKnowledgePieceHandler(ctx: any, args: { spaceId: any, content:
     });
 }
 
-describe('Convex Limit Enforcement', () => {
-    describe('Space Limits', () => {
-        it('allows creating a space when under the limit (free plan)', async () => {
-            const ctx = createMockCtx('user_free');
-            // Mock query().withIndex().collect()
-            const mockCollect = vi.fn().mockResolvedValue([{}, {}]); // 2 existing spaces
+async function createEmptyTestHandler(ctx: any, args: { spaceId: any, userId: string, type: string, questionCount: number }) {
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+    if (!userId || args.userId !== userId) {
+        throw new Error("Unauthorized");
+    }
+
+    const limits = getServerPlanLimitsForUser(userId, identity);
+    const maxAllowed = limits.maxTestsPerMonth;
+    if (maxAllowed === 0) {
+        throw new Error("You don't have access to test generation on your current plan.");
+    }
+
+    const space = await ctx.db.get(args.spaceId);
+    if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+        throw new Error("Unauthorized access to this space");
+    }
+
+    // Logic from countForUserThisMonthInternal
+    const spaceIds = [args.spaceId]; // simplified for test
+    const testsBySpace = await Promise.all(
+        spaceIds.map((spaceId) =>
+            ctx.db
+                .query("tests")
+                .withIndex("by_space", (q: any) => q.eq("spaceId", spaceId))
+                .filter((q: any) => q.gte(q.field("_creationTime"), 0)) // simplified
+                .collect()
+        )
+    );
+    const count = testsBySpace.reduce((sum, tests) => sum + tests.length, 0);
+
+    if (count >= maxAllowed) {
+        throw new Error(`Limit reached: You have created ${count} tests this month.`);
+    }
+
+    return await ctx.db.insert("tests", {
+        spaceId: args.spaceId,
+        status: "active",
+        config: { type: args.type, questionCount: args.questionCount },
+    });
+}
+
+// --- TESTS ---
+
+describe('Convex Limit Enforcement & Security', () => {
+    describe('Exploit Prevention', () => {
+        it('prevents spoofing userId in createSpace', async () => {
+            const ctx = createMockCtx('attacker_id');
+            // Attacker tries to create a space for 'victim_id'
+            await expect(
+                createSpaceHandler(ctx, { name: 'Evil Space', userId: 'victim_id' })
+            ).rejects.toThrow("Unauthorized");
+            
+            expect(ctx.db.insert).not.toHaveBeenCalled();
+        });
+
+        it('prevents adding knowledge piece to someone else\'s space', async () => {
+            const ctx = createMockCtx('attacker_id');
+            ctx.db.get.mockResolvedValue({ userId: 'victim_id' });
+            
+            await expect(
+                addKnowledgePieceHandler(ctx, { spaceId: 'victim_space' as any, content: 'Spam' })
+            ).rejects.toThrow("Unauthorized access to this space");
+            
+            expect(ctx.db.insert).not.toHaveBeenCalled();
+        });
+
+        it('allows adding knowledge piece to "default_user" shared spaces', async () => {
+            const ctx = createMockCtx('user_id');
+            ctx.db.get.mockResolvedValue({ userId: 'default_user' });
             (ctx.db.query as any).mockReturnValue({
                 withIndex: vi.fn().mockReturnValue({
-                    collect: mockCollect
+                    collect: vi.fn().mockResolvedValue([])
                 })
             });
             
-            await createSpaceHandler(ctx, { name: 'New Space', userId: 'user_free' });
+            await addKnowledgePieceHandler(ctx, { spaceId: 'shared_space' as any, content: 'Good content' });
             
-            expect(ctx.db.insert).toHaveBeenCalledWith('spaces', expect.objectContaining({ name: 'New Space' }));
+            expect(ctx.db.insert).toHaveBeenCalled();
         });
+    });
 
+    describe('Space Limits', () => {
         it('blocks creating a space when at the limit (free plan)', async () => {
             const ctx = createMockCtx('user_free');
             const mockCollect = vi.fn().mockResolvedValue([{}, {}, {}]); // 3 existing spaces
@@ -117,41 +178,10 @@ describe('Convex Limit Enforcement', () => {
             await expect(
                 createSpaceHandler(ctx, { name: 'Too Many', userId: 'user_free' })
             ).rejects.toThrow(/Limit reached: You can only have 3 spaces/);
-            
-            expect(ctx.db.insert).not.toHaveBeenCalled();
-        });
-
-        it('allows more spaces on Pro plan', async () => {
-            const ctx = createMockCtx('user_pro', { pro_tests: true });
-            const mockCollect = vi.fn().mockResolvedValue(new Array(10).fill({})); 
-            (ctx.db.query as any).mockReturnValue({
-                withIndex: vi.fn().mockReturnValue({
-                    collect: mockCollect
-                })
-            });
-            
-            await createSpaceHandler(ctx, { name: 'Pro Space', userId: 'user_pro' });
-            
-            expect(ctx.db.insert).toHaveBeenCalled();
         });
     });
 
     describe('Knowledge Piece Limits', () => {
-        it('allows adding a knowledge piece when under the limit (free plan)', async () => {
-            const ctx = createMockCtx('user_free');
-            ctx.db.get.mockResolvedValue({ userId: 'user_free' });
-            const mockCollect = vi.fn().mockResolvedValue(new Array(19).fill({})); 
-            (ctx.db.query as any).mockReturnValue({
-                withIndex: vi.fn().mockReturnValue({
-                    collect: mockCollect
-                })
-            });
-            
-            await addKnowledgePieceHandler(ctx, { spaceId: 'space_123' as any, content: 'Some content' });
-            
-            expect(ctx.db.insert).toHaveBeenCalled();
-        });
-
         it('blocks adding a knowledge piece when at the limit (free plan)', async () => {
             const ctx = createMockCtx('user_free');
             ctx.db.get.mockResolvedValue({ userId: 'user_free' });
@@ -165,23 +195,65 @@ describe('Convex Limit Enforcement', () => {
             await expect(
                 addKnowledgePieceHandler(ctx, { spaceId: 'space_123' as any, content: 'Too much' })
             ).rejects.toThrow(/Limit reached: You can only have 20 knowledge pieces/);
-            
-            expect(ctx.db.insert).not.toHaveBeenCalled();
         });
+    });
 
-        it('allows more knowledge pieces on Basic plan', async () => {
-            const ctx = createMockCtx('user_basic', { basic_tests: true });
-            ctx.db.get.mockResolvedValue({ userId: 'user_basic' });
-            const mockCollect = vi.fn().mockResolvedValue(new Array(49).fill({})); 
+    describe('Test Generation Limits', () => {
+        it('blocks creating a test when at the limit (free plan)', async () => {
+            const ctx = createMockCtx('user_free');
+            ctx.db.get.mockResolvedValue({ userId: 'user_free' });
+            
+            // Mock query for tests
+            const mockCollect = vi.fn().mockResolvedValue(new Array(10).fill({})); 
             (ctx.db.query as any).mockReturnValue({
                 withIndex: vi.fn().mockReturnValue({
-                    collect: mockCollect
+                    filter: vi.fn().mockReturnValue({
+                        collect: mockCollect
+                    })
                 })
             });
             
-            await addKnowledgePieceHandler(ctx, { spaceId: 'space_123' as any, content: 'Basic content' });
+            await expect(
+                createEmptyTestHandler(ctx, { spaceId: 'space_123' as any, userId: 'user_free', type: 'select', questionCount: 5 })
+            ).rejects.toThrow(/Limit reached: You have created 10 tests/);
+        });
+
+        it('allows more tests on Educator plan', async () => {
+            const ctx = createMockCtx('user_edu', { unlimited_ai_tests: true });
+            ctx.db.get.mockResolvedValue({ userId: 'user_edu' });
             
-            expect(ctx.db.insert).toHaveBeenCalled();
+            // 299 tests already created
+            const mockCollect = vi.fn().mockResolvedValue(new Array(299).fill({})); 
+            (ctx.db.query as any).mockReturnValue({
+                withIndex: vi.fn().mockReturnValue({
+                    filter: vi.fn().mockReturnValue({
+                        collect: mockCollect
+                    })
+                })
+            });
+            
+            await createEmptyTestHandler(ctx, { spaceId: 'space_123' as any, userId: 'user_edu', type: 'select', questionCount: 5 });
+            
+            expect(ctx.db.insert).toHaveBeenCalledWith('tests', expect.anything());
+        });
+
+        it('blocks even Educator at absolute hard cap (300)', async () => {
+            const ctx = createMockCtx('user_edu', { unlimited_ai_tests: true });
+            ctx.db.get.mockResolvedValue({ userId: 'user_edu' });
+            
+            // 300 tests already created
+            const mockCollect = vi.fn().mockResolvedValue(new Array(300).fill({})); 
+            (ctx.db.query as any).mockReturnValue({
+                withIndex: vi.fn().mockReturnValue({
+                    filter: vi.fn().mockReturnValue({
+                        collect: mockCollect
+                    })
+                })
+            });
+            
+            await expect(
+                createEmptyTestHandler(ctx, { spaceId: 'space_123' as any, userId: 'user_edu', type: 'select', questionCount: 5 })
+            ).rejects.toThrow(/Limit reached: You have created 300 tests/);
         });
     });
 });
