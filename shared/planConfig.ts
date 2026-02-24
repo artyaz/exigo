@@ -4,6 +4,9 @@ export const PLAN_LIMIT_CODE = "PLAN_LIMIT_PRO_REQUIRED";
 export const RESOLUTION_THRESHOLD = 90;
 export const UNLIMITED_LIMIT = Infinity;
 
+// Absolute hard cap for tests to ensure no true "unlimited" usage exists
+export const MAX_TESTS_SENTINEL = 1000;
+
 export const DEEP_DIVE_LIMITS_BY_TIER: Record<PlanTier, number> = {
     free: 0,
     basic: 0,

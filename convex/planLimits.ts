@@ -1,5 +1,5 @@
 import { query } from "./_generated/server";
-import { DEEP_DIVE_LIMITS_BY_TIER, getDeepDiveLimitForTier, PLAN_LIMIT_CODE, UNLIMITED_LIMIT } from "../shared/planConfig";
+import { DEEP_DIVE_LIMITS_BY_TIER, getDeepDiveLimitForTier, MAX_TESTS_SENTINEL, PLAN_LIMIT_CODE, UNLIMITED_LIMIT } from "../shared/planConfig";
 
 export type ServerPlanLimits = {
     maxSpaces: number;
@@ -21,7 +21,7 @@ const PRO_TIER_LIMITS: ServerPlanLimits = {
 
 const EDUCATOR_TIER_LIMITS: ServerPlanLimits = {
     maxSpaces: UNLIMITED_LIMIT,
-    maxTestsPerMonth: 300,
+    maxTestsPerMonth: Math.min(300, MAX_TESTS_SENTINEL),
     maxKnowledgePiecesPerSpace: UNLIMITED_LIMIT,
 };
 
