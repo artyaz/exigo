@@ -17,6 +17,7 @@ import type * as planLimits from "../planLimits.js";
 import type * as questions from "../questions.js";
 import type * as spaces from "../spaces.js";
 import type * as testMessages from "../testMessages.js";
+import type * as testUtils from "../testUtils.js";
 import type * as tests from "../tests.js";
 
 import type {
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   questions: typeof questions;
   spaces: typeof spaces;
   testMessages: typeof testMessages;
+  testUtils: typeof testUtils;
   tests: typeof tests;
 }>;
 
