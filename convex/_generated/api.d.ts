@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as deepDives from "../deepDives.js";
+import type * as health from "../health.js";
 import type * as knowledgeNodes from "../knowledgeNodes.js";
 import type * as knowledgePieces from "../knowledgePieces.js";
 import type * as planLimits from "../planLimits.js";
@@ -27,6 +28,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   deepDives: typeof deepDives;
+  health: typeof health;
   knowledgeNodes: typeof knowledgeNodes;
   knowledgePieces: typeof knowledgePieces;
   planLimits: typeof planLimits;
