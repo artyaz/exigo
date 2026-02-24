@@ -171,6 +171,23 @@ describe('Convex Limit Enforcement & Security', () => {
     });
 
     describe('Space Limits', () => {
+        it('verifies the full createSpace mutation flow with auth', async () => {
+            const userId = 'user_test_123';
+            // Simulate a user with Free plan (no special metadata)
+            const ctx = createMockCtx(userId);
+            
+            // Mock empty spaces for this user
+            const mockCollect = vi.fn().mockResolvedValue([]);
+            (ctx.db.query as any).mockReturnValue({ withIndex: () => ({ collect: mockCollect }) });
+            
+            // Execute handler
+            await createSpaceHandler(ctx, { name: 'Test Flow', userId });
+            
+            // Verify execution path
+            expect(ctx.auth.getUserIdentity).toHaveBeenCalled();
+            expect(ctx.db.insert).toHaveBeenCalledWith('spaces', { name: 'Test Flow', userId });
+        });
+
         it('blocks creating a space when at the limit (free plan)', async () => {
             const ctx = createMockCtx('user_free');
             const mockCollect = vi.fn().mockResolvedValue([{}, {}, {}]); // 3 existing spaces

@@ -55,8 +55,13 @@ export const create = mutation({
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
         const authenticatedUserId = identity?.subject;
-        if (!authenticatedUserId || authenticatedUserId !== args.userId) {
-            throw new Error("Unauthorized");
+        
+        if (!authenticatedUserId) {
+            throw new Error("Unauthorized: No identity found in Convex.");
+        }
+        
+        if (authenticatedUserId !== args.userId) {
+            throw new Error(`Unauthorized: Identity mismatch. Auth: ${authenticatedUserId}, Args: ${args.userId}`);
         }
 
         const spaces = await ctx.db
