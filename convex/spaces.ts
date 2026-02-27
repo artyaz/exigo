@@ -57,9 +57,7 @@ export const create = mutation({
     const auth = await getAuthedContext(ctx);
 
     if (auth.userId !== args.userId) {
-      throw new Error(
-        `Unauthorized: Identity mismatch. Auth: ${auth.userId}, Args: ${args.userId}`,
-      );
+      throw new Error("Unauthorized: identity mismatch");
     }
 
     const spaces = await ctx.db
@@ -71,7 +69,7 @@ export const create = mutation({
     const serverLimit = auth.limits.maxSpaces;
 
     console.log(
-      `[Space Creation] User: ${args.userId}, Tier Limit: ${serverLimit}, Current Count: ${currentCount}`,
+      `[Space Creation] Tier Limit: ${serverLimit}, Current Count: ${currentCount}`,
     );
 
     if (serverLimit !== UNLIMITED_LIMIT && currentCount >= serverLimit) {

@@ -6,6 +6,18 @@ import { UNLIMITED_LIMIT } from "../shared/planConfig";
 export const getForSpace = query({
   args: { spaceId: v.id("spaces") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+    if (!userId) return [];
+
+    const space = await ctx.db.get(args.spaceId);
+    if (
+      !space ||
+      (space.userId !== userId && space.userId !== "default_user")
+    ) {
+      return [];
+    }
+
     return await ctx.db
       .query("knowledgePieces")
       .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
@@ -37,7 +49,7 @@ export const add = mutation({
     const projectedTotal = existingPieces.length + 1;
 
     console.log(
-      `[Knowledge Piece Addition] User: ${auth.userId}, Space: ${args.spaceId}, Tier Limit: ${serverLimit}, Current Pieces: ${existingPieces.length}`,
+      `[Knowledge Piece Addition] Tier Limit: ${serverLimit}, Current: ${existingPieces.length}, Projected: ${projectedTotal}`,
     );
 
     if (serverLimit !== UNLIMITED_LIMIT && projectedTotal > serverLimit) {
@@ -65,7 +77,7 @@ export const updateTitle = mutation({
 
     const piece = await ctx.db.get(args.id);
     if (!piece) {
-      throw new Error(`Knowledge piece not found for id: ${args.id}`);
+      throw new Error(`Knowledge piece not found`);
     }
 
     const space = await ctx.db.get(piece.spaceId);
@@ -108,7 +120,7 @@ export const bulkImport = mutation({
     const projectedTotal = existingPieces.length + nonEmptyIncomingCount;
 
     console.log(
-      `[Knowledge Piece Bulk Import] User: ${auth.userId}, Space: ${args.spaceId}, Incoming: ${nonEmptyIncomingCount}, Current: ${existingPieces.length}, Tier Limit: ${serverLimit}`,
+      `[Knowledge Piece Bulk Import] Incoming: ${nonEmptyIncomingCount}, Current: ${existingPieces.length}, Tier Limit: ${serverLimit}`,
     );
 
     if (serverLimit !== UNLIMITED_LIMIT && projectedTotal > serverLimit) {
@@ -142,7 +154,7 @@ export const appendContent = mutation({
 
     const piece = await ctx.db.get(args.id);
     if (!piece) {
-      throw new Error(`Knowledge piece not found for id: ${args.id}`);
+      throw new Error(`Knowledge piece not found`);
     }
 
     const space = await ctx.db.get(piece.spaceId);

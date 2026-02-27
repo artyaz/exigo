@@ -77,6 +77,31 @@ const STRATEGIES: Record<AccessLevel, LimitStrategy> = {
   [ACCESS_LEVELS.EDUCATOR]: new EducatorLimitStrategy(),
 };
 
+function isValidAccessLevel(level: number): level is AccessLevel {
+  return (
+    level === ACCESS_LEVELS.FREE ||
+    level === ACCESS_LEVELS.PRO_SCHOLAR ||
+    level === ACCESS_LEVELS.EDUCATOR
+  );
+}
+
+export function normalizeAccessLevel(level: number): AccessLevel {
+  if (isValidAccessLevel(level)) return level;
+  console.warn(`Invalid access level ${level}, defaulting to FREE`);
+  return ACCESS_LEVELS.FREE;
+}
+
+export function getAccessLevelName(accessLevel: AccessLevel): string {
+  switch (accessLevel) {
+    case ACCESS_LEVELS.EDUCATOR:
+      return "educator";
+    case ACCESS_LEVELS.PRO_SCHOLAR:
+      return "pro_scholar";
+    default:
+      return "free";
+  }
+}
+
 export function getStrategy(accessLevel: AccessLevel): LimitStrategy {
   return STRATEGIES[accessLevel] ?? STRATEGIES[ACCESS_LEVELS.FREE];
 }
@@ -96,7 +121,12 @@ export function parseClerkPlanSlug(slug: string | undefined): AccessLevel {
   if (normalized === "educator") return ACCESS_LEVELS.EDUCATOR;
   if (normalized === "pro_scholar" || normalized === "pro-scholar")
     return ACCESS_LEVELS.PRO_SCHOLAR;
-  if (normalized === "basic_tests") return ACCESS_LEVELS.FREE;
+  if (
+    normalized === "basic_tests" ||
+    normalized === "free_user" ||
+    normalized === "free"
+  )
+    return ACCESS_LEVELS.FREE;
 
   if (/educator|teacher/.test(normalized)) return ACCESS_LEVELS.EDUCATOR;
   if (/pro|scholar|premium|plus/.test(normalized))
@@ -132,7 +162,7 @@ export async function getEffectiveAccessLevel(
 ): Promise<AccessLevel> {
   const subscription = await getActiveSubscription(ctx, userId);
   if (subscription) {
-    return subscription.accessLevel as AccessLevel;
+    return normalizeAccessLevel(subscription.accessLevel);
   }
 
   const identity = await ctx.auth.getUserIdentity();
@@ -170,6 +200,16 @@ function detectPlanSlugFromIdentity(
   addValues(identityLike);
   addValues(identityLike.publicMetadata);
   addValues(identityLike.privateMetadata);
+  addValues((identityLike as Record<string, unknown>).unsafeMetadata);
+
+  const org = (identityLike as Record<string, unknown>).organization as
+    | Record<string, unknown>
+    | undefined;
+  if (org) {
+    addValues(org.publicMetadata);
+    addValues(org.privateMetadata);
+    addValues(org.unsafeMetadata);
+  }
 
   const isMatch = (candidates: string[]) => {
     return planValues.some((val) => {
@@ -185,7 +225,17 @@ function detectPlanSlugFromIdentity(
   if (isMatch(["basic", "starter"])) return "basic_tests";
 
   const checkFeature = (feature: string): boolean => {
-    const searchTargets = [identityLike, identityLike.publicMetadata];
+    const searchTargets = [
+      identityLike,
+      identityLike.publicMetadata,
+      (identityLike as Record<string, unknown>).unsafeMetadata,
+    ];
+    const org = (identityLike as Record<string, unknown>).organization as
+      | Record<string, unknown>
+      | undefined;
+    if (org) {
+      searchTargets.push(org.publicMetadata, org.unsafeMetadata);
+    }
     for (const target of searchTargets) {
       if (target && typeof target === "object") {
         const t = target as Record<string, unknown>;
@@ -238,8 +288,9 @@ export async function getEffectiveAccessLevelForAction(
     { userId },
   );
 
-  if (subscriptionAccessLevel > ACCESS_LEVELS.FREE) {
-    return subscriptionAccessLevel;
+  const normalizedLevel = normalizeAccessLevel(subscriptionAccessLevel);
+  if (normalizedLevel > ACCESS_LEVELS.FREE) {
+    return normalizedLevel;
   }
 
   const identity = await ctx.auth.getUserIdentity();

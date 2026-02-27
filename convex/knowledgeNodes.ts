@@ -42,6 +42,14 @@ export const create = mutation({
       throw new Error("Unauthorized access to this space");
     }
 
+    const knowledgePiece = await ctx.db.get(args.knowledgePieceId);
+    if (!knowledgePiece) {
+      throw new Error("Knowledge piece not found");
+    }
+    if (knowledgePiece.spaceId !== args.spaceId) {
+      throw new Error("Knowledge piece does not belong to this space");
+    }
+
     return await ctx.db.insert("knowledgeNodes", {
       spaceId: args.spaceId,
       knowledgePieceId: args.knowledgePieceId,
@@ -131,6 +139,14 @@ export const createInternal = internalMutation({
     content: v.string(),
   },
   handler: async (ctx, args) => {
+    const knowledgePiece = await ctx.db.get(args.knowledgePieceId);
+    if (!knowledgePiece) {
+      throw new Error("Knowledge piece not found");
+    }
+    if (knowledgePiece.spaceId !== args.spaceId) {
+      throw new Error("Knowledge piece does not belong to this space");
+    }
+
     return await ctx.db.insert("knowledgeNodes", {
       spaceId: args.spaceId,
       knowledgePieceId: args.knowledgePieceId,

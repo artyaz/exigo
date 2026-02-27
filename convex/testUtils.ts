@@ -7,6 +7,8 @@ import {
 } from "./subscriptionService";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
+const ACCESS_LEVEL = v.union(v.literal(0), v.literal(1), v.literal(2));
+
 export const createSpaceWithMockIdentity = internalMutation({
   args: { name: v.string(), userId: v.string(), mockTier: v.string() },
   handler: async (ctx, args) => {
@@ -54,7 +56,7 @@ export const createSpaceWithMockIdentity = internalMutation({
 export const setSubscriptionForTest = internalMutation({
   args: {
     userId: v.string(),
-    accessLevel: v.number(),
+    accessLevel: ACCESS_LEVEL,
     status: v.optional(
       v.union(
         v.literal("active"),

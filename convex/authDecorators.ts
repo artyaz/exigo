@@ -1,4 +1,4 @@
-import { ConvexError } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import type { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
 import {
   getEffectiveAccessLevel,
@@ -94,7 +94,10 @@ export async function getAuthenticatedUserId(
 ): Promise<string> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity?.subject) {
-    throw new Error("Unauthorized: No identity found");
+    throw new ConvexError({
+      code: "UNAUTHORIZED",
+      message: "Not authenticated",
+    });
   }
   return identity.subject;
 }

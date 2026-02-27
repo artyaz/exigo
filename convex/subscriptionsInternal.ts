@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 
 export const upsert = internalMutation({
   args: {
@@ -46,7 +46,7 @@ export const upsert = internalMutation({
   },
 });
 
-export const getForUser = internalMutation({
+export const getForUser = internalQuery({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db

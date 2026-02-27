@@ -9,6 +9,8 @@ import type { Id } from "./_generated/dataModel";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
+const QUESTION_TYPE = v.union(v.literal("select"), v.literal("write"));
+
 function getStartOfMonthMs() {
   const now = new Date();
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0);
@@ -166,6 +168,10 @@ export const create = mutation({
 export const countForUserThisMonth = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject || identity.subject !== args.userId) {
+      throw new Error("Unauthorized");
+    }
     return await countForUserThisMonthInternal(ctx, args.userId);
   },
 });
@@ -217,6 +223,11 @@ export const getForSpace = query({
 export const listAll = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject || identity.subject !== args.userId) {
+      throw new Error("Unauthorized");
+    }
+
     const tests = await ctx.db.query("tests").order("desc").collect();
     const enriched = await Promise.all(
       tests.map(async (test) => {
@@ -267,7 +278,7 @@ export const createWithQuestions = mutation({
     userId: v.string(),
     questions: v.array(
       v.object({
-        type: v.string(),
+        type: QUESTION_TYPE,
         question: v.string(),
         options: v.optional(v.array(v.string())),
         answer: v.optional(v.string()),
@@ -315,7 +326,7 @@ export const createWithQuestions = mutation({
     for (const q of args.questions) {
       await ctx.db.insert("questions", {
         testId: testId,
-        type: q.type as "select" | "write",
+        type: q.type,
         question: q.question,
         options: q.options,
         answer: q.answer,

@@ -4,50 +4,42 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const evt = await verifyWebhook(req);
-    const eventType = evt.type;
+    const payload = await verifyWebhook(req);
+    const eventType = payload.type as string;
 
-    console.log(`[Clerk Webhook] Received event: ${eventType}`, {
-      id: (evt.data as { id?: string }).id,
-    });
+    console.log(`[Clerk Webhook] Event: ${eventType}`);
+
+    // Skip non-subscription events
+    if (!eventType.startsWith("subscription")) {
+      return NextResponse.json({ received: true, skipped: "not_subscription" });
+    }
 
     const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-    if (!convexUrl) {
-      throw new Error("NEXT_PUBLIC_CONVEX_URL is missing");
-    }
-
     const adminKey = process.env.CONVEX_DEPLOY_KEY;
-    if (!adminKey) {
-      throw new Error("CONVEX_DEPLOY_KEY is missing for webhook operations");
+
+    if (!convexUrl || !adminKey) {
+      throw new Error("Missing Convex configuration");
     }
 
+    // Forward payload to Convex (Clerk transformation handles the structure)
     const response = await fetch(`${convexUrl}/http/clerkWebhook`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Convex ${adminKey}`,
       },
-      body: JSON.stringify(evt),
+      body: JSON.stringify(payload.data),
     });
 
     if (!response.ok) {
       const text = await response.text();
-      console.error(
-        `[Clerk Webhook] Convex HTTP action failed: ${response.status} ${text}`,
-      );
-      throw new Error(`Convex HTTP action failed: ${response.status}`);
+      console.error(`[Clerk Webhook] Convex error: ${response.status}`);
+      throw new Error(`Convex failed: ${response.status}`);
     }
 
-    const result = (await response.json()) as {
-      received: boolean;
-      skipped?: string;
-    };
-    return NextResponse.json(result);
+    return NextResponse.json({ received: true });
   } catch (error) {
-    console.error("[Clerk Webhook] Error processing webhook:", error);
-    return NextResponse.json(
-      { error: "Webhook processing failed" },
-      { status: 500 },
-    );
+    console.error("[Clerk Webhook] Error:", error);
+    return NextResponse.json({ error: "Webhook failed" }, { status: 500 });
   }
 }

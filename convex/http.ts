@@ -3,120 +3,48 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 const clerkWebhook = httpAction(async (ctx, request) => {
+  const authHeader = request.headers.get("Authorization");
+  const expectedAuth = `Convex ${process.env.CONVEX_DEPLOY_KEY}`;
+
+  if (!authHeader || authHeader !== expectedAuth) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const payload = (await request.json()) as {
-    type: string;
-    data: {
-      id: string;
-      object?: string;
-      plan?: {
-        id?: string;
-        slug?: string;
-        name?: string;
-      };
-      payer_user_id?: string;
-      payer_organization_id?: string;
-      status?: string;
-      period_start?: number;
-      period_end?: number | null;
-      canceled_at?: number | null;
-    };
+    userId: string;
+    accessLevel: number;
+    clerkPlanSlug?: string;
+    status: "active" | "canceled" | "past_due" | "expired";
+    periodEnd?: number;
+    canceledAt?: number;
   };
 
-  const eventType = payload.type;
-  const data = payload.data;
+  if (!payload.userId) {
+    return new Response(JSON.stringify({ error: "Missing userId" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
-  console.log(`[Clerk Webhook HTTP] Received event: ${eventType}`, {
-    id: data.id,
+  console.log("[Webhook] Syncing subscription", {
+    accessLevel: payload.accessLevel,
+    status: payload.status,
   });
-
-  const userId = data.payer_user_id;
-  if (!userId) {
-    console.log("[Clerk Webhook HTTP] No payer_user_id, skipping");
-    return new Response(
-      JSON.stringify({ received: true, skipped: "no_user_id" }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
-
-  if (!eventType.startsWith("subscriptionItem.")) {
-    console.log(
-      `[Clerk Webhook HTTP] Event ${eventType} not a subscriptionItem event, skipping`,
-    );
-    return new Response(
-      JSON.stringify({ received: true, skipped: "not_subscription_item" }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
-
-  function parseAccessLevelFromSlug(slug: string | undefined): number {
-    if (!slug) return 0;
-    const normalized = slug.toLowerCase().trim();
-
-    if (normalized === "educator") return 2;
-    if (normalized === "pro_scholar" || normalized === "pro-scholar") return 1;
-    if (normalized === "basic_tests") return 0;
-
-    if (/educator|teacher/.test(normalized)) return 2;
-    if (/pro|scholar|premium|plus/.test(normalized)) return 1;
-
-    return 0;
-  }
-
-  function mapStatusToSubscriptionStatus(
-    status: string | undefined,
-  ): "active" | "canceled" | "past_due" | "expired" {
-    switch (status) {
-      case "active":
-        return "active";
-      case "canceled":
-        return "canceled";
-      case "past_due":
-        return "past_due";
-      case "ended":
-      case "abandoned":
-      case "incomplete":
-        return "expired";
-      case "upcoming":
-        return "active";
-      default:
-        return "active";
-    }
-  }
-
-  const planId = data.plan?.id;
-  const planSlug = data.plan?.slug;
-  const accessLevel = parseAccessLevelFromSlug(planSlug);
-  const status = mapStatusToSubscriptionStatus(data.status);
-  const periodEnd = data.period_end ?? undefined;
-  const canceledAt = data.canceled_at ?? undefined;
-
-  console.log(
-    `[Clerk Webhook HTTP] Upserting subscription for user ${userId}`,
-    {
-      planSlug,
-      accessLevel,
-      status,
-      periodEnd,
-    },
-  );
 
   await ctx.runMutation(internal.subscriptionsInternal.upsert, {
-    userId,
-    accessLevel,
-    clerkPlanId: planId,
-    clerkPlanSlug: planSlug,
-    status,
-    periodEnd,
-    canceledAt,
+    userId: payload.userId,
+    accessLevel: payload.accessLevel,
+    clerkPlanId: undefined,
+    clerkPlanSlug: payload.clerkPlanSlug,
+    status: payload.status,
+    periodEnd: payload.periodEnd,
+    canceledAt: payload.canceledAt,
   });
 
-  return new Response(JSON.stringify({ received: true }), {
+  return new Response(JSON.stringify({ success: true }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });

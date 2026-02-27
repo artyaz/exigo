@@ -80,7 +80,9 @@ export default defineSchema({
     ),
     periodEnd: v.optional(v.number()),
     canceledAt: v.optional(v.number()),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
   testsUsage: defineTable({
     userId: v.string(),
     month: v.string(),
