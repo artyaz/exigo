@@ -1,16 +1,24 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getAuthedContext, withAuth } from "./authDecorators";
+import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 export const create = mutation({
     args: {
-        userId: v.string(),
         spaceId: v.id("spaces"),
         questionId: v.id("questions"),
-        maxDives: v.number(),
     },
     handler: async (ctx, args) => {
+        const auth = await getAuthedContext(ctx);
+        const userId = auth.userId;
+        const maxDives = auth.limits.deepDiveLimit;
+
+        if (maxDives === 0) {
+            throw new Error("You don't have access to Deep Dive notes on your current plan. Please upgrade to continue.");
+        }
+
         const space = await ctx.db.get(args.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
+        if (!space || (space.userId !== userId && space.userId !== "default_user")) {
             throw new Error("Unauthorized access to this space");
         }
 
@@ -34,16 +42,16 @@ export const create = mutation({
 
         const dives = await ctx.db
             .query("deepDives")
-            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .withIndex("by_user", (q) => q.eq("userId", userId))
             .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
             .collect();
 
-        if (dives.length >= args.maxDives) {
-            throw new Error(`Limit reached: You can only generate ${args.maxDives} Deep Dive notes per month on your current plan.`);
+        if (maxDives !== UNLIMITED_LIMIT && dives.length >= maxDives) {
+            throw new Error(`Limit reached: You can only generate ${maxDives} Deep Dive notes per month on your current plan.`);
         }
 
         return await ctx.db.insert("deepDives", {
-            userId: args.userId,
+            userId: userId,
             spaceId: args.spaceId,
             questionId: args.questionId,
         });
