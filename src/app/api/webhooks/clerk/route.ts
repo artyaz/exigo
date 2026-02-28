@@ -4,13 +4,23 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const payload = await verifyWebhook(req);
-    const eventType = payload.type as string;
+    const rawPayload = await verifyWebhook(req);
+    // After Clerk webhook transformation, the structure of the data changes.
+    // Ensure we handle it with the properties we expect.
+    type TransformedPayload = {
+      userId?: string;
+      accessLevel?: number;
+      clerkPlanSlug?: string;
+      status?: string;
+      periodEnd?: number;
+    };
+    const payload = rawPayload as unknown as TransformedPayload;
 
-    console.log(`[Clerk Webhook] Event: ${eventType}`);
+    console.log(`[Clerk Webhook] Full Transformed Payload:`, JSON.stringify(payload, null, 2));
 
-    if (!eventType?.startsWith("subscription")) {
-      return NextResponse.json({ received: true, skipped: "not_subscription" });
+    if (!payload?.userId) {
+      console.log(`[Clerk Webhook] Missing userId, skipping (perhaps not a transformed subscription event)`);
+      return NextResponse.json({ received: true, skipped: "no_userid" });
     }
 
     const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
@@ -29,7 +39,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         Authorization: `Convex ${adminKey}`,
       },
-      body: JSON.stringify(payload.data),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
