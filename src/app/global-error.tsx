@@ -6,19 +6,25 @@ import { useEffect } from "react";
 
 export default function GlobalError({
   error,
-  _reset,
-}: {
+  reset,
+}: Readonly<{
   error: Error & { digest?: string };
-  _reset: () => void;
-}) {
+  reset: () => void;
+}>) {
   useEffect(() => {
     posthog.captureException(error);
   }, [error]);
 
   return (
-    <html>
+    <html lang="en">
       <body>
         <NextError statusCode={0} />
+        <button
+          onClick={reset}
+          style={{ display: "block", margin: "1rem auto", padding: "0.5rem 1rem" }}
+        >
+          Try again
+        </button>
       </body>
     </html>
   );

@@ -41,8 +41,8 @@ export async function createSpaceServerAction(name: string): Promise<ActionResul
         spaceName: name,
     });
 
-    const convex = await createAuthedConvexClient(getToken, "actions.spaces.createSpaceServerAction");
     try {
+        const convex = await createAuthedConvexClient(getToken, "actions.spaces.createSpaceServerAction");
         const spaceId = await convex.mutation(api.spaces.create, { name, userId });
         return { ok: true, data: spaceId };
     } catch (error) {
@@ -85,9 +85,8 @@ export async function createTestServerAction(args: {
         };
     }
 
-    const convex = await createAuthedConvexClient(getToken, "actions.spaces.createTestServerAction");
-
     try {
+        const convex = await createAuthedConvexClient(getToken, "actions.spaces.createTestServerAction");
         const testId = await convex.mutation(api.tests.createEmptyTest, {
             spaceId: args.spaceId as Id<"spaces">,
             type: args.type,

@@ -33,7 +33,7 @@ function getFunctionName(functionRef: unknown): string {
 }
 
 function decodeBase64Url(input: string): string {
-    const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+    const normalized = input.replaceAll("-", "+").replaceAll("_", "/");
     const padding = normalized.length % 4;
     const padded = padding === 0 ? normalized : normalized + "=".repeat(4 - padding);
     return Buffer.from(padded, "base64").toString("utf-8");
@@ -53,45 +53,57 @@ function getDistinctIdFromJwt(token: string): string | undefined {
     }
 }
 
-async function captureConvexException(
+let posthogClient: import("posthog-node").PostHog | null = null;
+
+function getConvexPosthogClient(): import("posthog-node").PostHog | null {
+    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+    if (!key || !host) return null;
+    return posthogClient;
+}
+
+async function ensureConvexPosthogClient(): Promise<import("posthog-node").PostHog | null> {
+    if (posthogClient) return posthogClient;
+    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+    if (!key || !host) return null;
+    const { PostHog } = await import("posthog-node");
+    posthogClient ??= new PostHog(key, { host, flushAt: 1, flushInterval: 0 });
+    return posthogClient;
+}
+
+function captureConvexException(
     error: unknown,
     distinctId: string | undefined,
     properties: Record<string, string>,
-): Promise<void> {
-    if (
-        !process.env.NEXT_PUBLIC_POSTHOG_KEY ||
-        !process.env.NEXT_PUBLIC_POSTHOG_HOST
-    ) {
+): void {
+    if (!getConvexPosthogClient() && !process.env.NEXT_PUBLIC_POSTHOG_KEY) {
         return;
     }
-    try {
-        const { PostHog } = await import("posthog-node");
-        const posthog = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
-            host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-            flushAt: 1,
-            flushInterval: 0,
-        });
-        let message = String(error);
-        if (error instanceof Error && error.message) {
-            message = error.message;
-        } else if (error && typeof error === "object") {
-            const withMessage = error as { message?: unknown };
-            if (typeof withMessage.message === "string" && withMessage.message) {
-                message = withMessage.message;
+    ensureConvexPosthogClient()
+        .then((posthog) => {
+            if (!posthog) return;
+            let message = String(error);
+            if (error instanceof Error && error.message) {
+                message = error.message;
+            } else if (error && typeof error === "object") {
+                const withMessage = error as { message?: unknown };
+                if (typeof withMessage.message === "string" && withMessage.message) {
+                    message = withMessage.message;
+                }
             }
-        }
-        const exception =
-            error instanceof Error && typeof error.stack === "string"
-                ? error
-                : new Error(message);
-        posthog.captureException(exception, distinctId, properties);
-        await posthog._shutdown(2000);
-    } catch (captureError) {
-        logError("PostHog exception capture failed", {
-            source: "convex-client",
-            ...getErrorAttributes(captureError),
+            const exception =
+                error instanceof Error && typeof error.stack === "string"
+                    ? error
+                    : new Error(message);
+            posthog.captureException(exception, distinctId, properties);
+        })
+        .catch((captureError: unknown) => {
+            logError("PostHog exception capture failed", {
+                source: "convex-client",
+                ...getErrorAttributes(captureError),
+            });
         });
-    }
 }
 
 export function getConvexUrlOrThrow(context: string): string {
@@ -164,7 +176,7 @@ export async function createAuthedConvexClient(
                             duration_ms: Date.now() - startedAt,
                             ...getErrorAttributes(error),
                         });
-                        await captureConvexException(error, distinctId, {
+                        captureConvexException(error, distinctId, {
                             source: "convex-client",
                             context,
                             operation: String(prop),

@@ -302,7 +302,11 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 knowledgePieceId: resolvedTopicId,
             });
             if (!result.ok) {
-                setTestGenerateError(result.error);
+                const errorMessage =
+                    result.code === "UNAUTHORIZED" ? "Please sign in to generate tests." :
+                    result.code === "PLAN_LIMIT" ? result.error :
+                    "Failed to create test. Please try again.";
+                setTestGenerateError(errorMessage);
                 setIsGenerating(false);
                 return;
             }

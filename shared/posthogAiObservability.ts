@@ -23,7 +23,7 @@ type CaptureAiGenerationParams = {
 
 let posthogClient: PostHog | null = null;
 
-function getPosthogClient(): PostHog | null {
+export function getPosthogClient(): PostHog | null {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
   if (!key || !host) {
@@ -118,6 +118,14 @@ export function createAiTraceId(): string {
   return `trace-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+const MAX_AI_TEXT_LENGTH = 500;
+
+function truncateForAnalytics(value: unknown): string {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  if (text.length <= MAX_AI_TEXT_LENGTH) return text;
+  return text.slice(0, MAX_AI_TEXT_LENGTH) + "…";
+}
+
 export function captureAiGenerationEvent(params: CaptureAiGenerationParams): void {
   const posthog = getPosthogClient();
   if (!posthog || !params.distinctId) {
@@ -131,9 +139,9 @@ export function captureAiGenerationEvent(params: CaptureAiGenerationParams): voi
     $ai_trace_id: params.traceId,
     $ai_provider: params.provider,
     $ai_model: params.model,
-    $ai_input: params.input,
+    $ai_input: truncateForAnalytics(params.input),
     $ai_input_tokens: params.inputTokens ?? metadata.inputTokens,
-    $ai_output_choices: outputChoices,
+    $ai_output_choices: truncateForAnalytics(outputChoices),
     $ai_output_tokens: params.outputTokens ?? metadata.outputTokens,
     $ai_latency: params.latencySeconds,
   };

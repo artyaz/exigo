@@ -56,10 +56,13 @@ export default function SpacesPage() {
             }
             setNewSpaceName("");
         } catch (err) {
-            const exception =
-                err instanceof Error && typeof err.stack === "string"
-                    ? err
-                    : new Error(err instanceof Error ? err.message : String(err));
+            let exception: Error;
+            if (err instanceof Error && typeof err.stack === "string") {
+                exception = err;
+            } else {
+                const message = err instanceof Error ? err.message : String(err);
+                exception = new Error(message);
+            }
             posthog.captureException(
                 exception,
                 { source: "spaces.create", attemptedSpaceName: newSpaceName.trim() },

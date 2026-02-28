@@ -18,6 +18,7 @@ import { RESOLUTION_THRESHOLD } from "../shared/planConfig";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
+  getPosthogClient,
 } from "../shared/posthogAiObservability";
 
 const FALLBACK_IMPROVEMENT =
@@ -222,6 +223,21 @@ Generate a concise 1-sentence description of the advanced concept they should fo
           "knowledgeNodes.generateImprovements: Gemini request failed; using fallback improvement.",
           error,
         );
+        const posthog = getPosthogClient();
+        if (posthog) {
+          posthog.capture({
+            distinctId: auth.userId,
+            event: "ai_generation_failed",
+            properties: {
+              source: "knowledgeNodes.generateImprovements",
+              error_message: error instanceof Error ? error.message : String(error),
+              error_name: error instanceof Error ? error.name : "UnknownError",
+              model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+              knowledgePieceId: args.knowledgePieceId,
+              usedFallback: true,
+            },
+          });
+        }
       }
     }
 

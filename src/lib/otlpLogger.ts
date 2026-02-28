@@ -12,7 +12,9 @@ type Primitive = string | number | boolean;
 type AttributeValue = Primitive | Primitive[];
 export type LogAttributes = Record<string, AttributeValue | undefined>;
 
-const POSTHOG_OTLP_LOGS_URL = "https://us.i.posthog.com/i/v1/logs";
+const POSTHOG_OTLP_LOGS_URL =
+  process.env.POSTHOG_OTLP_URL ??
+  `https://${process.env.POSTHOG_REGION === "eu" ? "eu" : "us"}.i.posthog.com/i/v1/logs`;
 const LOGGER_NAME = "exigo.server";
 
 let initialized = false;
@@ -37,7 +39,7 @@ function sanitizeAttributes(
   if (!attributes) return {};
   const cleaned: Record<string, AttributeValue> = {};
   for (const [key, value] of Object.entries(attributes)) {
-    if (typeof value !== "undefined") {
+    if (value !== undefined) {
       cleaned[key] = value;
     }
   }
@@ -67,19 +69,23 @@ export function registerOtelLogger(): void {
     "deployment.environment": getDeploymentEnvironment(),
   });
 
-  const exporter = new OTLPLogExporter({
-    url: POSTHOG_OTLP_LOGS_URL,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  try {
+    const exporter = new OTLPLogExporter({
+      url: POSTHOG_OTLP_LOGS_URL,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-  const provider = new LoggerProvider({
-    resource,
-    processors: [new BatchLogRecordProcessor(exporter)],
-  });
-  logs.setGlobalLoggerProvider(provider);
-  loggerInstance = logs.getLogger(LOGGER_NAME);
+    const provider = new LoggerProvider({
+      resource,
+      processors: [new BatchLogRecordProcessor(exporter)],
+    });
+    logs.setGlobalLoggerProvider(provider);
+    loggerInstance = logs.getLogger(LOGGER_NAME);
+  } catch (initError) {
+    console.error("Failed to initialize OTLP logger:", initError);
+  }
   initialized = true;
 }
 

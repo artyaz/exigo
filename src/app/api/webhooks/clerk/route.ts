@@ -92,17 +92,42 @@ export async function POST(req: NextRequest) {
       external_url: `${convexSiteUrl}/clerkWebhook`,
     });
 
-    const response = await fetch(`${convexSiteUrl}/clerkWebhook`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Convex ${adminKey}`,
-      },
-      // Safely strip explicitly undefined values so they don't get serialized as null
-      body: JSON.stringify(payload, (k: string, v: unknown): unknown =>
-        v === undefined ? undefined : v,
-      ),
-    });
+    const timeoutMs = process.env.WEBHOOK_TIMEOUT_MS
+      ? parseInt(process.env.WEBHOOK_TIMEOUT_MS, 10)
+      : 15000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(`${convexSiteUrl}/clerkWebhook`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Convex ${adminKey}`,
+        },
+        body: JSON.stringify(payload, (k: string, v: unknown): unknown =>
+          v === undefined ? undefined : v,
+        ),
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof DOMException && fetchError.name === "AbortError") {
+        logError("Convex webhook forwarding timed out", {
+          source: "clerk-webhook",
+          requestId,
+          eventType,
+          userId: payload.userId,
+          external_service: "convex",
+          timeout_ms: timeoutMs,
+          duration_ms: Date.now() - forwardStartedAt,
+        });
+        return NextResponse.json({ error: "Webhook forwarding timed out" }, { status: 504 });
+      }
+      throw fetchError;
+    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const text = await response.text();

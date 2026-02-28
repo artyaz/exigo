@@ -20,6 +20,30 @@ function normalizeException(err: unknown): Error {
   return new Error(String(err));
 }
 
+function extractDistinctId(
+  headers: { cookie?: string | string[]; get?: (name: string) => string | null },
+  requestId: string,
+): string | undefined {
+  if (!headers.cookie) return undefined;
+  const cookieString = Array.isArray(headers.cookie)
+    ? headers.cookie.join("; ")
+    : headers.cookie;
+  const match = /ph_phc_.*?_posthog=([^;]+)/.exec(cookieString);
+  if (!match?.[1]) return undefined;
+  try {
+    const decoded = decodeURIComponent(match[1]);
+    const data = JSON.parse(decoded) as { distinct_id?: string };
+    return data.distinct_id ?? undefined;
+  } catch (e) {
+    logWarn("Failed to parse PostHog cookie", {
+      requestId,
+      route: "next.onRequestError",
+      ...getErrorAttributes(e),
+    });
+    return undefined;
+  }
+}
+
 export const onRequestError = async (
   err: unknown,
   request: {
@@ -38,47 +62,21 @@ export const onRequestError = async (
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
     const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
     if (!key || !host) {
-      return;
+      logWarn("PostHog env vars missing; skipping exception capture", {
+        requestId,
+        route: request.url ?? "unknown",
+        missingKey: !key,
+        missingHost: !host,
+      });
+    } else {
+      const { PostHog } = await import("posthog-node");
+      const posthog = new PostHog(key, { host, flushAt: 1, flushInterval: 0 });
+      const distinctId = extractDistinctId(request.headers, requestId);
+      posthog.captureException(normalizeException(err), distinctId, {
+        source: "next.onRequestError",
+      });
+      await posthog.shutdown(2000);
     }
-
-    const { PostHog } = await import("posthog-node");
-    const posthog = new PostHog(key, {
-      host,
-      flushAt: 1,
-      flushInterval: 0,
-    });
-
-    let distinctId: string | undefined = undefined;
-
-    if (request.headers.cookie) {
-      const cookieString = Array.isArray(request.headers.cookie)
-        ? request.headers.cookie.join("; ")
-        : request.headers.cookie;
-
-      const postHogCookieMatch = cookieString.match(
-        /ph_phc_.*?_posthog=([^;]+)/,
-      );
-      if (postHogCookieMatch?.[1]) {
-        try {
-          const decodedCookie = decodeURIComponent(postHogCookieMatch[1]);
-          const postHogData = JSON.parse(decodedCookie) as {
-            distinct_id?: string;
-          };
-          distinctId = postHogData.distinct_id ?? undefined;
-        } catch (e) {
-          logWarn("Failed to parse PostHog cookie", {
-            requestId,
-            route: "next.onRequestError",
-            ...getErrorAttributes(e),
-          });
-        }
-      }
-    }
-
-    posthog.captureException(normalizeException(err), distinctId, {
-      source: "next.onRequestError",
-    });
-    await posthog._shutdown(2000);
   }
 
   logError("Unhandled request error captured", {
