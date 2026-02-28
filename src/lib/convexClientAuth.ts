@@ -40,8 +40,19 @@ async function captureConvexException(
     try {
         const { getPostHogServer } = await import("./posthog-server");
         const posthog = getPostHogServer();
+        let message = String(error);
+        if (error instanceof Error && error.message) {
+            message = error.message;
+        } else if (error && typeof error === "object") {
+            const withMessage = error as { message?: unknown };
+            if (typeof withMessage.message === "string" && withMessage.message) {
+                message = withMessage.message;
+            }
+        }
         const exception =
-            error instanceof Error ? error : new Error(String(error));
+            error instanceof Error && typeof error.stack === "string"
+                ? error
+                : new Error(message);
         posthog.captureException(exception, undefined, properties);
     } catch (captureError) {
         console.error("PostHog capture failed:", captureError);

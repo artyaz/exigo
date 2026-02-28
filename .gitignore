@@ -48,6 +48,7 @@ yarn-error.log*
 # ai assistant files
 .cursorrules
 .agent/
+.copilot-instructions
 # clerk configuration (can include secrets)
 /.clerk/
 lint-output*.txt

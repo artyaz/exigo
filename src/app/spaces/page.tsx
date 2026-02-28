@@ -52,8 +52,12 @@ export default function SpacesPage() {
             await createSpaceServerAction(newSpaceName);
             setNewSpaceName("");
         } catch (err) {
+            const exception =
+                err instanceof Error && typeof err.stack === "string"
+                    ? err
+                    : new Error(err instanceof Error ? err.message : String(err));
             posthog.captureException(
-                err instanceof Error ? err : new Error(String(err)),
+                exception,
                 { source: "spaces.create", attemptedSpaceName: newSpaceName.trim() },
             );
             setError(err instanceof Error ? err.message : "Failed to create space");
