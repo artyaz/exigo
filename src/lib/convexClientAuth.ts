@@ -128,7 +128,10 @@ export async function createAuthedConvexClient(
                 (prop === "query" || prop === "mutation" || prop === "action") &&
                 typeof value === "function"
             ) {
-                const callable = value as (...callArgs: unknown[]) => Promise<unknown>;
+                const callable = value as (
+                    this: ConvexHttpClient,
+                    ...callArgs: unknown[]
+                ) => Promise<unknown>;
                 return async (...args: unknown[]) => {
                     const functionName = getFunctionName(args[0]);
                     const startedAt = Date.now();
@@ -141,7 +144,7 @@ export async function createAuthedConvexClient(
                     });
 
                     try {
-                        const result = await callable(...args);
+                        const result = await callable.apply(target, args);
                         logInfo("Convex operation succeeded", {
                             source: "convex-client",
                             context,
