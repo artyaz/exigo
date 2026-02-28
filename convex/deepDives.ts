@@ -1,69 +1,93 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getAuthedContext } from "./authDecorators";
+import { UNLIMITED_LIMIT } from "../shared/planConfig";
+
+function getStartOfMonthUTC(): number {
+  const now = new Date();
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0);
+}
 
 export const create = mutation({
-    args: {
-        userId: v.string(),
-        spaceId: v.id("spaces"),
-        questionId: v.id("questions"),
-        maxDives: v.number(),
-    },
-    handler: async (ctx, args) => {
-        const space = await ctx.db.get(args.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
-            throw new Error("Unauthorized access to this space");
-        }
+  args: {
+    spaceId: v.id("spaces"),
+    questionId: v.id("questions"),
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthedContext(ctx);
+    const userId = auth.userId;
+    const maxDives = auth.limits.deepDiveLimit;
 
-        const question = await ctx.db.get(args.questionId);
-        if (!question) {
-            throw new Error("Question not found");
-        }
+    if (maxDives === 0) {
+      throw new Error(
+        "You don't have access to Deep Dive notes on your current plan. Please upgrade to continue.",
+      );
+    }
 
-        const test = await ctx.db.get(question.testId);
-        if (!test) {
-            throw new Error("Test not found for this question");
-        }
+    const space = await ctx.db.get(args.spaceId);
+    if (
+      !space ||
+      (space.userId !== userId && space.userId !== "default_user")
+    ) {
+      throw new Error("Unauthorized access to this space");
+    }
 
-        if (test.spaceId !== args.spaceId) {
-            throw new Error("Question does not belong to this space");
-        }
+    const question = await ctx.db.get(args.questionId);
+    if (!question) {
+      throw new Error("Question not found");
+    }
 
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
+    const test = await ctx.db.get(question.testId);
+    if (!test) {
+      throw new Error("Test not found for this question");
+    }
 
-        const dives = await ctx.db
-            .query("deepDives")
-            .withIndex("by_user", (q) => q.eq("userId", args.userId))
-            .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
-            .collect();
+    if (test.spaceId !== args.spaceId) {
+      throw new Error("Question does not belong to this space");
+    }
 
-        if (dives.length >= args.maxDives) {
-            throw new Error(`Limit reached: You can only generate ${args.maxDives} Deep Dive notes per month on your current plan.`);
-        }
+    if (maxDives !== UNLIMITED_LIMIT) {
+      const startOfMonth = getStartOfMonthUTC();
 
-        return await ctx.db.insert("deepDives", {
-            userId: args.userId,
-            spaceId: args.spaceId,
-            questionId: args.questionId,
-        });
-    },
+      const dives = await ctx.db
+        .query("deepDives")
+        .withIndex("by_user", (q) =>
+          q.eq("userId", userId).gte("_creationTime", startOfMonth),
+        )
+        .collect();
+
+      if (dives.length >= maxDives) {
+        throw new Error(
+          `Limit reached: You can only generate ${maxDives} Deep Dive notes per month on your current plan.`,
+        );
+      }
+    }
+
+    return await ctx.db.insert("deepDives", {
+      userId: userId,
+      spaceId: args.spaceId,
+      questionId: args.questionId,
+    });
+  },
 });
 
-
 export const countForUserThisMonth = query({
-    args: { userId: v.string() },
-    handler: async (ctx, args) => {
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) {
+      return 0;
+    }
 
-        const dives = await ctx.db
-            .query("deepDives")
-            .withIndex("by_user", (q) => q.eq("userId", args.userId))
-            .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
-            .collect();
+    const startOfMonth = getStartOfMonthUTC();
 
-        return dives.length;
-    },
+    const dives = await ctx.db
+      .query("deepDives")
+      .withIndex("by_user", (q) =>
+        q.eq("userId", identity.subject).gte("_creationTime", startOfMonth),
+      )
+      .collect();
+
+    return dives.length;
+  },
 });

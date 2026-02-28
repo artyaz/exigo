@@ -5,7 +5,6 @@ import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
-import { getDeepDiveLimitForTier } from "../../../../../shared/planConfig";
 
 interface FeelsHardBody {
     testId?: string;
@@ -91,8 +90,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Upgrade to Pro to use Deep Dive study notes!" }, { status: 403 });
         }
 
-        const limit = getDeepDiveLimitForTier(planStatus.tier);
-
 
         if (!process.env.GOOGLE_GEMINI_API_KEY) {
             return NextResponse.json({ error: "Server missing Gemini API key" }, { status: 500 });
@@ -157,10 +154,8 @@ export async function POST(req: NextRequest) {
         });
 
         await convex.mutation(api.deepDives.create, {
-            userId,
             spaceId: test.spaceId,
             questionId: questionId as Id<"questions">,
-            maxDives: limit,
         });
 
 
