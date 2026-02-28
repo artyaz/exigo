@@ -60,8 +60,12 @@ async function captureConvexException(
         return;
     }
     try {
-        const { getPostHogServer } = await import("./posthog-server");
-        const posthog = getPostHogServer();
+        const { PostHog } = await import("posthog-node");
+        const posthog = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
+            host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+            flushAt: 1,
+            flushInterval: 0,
+        });
         let message = String(error);
         if (error instanceof Error && error.message) {
             message = error.message;
@@ -76,6 +80,7 @@ async function captureConvexException(
                 ? error
                 : new Error(message);
         posthog.captureException(exception, distinctId, properties);
+        await posthog._shutdown(2000);
     } catch (captureError) {
         console.error("PostHog capture failed:", captureError);
     }

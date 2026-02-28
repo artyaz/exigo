@@ -2,14 +2,34 @@ export function register() {
   // No-op for initialization
 }
 
+function normalizeException(err: unknown): Error {
+  if (err instanceof Error && typeof err.stack === "string") {
+    return err;
+  }
+  if (err instanceof Error) {
+    return new Error(err.message);
+  }
+  return new Error(String(err));
+}
+
 export const onRequestError = async (
-  err: Error,
+  err: unknown,
   request: { headers: { cookie?: string | string[] } },
   _context: unknown,
 ) => {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { getPostHogServer } = await import("./src/lib/posthog-server");
-    const posthog = getPostHogServer();
+    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+    if (!key || !host) {
+      return;
+    }
+
+    const { PostHog } = await import("posthog-node");
+    const posthog = new PostHog(key, {
+      host,
+      flushAt: 1,
+      flushInterval: 0,
+    });
 
     let distinctId: string | undefined = undefined;
 
@@ -34,6 +54,9 @@ export const onRequestError = async (
       }
     }
 
-    await posthog.captureException(err, distinctId);
+    posthog.captureException(normalizeException(err), distinctId, {
+      source: "next.onRequestError",
+    });
+    await posthog._shutdown(2000);
   }
 };
