@@ -4,11 +4,31 @@ import { internal } from "./_generated/api";
 
 const VALID_STATUSES = ["active", "canceled", "past_due", "expired"] as const;
 type SubscriptionStatus = (typeof VALID_STATUSES)[number];
+const MAX_ACCESS_LEVEL = 2;
 
 function isValidStatus(value: unknown): value is SubscriptionStatus {
   return (
     typeof value === "string" &&
     VALID_STATUSES.includes(value as SubscriptionStatus)
+  );
+}
+
+function isValidAccessLevel(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_ACCESS_LEVEL
+  );
+}
+
+function isValidTimestamp(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0
   );
 }
 
@@ -71,7 +91,7 @@ const clerkWebhook = httpAction(async (ctx, request) => {
     );
   }
 
-  if (typeof p.accessLevel !== "number") {
+  if (!isValidAccessLevel(p.accessLevel)) {
     return new Response(
       JSON.stringify({ error: "Missing or invalid accessLevel" }),
       {
@@ -98,14 +118,14 @@ const clerkWebhook = httpAction(async (ctx, request) => {
     });
   }
 
-  if (p.periodEnd !== undefined && typeof p.periodEnd !== "number") {
+  if (p.periodEnd !== undefined && !isValidTimestamp(p.periodEnd)) {
     return new Response(JSON.stringify({ error: "Invalid periodEnd" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  if (p.canceledAt !== undefined && typeof p.canceledAt !== "number") {
+  if (p.canceledAt !== undefined && !isValidTimestamp(p.canceledAt)) {
     return new Response(JSON.stringify({ error: "Invalid canceledAt" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },

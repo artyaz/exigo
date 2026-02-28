@@ -134,14 +134,17 @@ export const saveMessageInternal = internalMutation({
   },
 });
 
+const MAX_CHAT_HISTORY = 20;
+
 function buildHistoryPrompt(
   pastMessages: Doc<"testMessages">[],
   latestMessage: string,
 ): string {
-  if (pastMessages.length === 0) {
+  const recentMessages = pastMessages.slice(-MAX_CHAT_HISTORY);
+  if (recentMessages.length === 0) {
     return `\nStudent: ${latestMessage}`;
   }
-  const history = pastMessages
+  const history = recentMessages
     .map((m) => `${m.role === "user" ? "Student" : "You"}: ${m.content}`)
     .join("\n");
   return `\nPrevious conversation about this question:\n${history}\nStudent: ${latestMessage}`;

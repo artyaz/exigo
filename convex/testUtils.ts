@@ -1,4 +1,4 @@
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import {
   getLimitsForAccessLevel,
@@ -90,7 +90,7 @@ export const setSubscriptionForTest = internalMutation({
   },
 });
 
-export const getSubscriptionForTest = internalMutation({
+export const getSubscriptionForTest = internalQuery({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
     return await ctx.db

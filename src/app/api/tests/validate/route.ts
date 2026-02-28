@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
     const questionId = rawBody.questionId;
     const answer = rawBody.answer;
     const testType = rawBody.testType;
+    const knowledgePieceId = rawBody.knowledgePieceId;
 
     if (
       typeof questionId !== "string" ||
@@ -83,6 +84,16 @@ export async function POST(req: NextRequest) {
     ) {
       return NextResponse.json(
         { error: "Missing or invalid required fields" },
+        { status: 400 },
+      );
+    }
+
+    if (
+      knowledgePieceId !== undefined &&
+      typeof knowledgePieceId !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid knowledgePieceId" },
         { status: 400 },
       );
     }

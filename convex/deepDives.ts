@@ -41,20 +41,22 @@ export const create = mutation({
       throw new Error("Question does not belong to this space");
     }
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    if (maxDives !== UNLIMITED_LIMIT) {
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
 
-    const dives = await ctx.db
-      .query("deepDives")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
-      .collect();
+      const dives = await ctx.db
+        .query("deepDives")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
+        .collect();
 
-    if (maxDives !== UNLIMITED_LIMIT && dives.length >= maxDives) {
-      throw new Error(
-        `Limit reached: You can only generate ${maxDives} Deep Dive notes per month on your current plan.`,
-      );
+      if (dives.length >= maxDives) {
+        throw new Error(
+          `Limit reached: You can only generate ${maxDives} Deep Dive notes per month on your current plan.`,
+        );
+      }
     }
 
     return await ctx.db.insert("deepDives", {
@@ -66,15 +68,20 @@ export const create = mutation({
 });
 
 export const countForUserThisMonth = query({
-  args: { userId: v.string() },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) {
+      return 0;
+    }
+
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
 
     const dives = await ctx.db
       .query("deepDives")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
       .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
       .collect();
 
