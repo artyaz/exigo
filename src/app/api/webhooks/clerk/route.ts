@@ -20,18 +20,27 @@ export async function POST(req: NextRequest) {
     // After Clerk webhook transformation, the structure of the data changes.
     // Ensure we handle it with the properties we expect.
     type TransformedPayload = {
+      eventType?: string;
       userId?: string;
       accessLevel?: number;
       clerkPlanSlug?: string;
       status?: string;
       periodEnd?: number;
+      canceledAt?: number;
     };
     const payload = JSON.parse(rawBody) as TransformedPayload;
 
     console.log(`[Clerk Webhook] Full Transformed Payload:`, JSON.stringify(payload, null, 2));
 
+    const eventType = payload.eventType ?? "";
+
+    if (!eventType.startsWith("subscription") && !eventType.startsWith("subscriptionItem")) {
+      console.log(`[Clerk Webhook] Skipping event type: ${eventType}`);
+      return NextResponse.json({ received: true, skipped: "not_subscription" });
+    }
+
     if (!payload?.userId) {
-      console.log(`[Clerk Webhook] Missing userId, skipping (perhaps not a transformed subscription event)`);
+      console.log(`[Clerk Webhook] Missing userId, skipping`);
       return NextResponse.json({ received: true, skipped: "no_userid" });
     }
 
