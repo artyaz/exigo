@@ -7,6 +7,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, BookOpen, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
+import posthog from "posthog-js";
 import { RedirectToSignIn, SignedIn, SignedOut, UserButton, useAuth } from "@clerk/nextjs";
 import { USER_BUTTON_APPEARANCE } from "~/lib/clerk-shared";
 import { createSpaceServerAction } from "~/app/actions/spaces";
@@ -51,6 +52,10 @@ export default function SpacesPage() {
             await createSpaceServerAction(newSpaceName);
             setNewSpaceName("");
         } catch (err) {
+            posthog.captureException(
+                err instanceof Error ? err : new Error(String(err)),
+                { source: "spaces.create", attemptedSpaceName: newSpaceName.trim() },
+            );
             setError(err instanceof Error ? err.message : "Failed to create space");
         } finally {
             setIsCreating(false);

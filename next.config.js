@@ -3,9 +3,10 @@
  * for Docker builds.
  */
 import "./src/env.js";
+import { withPostHogConfig } from "@posthog/nextjs-config";
 
 /** @type {import("next").NextConfig} */
-const config = {
+const nextConfig = {
     experimental: {
         serverActions: {
             bodySizeLimit: "10mb",
@@ -13,4 +14,9 @@ const config = {
     },
 };
 
-export default config;
+export default withPostHogConfig(nextConfig, {
+    personalApiKey: process.env.POSTHOG_PERSONAL_API_KEY ?? "",
+    envId: process.env.POSTHOG_ENV_ID ?? "",
+    host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    sourcemaps: { enabled: true },
+});

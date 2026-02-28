@@ -28,6 +28,7 @@
     "@clerk/nextjs": "^6.38.1",
     "@clerk/themes": "^2.4.55",
     "@google/genai": "^1.42.0",
+    "@posthog/nextjs-config": "^1.8.18",
     "@prisma/client": "^6.6.0",
     "@t3-oss/env-nextjs": "^0.12.0",
     "@tanstack/react-query": "^5.69.0",
