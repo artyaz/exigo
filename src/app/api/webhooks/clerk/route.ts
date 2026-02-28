@@ -9,8 +9,7 @@ export async function POST(req: NextRequest) {
 
     console.log(`[Clerk Webhook] Event: ${eventType}`);
 
-    // Skip non-subscription events
-    if (!eventType.startsWith("subscription")) {
+    if (!eventType?.startsWith("subscription")) {
       return NextResponse.json({ received: true, skipped: "not_subscription" });
     }
 
@@ -18,11 +17,13 @@ export async function POST(req: NextRequest) {
     const adminKey = process.env.CONVEX_DEPLOY_KEY;
 
     if (!convexUrl || !adminKey) {
+      console.error("[Clerk Webhook] Missing Convex configuration");
       throw new Error("Missing Convex configuration");
     }
 
-    // Forward payload to Convex (Clerk transformation handles the structure)
-    const response = await fetch(`${convexUrl}/http/clerkWebhook`, {
+    console.log("[Clerk Webhook] Forwarding to Convex...");
+
+    const response = await fetch(`${convexUrl}/clerkWebhook`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -33,10 +34,11 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const text = await response.text();
-      console.error(`[Clerk Webhook] Convex error: ${response.status}`);
+      console.error(`[Clerk Webhook] Convex error: ${response.status}`, text);
       throw new Error(`Convex failed: ${response.status}`);
     }
 
+    console.log("[Clerk Webhook] Success");
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error("[Clerk Webhook] Error:", error);
