@@ -3,7 +3,6 @@ import { v } from "convex/values";
 import {
   getLimitsForAccessLevel,
   parseClerkPlanSlug,
-  ACCESS_LEVELS,
 } from "./subscriptionService";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 

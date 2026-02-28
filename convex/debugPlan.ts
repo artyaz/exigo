@@ -1,7 +1,6 @@
 import { query } from "./_generated/server";
 import {
   getEffectiveAccessLevel,
-  ACCESS_LEVELS,
   getLimitsForAccessLevel,
   getAccessLevelName,
 } from "./subscriptionService";
@@ -11,7 +10,9 @@ const isDebugEnabled =
   process.env.NODE_ENV !== "production";
 
 function hashId(id: string): string {
-  return id.length > 8 ? `${id.slice(0, 4)}...${id.slice(-4)}` : id;
+  if (id.length > 8) return `${id.slice(0, 4)}...${id.slice(-4)}`;
+  if (id.length >= 4) return `${id.slice(0, 2)}...${id.slice(-2)}`;
+  return "*".repeat(id.length);
 }
 
 export const debugPlan = query({

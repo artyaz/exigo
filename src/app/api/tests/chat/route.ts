@@ -7,6 +7,7 @@ import {
   ConvexAuthError,
   createAuthedConvexClient,
 } from "../../../../lib/convexClientAuth";
+import { PLAN_LIMIT_CODE } from "../../../../../shared/planConfig";
 
 type ChatBody = {
   testId: string;
@@ -33,13 +34,25 @@ function parseChatBody(raw: Record<string, unknown>): ChatBody | null {
   return { testId, questionId, message };
 }
 
+function hasErrorCode(error: unknown, code: string): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { data?: { code?: string } };
+  return err.data?.code === code;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { getToken } = await auth();
 
     const convex = await createAuthedConvexClient(getToken, "api.tests.chat");
 
-    const rawBody = (await req.json()) as Record<string, unknown>;
+    let rawBody: Record<string, unknown>;
+    try {
+      rawBody = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: "Malformed JSON" }, { status: 400 });
+    }
+
     const parsedBody = parseChatBody(rawBody);
     if (!parsedBody) {
       return NextResponse.json(
@@ -63,8 +76,7 @@ export async function POST(req: NextRequest) {
         { status: 401 },
       );
     }
-    const errorMessage = err instanceof Error ? err.message : undefined;
-    if (errorMessage?.includes("higher subscription")) {
+    if (hasErrorCode(err, PLAN_LIMIT_CODE)) {
       return NextResponse.json(
         {
           error:
@@ -74,7 +86,7 @@ export async function POST(req: NextRequest) {
       );
     }
     return NextResponse.json(
-      { error: errorMessage ?? "Unknown error" },
+      { error: "Internal server error" },
       { status: 500 },
     );
   }

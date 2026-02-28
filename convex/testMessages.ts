@@ -14,7 +14,17 @@ import {
   getAuthedContextForAction,
   requireEducatorAccess,
 } from "./authDecorators";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
+
+async function getAuthenticatedUserId(
+  ctx: QueryCtx | MutationCtx,
+): Promise<string> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity?.subject) {
+    throw new Error("Not authenticated");
+  }
+  return identity.subject;
+}
 
 async function authorizeQuestionAccess(
   ctx: QueryCtx | MutationCtx,
@@ -40,9 +50,10 @@ async function authorizeQuestionAccess(
 }
 
 export const getForQuestion = query({
-  args: { questionId: v.id("questions"), userId: v.string() },
+  args: { questionId: v.id("questions"), userId: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await authorizeQuestionAccess(ctx, args.questionId, args.userId);
+    const authenticatedUserId = await getAuthenticatedUserId(ctx);
+    await authorizeQuestionAccess(ctx, args.questionId, authenticatedUserId);
 
     return await ctx.db
       .query("testMessages")
@@ -57,13 +68,14 @@ export const send = mutation({
     questionId: v.id("questions"),
     role: v.union(v.literal("user"), v.literal("ai")),
     content: v.string(),
-    userId: v.string(),
+    userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const authenticatedUserId = await getAuthenticatedUserId(ctx);
     const { question } = await authorizeQuestionAccess(
       ctx,
       args.questionId,
-      args.userId,
+      authenticatedUserId,
     );
 
     if (question.testId !== args.testId) {

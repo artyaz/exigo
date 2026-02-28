@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 
+function hashId(id: string): string {
+  if (id.length > 8) return `${id.slice(0, 4)}...${id.slice(-4)}`;
+  if (id.length >= 4) return `${id.slice(0, 2)}...${id.slice(-2)}`;
+  return "*".repeat(id.length);
+}
+
 export const upsert = internalMutation({
   args: {
     userId: v.string(),
@@ -18,7 +24,7 @@ export const upsert = internalMutation({
   },
   handler: async (ctx, args) => {
     console.log("[Subscription] Inserting subscription record", {
-      userId: args.userId,
+      userId: hashId(args.userId),
       accessLevel: args.accessLevel,
       status: args.status,
       periodEnd: args.periodEnd,

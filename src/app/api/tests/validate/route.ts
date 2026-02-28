@@ -65,14 +65,24 @@ export async function POST(req: NextRequest) {
       "api.tests.validate",
     );
 
-    const rawBody = (await req.json()) as Record<string, unknown>;
-    const questionId = rawBody.questionId as string | undefined;
-    const answer = rawBody.answer as string | undefined;
-    const testType = rawBody.testType as string | undefined;
+    let rawBody: Record<string, unknown>;
+    try {
+      rawBody = (await req.json()) as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: "Malformed JSON" }, { status: 400 });
+    }
 
-    if (!questionId || !answer || !testType) {
+    const questionId = rawBody.questionId;
+    const answer = rawBody.answer;
+    const testType = rawBody.testType;
+
+    if (
+      typeof questionId !== "string" ||
+      typeof answer !== "string" ||
+      typeof testType !== "string"
+    ) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        { error: "Missing or invalid required fields" },
         { status: 400 },
       );
     }
@@ -121,7 +131,7 @@ export async function POST(req: NextRequest) {
         : `Incorrect. The correct answer was: ${question.answer}`;
     } else if (testType === "write") {
       const planStatus = await convex.query(api.planLimits.getPlan, {});
-      if (planStatus.tier === "free") {
+      if (planStatus.tier !== "educator") {
         return NextResponse.json(
           {
             error:
@@ -259,9 +269,8 @@ export async function POST(req: NextRequest) {
         { status: 401 },
       );
     }
-    const errorMessage = err instanceof Error ? err.message : undefined;
     return NextResponse.json(
-      { error: errorMessage ?? "Unknown error" },
+      { error: "Internal server error" },
       { status: 500 },
     );
   }

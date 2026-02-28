@@ -1,4 +1,4 @@
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
 import {
   PLAN_LIMIT_CODE,
@@ -152,8 +152,10 @@ export async function getActiveSubscription(
   );
 
   if (activeSubscriptions.length > 0) {
-    return activeSubscriptions.reduce((best, current) =>
-      current.accessLevel > best.accessLevel ? current : best,
+    return activeSubscriptions.reduce(
+      (best, current) =>
+        current.accessLevel > best.accessLevel ? current : best,
+      activeSubscriptions[0]!,
     );
   }
 
@@ -162,8 +164,10 @@ export async function getActiveSubscription(
   );
 
   if (canceledWithTime.length > 0) {
-    return canceledWithTime.reduce((best, current) =>
-      current.accessLevel > best.accessLevel ? current : best,
+    return canceledWithTime.reduce(
+      (best, current) =>
+        current.accessLevel > best.accessLevel ? current : best,
+      canceledWithTime[0]!,
     );
   }
 

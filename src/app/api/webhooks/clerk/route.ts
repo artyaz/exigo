@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    // Read the body text for manual parsing since verifyWebhook strips custom fields 
+    // Read the body text for manual parsing since verifyWebhook strips custom fields
     // when returning the structured standard webhook payload.
     const rawBody = await req.text();
 
@@ -30,11 +30,14 @@ export async function POST(req: NextRequest) {
     };
     const payload = JSON.parse(rawBody) as TransformedPayload;
 
-    console.log(`[Clerk Webhook] Full Transformed Payload:`, JSON.stringify(payload, null, 2));
-
     const eventType = payload.eventType ?? "";
 
-    if (!eventType.startsWith("subscription") && !eventType.startsWith("subscriptionItem")) {
+    console.log(`[Clerk Webhook] Event: ${eventType}`);
+
+    if (
+      !eventType.startsWith("subscription") &&
+      !eventType.startsWith("subscriptionItem")
+    ) {
       console.log(`[Clerk Webhook] Skipping event type: ${eventType}`);
       return NextResponse.json({ received: true, skipped: "not_subscription" });
     }
@@ -61,7 +64,9 @@ export async function POST(req: NextRequest) {
         Authorization: `Convex ${adminKey}`,
       },
       // Safely strip explicitly undefined values so they don't get serialized as null
-      body: JSON.stringify(payload, (k: string, v: unknown): unknown => (v === undefined ? undefined : v)),
+      body: JSON.stringify(payload, (k: string, v: unknown): unknown =>
+        v === undefined ? undefined : v,
+      ),
     });
 
     if (!response.ok) {

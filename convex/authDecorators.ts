@@ -1,4 +1,4 @@
-import { v, ConvexError } from "convex/values";
+import { ConvexError } from "convex/values";
 import type { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
 import {
   getEffectiveAccessLevel,
