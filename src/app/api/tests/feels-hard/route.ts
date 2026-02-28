@@ -5,6 +5,16 @@ import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import {
+    captureAiGenerationEvent,
+    createAiTraceId,
+} from "../../../../../shared/posthogAiObservability";
+import {
+    createRequestId,
+    getErrorAttributes,
+    logError,
+    logInfo,
+} from "../../../../lib/otlpLogger";
 
 interface FeelsHardBody {
     testId?: string;
@@ -76,6 +86,8 @@ function resolveTargetPiece(
  * that note to the knowledge piece that was used for this test.
  */
 export async function POST(req: NextRequest) {
+    const requestId = createRequestId(req.headers);
+    const startedAt = Date.now();
     try {
         const { userId, getToken } = await auth();
         if (!userId) {
@@ -142,8 +154,40 @@ export async function POST(req: NextRequest) {
             conversationContext
         );
 
+        const aiTraceId = createAiTraceId();
         const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+        const aiStartedAt = Date.now();
+        logInfo("Feels-hard AI generation started", {
+            source: "api.tests.feels-hard",
+            requestId,
+            route: "/api/tests/feels-hard",
+            userId,
+            testId,
+            questionId,
+            ai_provider: "google",
+            ai_model: model,
+        });
         const response = await ai.models.generateContent({ model, contents: prompt });
+        captureAiGenerationEvent({
+            distinctId: userId,
+            traceId: aiTraceId,
+            provider: "google",
+            model,
+            input: [{ role: "user", content: prompt }],
+            response,
+            latencySeconds: (Date.now() - aiStartedAt) / 1000,
+        });
+        logInfo("Feels-hard AI generation succeeded", {
+            source: "api.tests.feels-hard",
+            requestId,
+            route: "/api/tests/feels-hard",
+            userId,
+            testId,
+            questionId,
+            ai_provider: "google",
+            ai_model: model,
+            duration_ms: Date.now() - aiStartedAt,
+        });
         const struggleNote = response.text?.trim() ?? "User had an issue with this topic.";
 
         await convex.mutation(api.knowledgeNodes.create, {
@@ -161,7 +205,13 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ success: true, note: struggleNote });
     } catch (err: unknown) {
-        console.error("Feels-hard error:", err);
+        logError("Feels-hard request failed", {
+            source: "api.tests.feels-hard",
+            requestId,
+            route: "/api/tests/feels-hard",
+            duration_ms: Date.now() - startedAt,
+            ...getErrorAttributes(err),
+        });
         if (err instanceof ConvexAuthError) {
             return NextResponse.json({ error: "Unauthorized: Missing Convex auth token." }, { status: 401 });
         }

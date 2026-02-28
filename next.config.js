@@ -3,9 +3,10 @@
  * for Docker builds.
  */
 import "./src/env.js";
+import { withPostHogConfig } from "@posthog/nextjs-config";
 
 /** @type {import("next").NextConfig} */
-const config = {
+const nextConfig = {
     experimental: {
         serverActions: {
             bodySizeLimit: "10mb",
@@ -13,4 +14,17 @@ const config = {
     },
 };
 
-export default config;
+const personalApiKey = process.env.POSTHOG_PERSONAL_API_KEY;
+const projectId = process.env.POSTHOG_PROJECT_ID ?? process.env.POSTHOG_ENV_ID;
+
+const posthogConfig =
+    personalApiKey && projectId
+        ? withPostHogConfig(nextConfig, {
+            personalApiKey,
+            projectId,
+            host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+            sourcemaps: { enabled: true },
+        })
+        : nextConfig;
+
+export default posthogConfig;

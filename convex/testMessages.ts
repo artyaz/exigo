@@ -15,6 +15,10 @@ import {
   requireEducatorAccess,
 } from "./authDecorators";
 import { internal } from "./_generated/api";
+import {
+  captureAiGenerationEvent,
+  createAiTraceId,
+} from "../shared/posthogAiObservability";
 
 async function getAuthenticatedUserId(
   ctx: QueryCtx | MutationCtx,
@@ -219,9 +223,19 @@ export const chat = action({
         const historyPrompt = buildHistoryPrompt(pastMessages, args.message);
         const prompt = buildTutorPrompt(question, historyPrompt);
         const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+        const startedAt = Date.now();
         const response = await ai.models.generateContent({
           model,
           contents: prompt,
+        });
+        captureAiGenerationEvent({
+          distinctId: auth.userId,
+          traceId: createAiTraceId(),
+          provider: "google",
+          model,
+          input: [{ role: "user", content: prompt }],
+          response,
+          latencySeconds: (Date.now() - startedAt) / 1000,
         });
         aiResponseText = response.text ?? aiResponseText;
       } catch (error) {
