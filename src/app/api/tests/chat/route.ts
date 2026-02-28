@@ -66,7 +66,10 @@ export async function POST(req: NextRequest) {
     const errorMessage = err instanceof Error ? err.message : undefined;
     if (errorMessage?.includes("higher subscription")) {
       return NextResponse.json(
-        { error: "Upgrade to Pro to chat further about answers!" },
+        {
+          error:
+            "AI Tutor is available on Educator plan. Please upgrade your plan.",
+        },
         { status: 403 },
       );
     }

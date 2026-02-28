@@ -11,7 +11,7 @@ import { internal } from "./_generated/api";
 import {
   getAuthedContext,
   getAuthedContextForAction,
-  requireProAccess,
+  requireEducatorAccess,
   getAuthenticatedUserId,
 } from "./authDecorators";
 import { RESOLUTION_THRESHOLD } from "../shared/planConfig";
@@ -32,7 +32,7 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-    requireProAccess(auth);
+    requireEducatorAccess(auth);
 
     const space = await ctx.db.get(args.spaceId);
     if (
@@ -67,7 +67,7 @@ export const resolve = mutation({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-    requireProAccess(auth);
+    requireEducatorAccess(auth);
 
     const node = await ctx.db.get(args.id);
     if (!node) {
@@ -165,7 +165,7 @@ export const generateImprovements = action({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContextForAction(ctx);
-    requireProAccess(auth);
+    requireEducatorAccess(auth);
 
     const pieceData = await ctx.runQuery(
       internal.knowledgeNodes.getPieceDataInternal,

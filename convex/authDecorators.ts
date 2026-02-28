@@ -89,6 +89,10 @@ export function requireProAccess(auth: AuthedContext): void {
   requireMinAccessLevel(auth, ACCESS_LEVELS.PRO_SCHOLAR);
 }
 
+export function requireEducatorAccess(auth: AuthedContext): void {
+  requireMinAccessLevel(auth, ACCESS_LEVELS.EDUCATOR);
+}
+
 export async function getAuthenticatedUserId(
   ctx: QueryCtx | MutationCtx,
 ): Promise<string> {

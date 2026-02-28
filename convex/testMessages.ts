@@ -10,7 +10,10 @@ import {
 } from "./_generated/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import { GoogleGenAI } from "@google/genai";
-import { getAuthedContextForAction, requireProAccess } from "./authDecorators";
+import {
+  getAuthedContextForAction,
+  requireEducatorAccess,
+} from "./authDecorators";
 import { api, internal } from "./_generated/api";
 
 async function authorizeQuestionAccess(
@@ -164,7 +167,7 @@ export const chat = action({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContextForAction(ctx);
-    requireProAccess(auth);
+    requireEducatorAccess(auth);
 
     const data = await ctx.runQuery(
       internal.testMessages.getQuestionDataForChat,
