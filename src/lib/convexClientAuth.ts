@@ -27,8 +27,30 @@ function getFunctionName(functionRef: unknown): string {
     return "unknown";
 }
 
+function decodeBase64Url(input: string): string {
+    const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+    const padding = normalized.length % 4;
+    const padded = padding === 0 ? normalized : normalized + "=".repeat(4 - padding);
+    return Buffer.from(padded, "base64").toString("utf-8");
+}
+
+function getDistinctIdFromJwt(token: string): string | undefined {
+    const parts = token.split(".");
+    if (parts.length < 2) return undefined;
+    const payloadPart = parts[1];
+    if (!payloadPart) return undefined;
+
+    try {
+        const payload = JSON.parse(decodeBase64Url(payloadPart)) as { sub?: unknown };
+        return typeof payload.sub === "string" && payload.sub ? payload.sub : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 async function captureConvexException(
     error: unknown,
+    distinctId: string | undefined,
     properties: Record<string, string>,
 ): Promise<void> {
     if (
@@ -53,7 +75,7 @@ async function captureConvexException(
             error instanceof Error && typeof error.stack === "string"
                 ? error
                 : new Error(message);
-        posthog.captureException(exception, undefined, properties);
+        posthog.captureException(exception, distinctId, properties);
     } catch (captureError) {
         console.error("PostHog capture failed:", captureError);
     }
@@ -83,6 +105,7 @@ export async function createAuthedConvexClient(
 ): Promise<ConvexHttpClient> {
     const url = getConvexUrlOrThrow(context);
     const token = await fetchConvexTemplateTokenOrThrow(getToken, context);
+    const distinctId = getDistinctIdFromJwt(token);
     const convex = new ConvexHttpClient(url);
     convex.setAuth(token);
     const proxied: ConvexHttpClient = new Proxy(convex, {
@@ -97,7 +120,7 @@ export async function createAuthedConvexClient(
                     try {
                         return await callable(...args);
                     } catch (error) {
-                        await captureConvexException(error, {
+                        await captureConvexException(error, distinctId, {
                             source: "convex-client",
                             context,
                             operation: String(prop),
