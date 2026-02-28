@@ -23,6 +23,27 @@ export const upsert = internalMutation({
       .first();
 
     if (existing) {
+      const isUpgrade = args.accessLevel > existing.accessLevel;
+      const isNewActive =
+        args.status === "active" && existing.status !== "active";
+      const isUpdate = isUpgrade || isNewActive || existing.status !== "active";
+
+      if (!isUpdate) {
+        console.log("[Subscription] Skipping downgrade", {
+          current: {
+            accessLevel: existing.accessLevel,
+            status: existing.status,
+          },
+          incoming: { accessLevel: args.accessLevel, status: args.status },
+        });
+        return existing._id;
+      }
+
+      console.log("[Subscription] Updating subscription", {
+        from: { accessLevel: existing.accessLevel, status: existing.status },
+        to: { accessLevel: args.accessLevel, status: args.status },
+      });
+
       await ctx.db.patch(existing._id, {
         accessLevel: args.accessLevel,
         clerkPlanId: args.clerkPlanId,
@@ -33,6 +54,11 @@ export const upsert = internalMutation({
       });
       return existing._id;
     }
+
+    console.log("[Subscription] Creating subscription", {
+      accessLevel: args.accessLevel,
+      status: args.status,
+    });
 
     return await ctx.db.insert("subscriptions", {
       userId: args.userId,
