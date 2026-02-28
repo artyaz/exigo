@@ -140,17 +140,31 @@ export async function getActiveSubscription(
   userId: string,
 ): Promise<Doc<"subscriptions"> | null> {
   const now = Date.now();
-  const subscription = await ctx.db
+  const subscriptions = await ctx.db
     .query("subscriptions")
     .withIndex("by_user", (q) => q.eq("userId", userId))
-    .first();
+    .collect();
 
-  if (!subscription) return null;
+  if (subscriptions.length === 0) return null;
 
-  if (subscription.status === "active") return subscription;
+  const activeSubscriptions = subscriptions.filter(
+    (s) => s.status === "active",
+  );
 
-  if (subscription.status === "canceled" && subscription.periodEnd) {
-    if (subscription.periodEnd > now) return subscription;
+  if (activeSubscriptions.length > 0) {
+    return activeSubscriptions.reduce((best, current) =>
+      current.accessLevel > best.accessLevel ? current : best,
+    );
+  }
+
+  const canceledWithTime = subscriptions.filter(
+    (s) => s.status === "canceled" && s.periodEnd && s.periodEnd > now,
+  );
+
+  if (canceledWithTime.length > 0) {
+    return canceledWithTime.reduce((best, current) =>
+      current.accessLevel > best.accessLevel ? current : best,
+    );
   }
 
   return null;

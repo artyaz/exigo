@@ -17,47 +17,11 @@ export const upsert = internalMutation({
     canceledAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("subscriptions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .first();
-
-    if (existing) {
-      const isUpgrade = args.accessLevel > existing.accessLevel;
-      const isNewActive =
-        args.status === "active" && existing.status !== "active";
-      const isUpdate = isUpgrade || isNewActive || existing.status !== "active";
-
-      if (!isUpdate) {
-        console.log("[Subscription] Skipping downgrade", {
-          current: {
-            accessLevel: existing.accessLevel,
-            status: existing.status,
-          },
-          incoming: { accessLevel: args.accessLevel, status: args.status },
-        });
-        return existing._id;
-      }
-
-      console.log("[Subscription] Updating subscription", {
-        from: { accessLevel: existing.accessLevel, status: existing.status },
-        to: { accessLevel: args.accessLevel, status: args.status },
-      });
-
-      await ctx.db.patch(existing._id, {
-        accessLevel: args.accessLevel,
-        clerkPlanId: args.clerkPlanId,
-        clerkPlanSlug: args.clerkPlanSlug,
-        status: args.status,
-        periodEnd: args.periodEnd,
-        canceledAt: args.canceledAt,
-      });
-      return existing._id;
-    }
-
-    console.log("[Subscription] Creating subscription", {
+    console.log("[Subscription] Inserting subscription record", {
+      userId: args.userId,
       accessLevel: args.accessLevel,
       status: args.status,
+      periodEnd: args.periodEnd,
     });
 
     return await ctx.db.insert("subscriptions", {
@@ -78,6 +42,6 @@ export const getForUser = internalQuery({
     return await ctx.db
       .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .first();
+      .collect();
   },
 });
