@@ -294,13 +294,19 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             const resolvedTopicId = String(resolvedTopic._id);
             const topicLabel = resolvedTopic.title ?? resolvedTopic.content.slice(0, 40);
 
-            const testId = await createTestServerAction({
+            const result = await createTestServerAction({
                 spaceId: sId,
                 type: testType,
                 questionCount: 5,
                 topicTitle: topicLabel,
                 knowledgePieceId: resolvedTopicId,
             });
+            if (!result.ok) {
+                setTestGenerateError(result.error);
+                setIsGenerating(false);
+                return;
+            }
+            const testId = result.data;
 
             // Store selected topic for test page to use
             sessionStorage.setItem(`exigo_test_topic_${testId}`, resolvedTopicId);

@@ -49,7 +49,11 @@ export default function SpacesPage() {
         setIsCreating(true);
         setError(null);
         try {
-            await createSpaceServerAction(newSpaceName);
+            const result = await createSpaceServerAction(newSpaceName);
+            if (!result.ok) {
+                setError(result.error);
+                return;
+            }
             setNewSpaceName("");
         } catch (err) {
             const exception =
