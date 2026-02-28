@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
     }
 
     const targetKnowledgePieceId = resolveTargetPieceId(
-      knowledgePieceId,
+      knowledgePieceId as string | undefined,
       test.knowledgePieceId,
     );
 
