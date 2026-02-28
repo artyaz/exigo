@@ -35,17 +35,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true, skipped: "no_userid" });
     }
 
-    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+    const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
     const adminKey = process.env.CONVEX_DEPLOY_KEY;
 
-    if (!convexUrl || !adminKey) {
+    if (!convexSiteUrl || !adminKey) {
       console.error("[Clerk Webhook] Missing Convex configuration");
       throw new Error("Missing Convex configuration");
     }
 
     console.log("[Clerk Webhook] Forwarding to Convex...");
 
-    const response = await fetch(`${convexUrl}/clerkWebhook`, {
+    const response = await fetch(`${convexSiteUrl}/clerkWebhook`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
