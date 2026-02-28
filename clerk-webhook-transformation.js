@@ -36,14 +36,15 @@ function handler(webhook) {
     }
 
     // Create transformed flat payload to send to NextJS
+    // Note: Convex v.optional requires undefined, not null. So we coalesce nulls to undefined.
     webhook.payload = {
         eventType: webhook.payload.type, // Extract original clerk type
         userId,
         accessLevel,
         clerkPlanSlug: planSlug,
         status,
-        periodEnd: d.period_end,
-        canceledAt: d.canceled_at
+        periodEnd: d.period_end === null ? undefined : d.period_end,
+        canceledAt: d.canceled_at === null ? undefined : d.canceled_at
     };
 
     return webhook;

@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         Authorization: `Convex ${adminKey}`,
       },
-      body: JSON.stringify(payload),
+      // Safely strip explicitly undefined values so they don't get serialized as null
+      body: JSON.stringify(payload, (k: string, v: unknown): unknown => (v === undefined ? undefined : v)),
     });
 
     if (!response.ok) {
