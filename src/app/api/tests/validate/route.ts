@@ -65,17 +65,26 @@ export async function POST(req: NextRequest) {
       "api.tests.validate",
     );
 
-    let rawBody: Record<string, unknown>;
+    let rawBody: unknown;
     try {
-      rawBody = (await req.json()) as Record<string, unknown>;
+      rawBody = await req.json();
     } catch {
       return NextResponse.json({ error: "Malformed JSON" }, { status: 400 });
     }
 
-    const questionId = rawBody.questionId;
-    const answer = rawBody.answer;
-    const testType = rawBody.testType;
-    const knowledgePieceId = rawBody.knowledgePieceId;
+    if (
+      rawBody === null ||
+      typeof rawBody !== "object" ||
+      Array.isArray(rawBody)
+    ) {
+      return NextResponse.json({ error: "Malformed JSON" }, { status: 400 });
+    }
+
+    const body = rawBody as Record<string, unknown>;
+    const questionId = body.questionId;
+    const answer = body.answer;
+    const testType = body.testType;
+    const knowledgePieceId = body.knowledgePieceId;
 
     if (
       typeof questionId !== "string" ||
@@ -219,7 +228,7 @@ export async function POST(req: NextRequest) {
     }
 
     const targetKnowledgePieceId = resolveTargetPieceId(
-      rawBody.knowledgePieceId as string | undefined,
+      knowledgePieceId,
       test.knowledgePieceId,
     );
 

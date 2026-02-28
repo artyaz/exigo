@@ -3,6 +3,11 @@ import { mutation, query } from "./_generated/server";
 import { getAuthedContext } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
+function getStartOfMonthUTC(): number {
+  const now = new Date();
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0);
+}
+
 export const create = mutation({
   args: {
     spaceId: v.id("spaces"),
@@ -42,14 +47,13 @@ export const create = mutation({
     }
 
     if (maxDives !== UNLIMITED_LIMIT) {
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
+      const startOfMonth = getStartOfMonthUTC();
 
       const dives = await ctx.db
         .query("deepDives")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
+        .withIndex("by_user", (q) =>
+          q.eq("userId", userId).gte("_creationTime", startOfMonth),
+        )
         .collect();
 
       if (dives.length >= maxDives) {
@@ -75,14 +79,13 @@ export const countForUserThisMonth = query({
       return 0;
     }
 
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    const startOfMonth = getStartOfMonthUTC();
 
     const dives = await ctx.db
       .query("deepDives")
-      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .filter((q) => q.gte(q.field("_creationTime"), startOfMonth.getTime()))
+      .withIndex("by_user", (q) =>
+        q.eq("userId", identity.subject).gte("_creationTime", startOfMonth),
+      )
       .collect();
 
     return dives.length;

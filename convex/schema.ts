@@ -66,7 +66,7 @@ export default defineSchema({
     userId: v.string(),
     spaceId: v.id("spaces"),
     questionId: v.id("questions"),
-  }).index("by_user", ["userId"]),
+  }).index("by_user", ["userId", "_creationTime"]),
   subscriptions: defineTable({
     userId: v.string(),
     accessLevel: v.number(),
