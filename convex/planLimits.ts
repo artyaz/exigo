@@ -12,6 +12,7 @@ import {
   ACCESS_LEVELS,
   type PlanLimits,
 } from "./subscriptionService";
+import { getAuthedContext } from "./authDecorators";
 
 export type ServerPlanLimits = PlanLimits;
 
@@ -196,10 +197,8 @@ export const getPlan = query({
       };
     }
 
-    const identityLike = identity as unknown as Record<string, unknown>;
-    const slug = detectPlanSlugFromIdentity(identityLike);
-    const accessLevel = parseClerkPlanSlug(slug);
-    const limits = getLimitsForAccessLevel(accessLevel);
+    const auth = await getAuthedContext(ctx);
+    const { accessLevel, limits } = auth;
 
     const isPro = accessLevel >= ACCESS_LEVELS.PRO_SCHOLAR;
 
@@ -208,8 +207,6 @@ export const getPlan = query({
       tier = "educator";
     } else if (accessLevel === ACCESS_LEVELS.PRO_SCHOLAR) {
       tier = "pro";
-    } else if (slug === "basic_tests") {
-      tier = "basic";
     }
 
     return {
