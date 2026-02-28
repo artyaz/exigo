@@ -1,5 +1,13 @@
+import {
+  createRequestId,
+  getErrorAttributes,
+  logError,
+  logWarn,
+  registerOtelLogger,
+} from "./src/lib/otlpLogger";
+
 export function register() {
-  // No-op for initialization
+  registerOtelLogger();
 }
 
 function normalizeException(err: unknown): Error {
@@ -14,9 +22,18 @@ function normalizeException(err: unknown): Error {
 
 export const onRequestError = async (
   err: unknown,
-  request: { headers: { cookie?: string | string[] } },
+  request: {
+    method?: string;
+    url?: string;
+    headers: { cookie?: string | string[]; get?: (name: string) => string | null };
+  },
   _context: unknown,
 ) => {
+  const requestId =
+    typeof request.headers.get === "function"
+      ? createRequestId({ get: (name) => request.headers.get?.(name) ?? null })
+      : crypto.randomUUID();
+
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
     const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
@@ -49,7 +66,11 @@ export const onRequestError = async (
           };
           distinctId = postHogData.distinct_id ?? undefined;
         } catch (e) {
-          console.error("Error parsing PostHog cookie:", e);
+          logWarn("Failed to parse PostHog cookie", {
+            requestId,
+            route: "next.onRequestError",
+            ...getErrorAttributes(e),
+          });
         }
       }
     }
@@ -59,4 +80,11 @@ export const onRequestError = async (
     });
     await posthog._shutdown(2000);
   }
+
+  logError("Unhandled request error captured", {
+    requestId,
+    route: request.url ?? "unknown",
+    method: request.method ?? "unknown",
+    ...getErrorAttributes(err),
+  });
 };

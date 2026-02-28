@@ -5,6 +5,7 @@ import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { getTestLimit } from "../../lib/testLimits";
 import { createAuthedConvexClient } from "../../lib/convexClientAuth";
+import { logInfo } from "../../lib/otlpLogger";
 
 export async function createSpaceServerAction(name: string) {
     const { userId, getToken } = await auth();
@@ -13,7 +14,11 @@ export async function createSpaceServerAction(name: string) {
         throw new Error("Unauthorized: Please sign in to create a space.");
     }
 
-    console.log(`[Action: Create Space] User: ${userId}, Space Name: ${name}`);
+    logInfo("Create space action requested", {
+        source: "actions.spaces.createSpaceServerAction",
+        userId,
+        spaceName: name,
+    });
 
     const convex = await createAuthedConvexClient(getToken, "actions.spaces.createSpaceServerAction");
 

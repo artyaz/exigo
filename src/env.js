@@ -16,6 +16,7 @@ export const env = createEnv({
     POSTHOG_PERSONAL_API_KEY: z.string().optional(),
     POSTHOG_PROJECT_ID: z.string().optional(),
     POSTHOG_ENV_ID: z.string().optional(),
+    POSTHOG_PROJECT_TOKEN: z.string().optional(),
   },
 
   /**
@@ -41,6 +42,7 @@ export const env = createEnv({
     POSTHOG_PERSONAL_API_KEY: process.env.POSTHOG_PERSONAL_API_KEY,
     POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,
     POSTHOG_ENV_ID: process.env.POSTHOG_ENV_ID,
+    POSTHOG_PROJECT_TOKEN: process.env.POSTHOG_PROJECT_TOKEN,
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
     NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,

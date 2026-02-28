@@ -8,6 +8,12 @@ import {
   createAuthedConvexClient,
 } from "../../../../lib/convexClientAuth";
 import { PLAN_LIMIT_CODE } from "../../../../../shared/planConfig";
+import {
+  createRequestId,
+  getErrorAttributes,
+  logError,
+  logInfo,
+} from "../../../../lib/otlpLogger";
 
 type ChatBody = {
   testId: string;
@@ -41,8 +47,10 @@ function hasErrorCode(error: unknown, code: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = createRequestId(req.headers);
+  const startedAt = Date.now();
   try {
-    const { getToken } = await auth();
+    const { userId, getToken } = await auth();
 
     const convex = await createAuthedConvexClient(getToken, "api.tests.chat");
 
@@ -67,9 +75,25 @@ export async function POST(req: NextRequest) {
       message: parsedBody.message,
     });
 
+    logInfo("Test chat request succeeded", {
+      source: "api.tests.chat",
+      requestId,
+      route: "/api/tests/chat",
+      userId: userId ?? undefined,
+      testId: parsedBody.testId,
+      questionId: parsedBody.questionId,
+      duration_ms: Date.now() - startedAt,
+    });
+
     return NextResponse.json(result);
   } catch (err: unknown) {
-    console.error(err);
+    logError("Test chat request failed", {
+      source: "api.tests.chat",
+      requestId,
+      route: "/api/tests/chat",
+      duration_ms: Date.now() - startedAt,
+      ...getErrorAttributes(err),
+    });
     if (err instanceof ConvexAuthError) {
       return NextResponse.json(
         { error: "Unauthorized: Missing Convex auth token." },

@@ -9,6 +9,17 @@ import {
   createAuthedConvexClient,
 } from "../../../../lib/convexClientAuth";
 import { PLAN_LIMIT_CODE } from "../../../../../shared/planConfig";
+import {
+  captureAiGenerationEvent,
+  createAiTraceId,
+} from "../../../../../shared/posthogAiObservability";
+import {
+  createRequestId,
+  getErrorAttributes,
+  logError,
+  logInfo,
+  logWarn,
+} from "../../../../lib/otlpLogger";
 
 /**
  * Helper to securely validate incoming AI evaluation shape
@@ -54,6 +65,8 @@ function hasPlanLimitCode(error: unknown, code: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = createRequestId(req.headers);
+  const startedAt = Date.now();
   try {
     const { userId, getToken } = await auth();
     if (!userId) {
@@ -143,6 +156,7 @@ export async function POST(req: NextRequest) {
     let modelUsedResult: string | undefined;
     let isCorrect = false;
     let aiFeedback = "Correct!";
+    const aiTraceId = createAiTraceId();
 
     if (testType === "select") {
       isCorrect = answer === question.answer;
@@ -188,21 +202,86 @@ export async function POST(req: NextRequest) {
       let response;
 
       try {
+        const aiStartedAt = Date.now();
+        logInfo("Answer validation AI generation started", {
+          source: "api.tests.validate",
+          requestId,
+          route: "/api/tests/validate",
+          userId,
+          questionId,
+          ai_provider: "google",
+          ai_model: primaryModel,
+        });
         response = await ai.models.generateContent({
           model: primaryModel,
           contents: prompt,
           config: { responseMimeType: "application/json" },
         });
+        captureAiGenerationEvent({
+          distinctId: userId,
+          traceId: aiTraceId,
+          provider: "google",
+          model: primaryModel,
+          input: [{ role: "user", content: prompt }],
+          response,
+          latencySeconds: (Date.now() - aiStartedAt) / 1000,
+        });
+        logInfo("Answer validation AI generation succeeded", {
+          source: "api.tests.validate",
+          requestId,
+          route: "/api/tests/validate",
+          userId,
+          questionId,
+          ai_provider: "google",
+          ai_model: primaryModel,
+          duration_ms: Date.now() - aiStartedAt,
+        });
       } catch (err: unknown) {
-        console.error(
-          `Primary model (${primaryModel}) failed, trying fallback (${fallbackModel}):`,
-          err,
-        );
+        logWarn("Primary validation model failed, trying fallback", {
+          source: "api.tests.validate",
+          requestId,
+          route: "/api/tests/validate",
+          userId,
+          questionId,
+          ai_provider: "google",
+          ai_model: primaryModel,
+          fallback_model: fallbackModel,
+          ...getErrorAttributes(err),
+        });
         modelUsed = fallbackModel;
+        const aiStartedAt = Date.now();
+        logInfo("Fallback validation AI generation started", {
+          source: "api.tests.validate",
+          requestId,
+          route: "/api/tests/validate",
+          userId,
+          questionId,
+          ai_provider: "google",
+          ai_model: fallbackModel,
+        });
         response = await ai.models.generateContent({
           model: fallbackModel,
           contents: prompt,
           config: { responseMimeType: "application/json" },
+        });
+        captureAiGenerationEvent({
+          distinctId: userId,
+          traceId: aiTraceId,
+          provider: "google",
+          model: fallbackModel,
+          input: [{ role: "user", content: prompt }],
+          response,
+          latencySeconds: (Date.now() - aiStartedAt) / 1000,
+        });
+        logInfo("Fallback validation AI generation succeeded", {
+          source: "api.tests.validate",
+          requestId,
+          route: "/api/tests/validate",
+          userId,
+          questionId,
+          ai_provider: "google",
+          ai_model: fallbackModel,
+          duration_ms: Date.now() - aiStartedAt,
         });
       }
 
@@ -219,7 +298,14 @@ export async function POST(req: NextRequest) {
           aiFeedback = "Failed to parse AI feedback format.";
         }
       } catch (e) {
-        console.error("AI validation parse error:", e);
+        logWarn("Validation AI response parse failed", {
+          source: "api.tests.validate",
+          requestId,
+          route: "/api/tests/validate",
+          userId,
+          questionId,
+          ...getErrorAttributes(e),
+        });
         isCorrect = false;
         aiFeedback = "Failed to parse AI outcome.";
       }
@@ -264,7 +350,14 @@ export async function POST(req: NextRequest) {
       }
     } catch (planError: unknown) {
       if (!hasPlanLimitCode(planError, PLAN_LIMIT_CODE)) {
-        console.error("Knowledge Node mutation failed:", planError);
+        logError("Knowledge node update failed after validation", {
+          source: "api.tests.validate",
+          requestId,
+          route: "/api/tests/validate",
+          userId,
+          questionId,
+          ...getErrorAttributes(planError),
+        });
       }
     }
 
@@ -280,9 +373,26 @@ export async function POST(req: NextRequest) {
       responseBody._meta = { modelUsed: modelUsedResult };
     }
 
+    logInfo("Test answer validation succeeded", {
+      source: "api.tests.validate",
+      requestId,
+      route: "/api/tests/validate",
+      userId,
+      questionId,
+      testType,
+      isCorrect,
+      duration_ms: Date.now() - startedAt,
+    });
+
     return NextResponse.json(responseBody);
   } catch (err: unknown) {
-    console.error(err);
+    logError("Test answer validation failed", {
+      source: "api.tests.validate",
+      requestId,
+      route: "/api/tests/validate",
+      duration_ms: Date.now() - startedAt,
+      ...getErrorAttributes(err),
+    });
     if (err instanceof ConvexAuthError) {
       return NextResponse.json(
         { error: "Unauthorized: Missing Convex auth token." },

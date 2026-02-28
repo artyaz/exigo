@@ -11,6 +11,7 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 
 import { db } from "~/server/db";
+import { logInfo } from "~/lib/otlpLogger";
 
 /**
  * 1. CONTEXT
@@ -91,7 +92,11 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
   const result = await next();
 
   const end = Date.now();
-  console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
+  logInfo("tRPC procedure completed", {
+    route: path,
+    duration_ms: end - start,
+    source: "trpc",
+  });
 
   return result;
 });

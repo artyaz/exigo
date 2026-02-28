@@ -15,6 +15,10 @@ import {
   getAuthenticatedUserId,
 } from "./authDecorators";
 import { RESOLUTION_THRESHOLD } from "../shared/planConfig";
+import {
+  captureAiGenerationEvent,
+  createAiTraceId,
+} from "../shared/posthogAiObservability";
 
 const FALLBACK_IMPROVEMENT =
   "Explore advanced edge cases and nuanced trade-offs in this topic.";
@@ -198,9 +202,19 @@ Generate a concise 1-sentence description of the advanced concept they should fo
           apiKey: process.env.GOOGLE_GEMINI_API_KEY,
         });
         const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+        const startedAt = Date.now();
         const response = await ai.models.generateContent({
           model,
           contents: prompt,
+        });
+        captureAiGenerationEvent({
+          distinctId: auth.userId,
+          traceId: createAiTraceId(),
+          provider: "google",
+          model,
+          input: [{ role: "user", content: prompt }],
+          response,
+          latencySeconds: (Date.now() - startedAt) / 1000,
         });
         improvementIdea = response.text?.trim() ?? FALLBACK_IMPROVEMENT;
       } catch (error) {

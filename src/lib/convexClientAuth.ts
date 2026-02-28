@@ -1,6 +1,11 @@
 import "server-only";
 
 import { ConvexHttpClient } from "convex/browser";
+import {
+    getErrorAttributes,
+    logError,
+    logInfo,
+} from "./otlpLogger";
 
 type GetTokenFn = (options?: { template?: string }) => Promise<string | null>;
 
@@ -82,7 +87,10 @@ async function captureConvexException(
         posthog.captureException(exception, distinctId, properties);
         await posthog._shutdown(2000);
     } catch (captureError) {
-        console.error("PostHog capture failed:", captureError);
+        logError("PostHog exception capture failed", {
+            source: "convex-client",
+            ...getErrorAttributes(captureError),
+        });
     }
 }
 
@@ -122,14 +130,42 @@ export async function createAuthedConvexClient(
             ) {
                 const callable = value as (...callArgs: unknown[]) => Promise<unknown>;
                 return async (...args: unknown[]) => {
+                    const functionName = getFunctionName(args[0]);
+                    const startedAt = Date.now();
+                    logInfo("Convex operation started", {
+                        source: "convex-client",
+                        context,
+                        operation: String(prop),
+                        functionName,
+                        userId: distinctId,
+                    });
+
                     try {
-                        return await callable(...args);
+                        const result = await callable(...args);
+                        logInfo("Convex operation succeeded", {
+                            source: "convex-client",
+                            context,
+                            operation: String(prop),
+                            functionName,
+                            userId: distinctId,
+                            duration_ms: Date.now() - startedAt,
+                        });
+                        return result;
                     } catch (error) {
+                        logError("Convex operation failed", {
+                            source: "convex-client",
+                            context,
+                            operation: String(prop),
+                            functionName,
+                            userId: distinctId,
+                            duration_ms: Date.now() - startedAt,
+                            ...getErrorAttributes(error),
+                        });
                         await captureConvexException(error, distinctId, {
                             source: "convex-client",
                             context,
                             operation: String(prop),
-                            functionName: getFunctionName(args[0]),
+                            functionName,
                         });
                         throw error;
                     }
