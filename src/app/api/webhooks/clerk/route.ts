@@ -4,7 +4,19 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const rawPayload = await verifyWebhook(req);
+    // Read the body text for manual parsing since verifyWebhook strips custom fields 
+    // when returning the structured standard webhook payload.
+    const rawBody = await req.text();
+
+    // Construct a new request so verifyWebhook can read the body again to verify signatures.
+    const reqForVerify = new Request(req.url, {
+      method: req.method,
+      headers: req.headers,
+      body: rawBody,
+    });
+    // Cast via unknown to NextRequest to satisfy strict TS and ESLint rules
+    await verifyWebhook(reqForVerify as unknown as NextRequest);
+
     // After Clerk webhook transformation, the structure of the data changes.
     // Ensure we handle it with the properties we expect.
     type TransformedPayload = {
@@ -14,7 +26,7 @@ export async function POST(req: NextRequest) {
       status?: string;
       periodEnd?: number;
     };
-    const payload = rawPayload as unknown as TransformedPayload;
+    const payload = JSON.parse(rawBody) as TransformedPayload;
 
     console.log(`[Clerk Webhook] Full Transformed Payload:`, JSON.stringify(payload, null, 2));
 
