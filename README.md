@@ -15,30 +15,30 @@ Exigo is a smart learning tool that generates tests from your own study material
 
 Organize your study life into Spaces—each one is a self-contained topic area (e.g., "Biology 101", "JavaScript Fundamentals"). Upload your knowledge pieces (notes, docs, whatever you've got), and Exigo turns them into structured, testable content.
 
-<!-- TODO: Add spaces page screenshot -->
-<!-- ![Spaces](screenshots/spaces.png) -->
+<img width="932" height="775" alt="image" src="https://github.com/user-attachments/assets/98a86cac-d31e-4b5c-b93b-706d86bea096" />
+
 
 ### 🧪 AI Test Generation
 
 Generate multiple-choice or written-answer tests directly from your uploaded material. Exigo uses **Google Gemini** to craft questions that target the substance of your notes—not just surface-level keywords. Each question is streamed in real-time via Server-Sent Events, so you see progress as it happens.
 
-<!-- TODO: Add test generation screenshot -->
-<!-- ![Test Generation](screenshots/test-generation.png) -->
+<img width="1040" height="842" alt="image" src="https://github.com/user-attachments/assets/0c913844-35eb-4822-90fc-dc67bf27cdbd" />
+
 
 ### ✅ Smart Answer Validation
 
 - **Multiple choice**: Instant, deterministic grading.
 - **Written answers**: AI-powered evaluation with nuanced feedback. The AI compares your answer against the ideal response and tells you _why_ you were right or wrong—not just that you were.
 
-<!-- TODO: Add answer feedback screenshot -->
-<!-- ![Answer Feedback](screenshots/answer-feedback.png) -->
+<img width="625" height="352" alt="image" src="https://github.com/user-attachments/assets/95c6eccc-ac8e-47c7-95f6-8f32c1b15aac" />
+
 
 ### 💬 AI Tutor Chat
 
 Stuck on a question? Open a conversation with the built-in AI tutor. It has full context of the question, your answer, and the source material. If a concept still feels confusing, hit the **"Feels Hard"** button—Exigo will log it as a knowledge gap and weigh it more heavily in future tests.
 
-<!-- TODO: Add AI tutor chat screenshot -->
-<!-- ![AI Tutor](screenshots/ai-tutor.png) -->
+<img width="1912" height="987" alt="image" src="https://github.com/user-attachments/assets/cbd8fefb-de3d-4706-b4c7-8efad7585ec6" />
+
 
 ### 🧠 Knowledge Nodes (Pro)
 
@@ -50,8 +50,8 @@ This is where Exigo gets interesting. Behind the scenes, it builds a semantic gr
 
 Each node has a **resolution score** that ticks up as you prove mastery. Hit 90% and the node resolves—your knowledge gap is officially closed. Future tests dynamically pull from active nodes so you're always drilling the right stuff.
 
-<!-- TODO: Add knowledge nodes screenshot -->
-<!-- ![Knowledge Nodes](screenshots/knowledge-nodes.png) -->
+<img width="1912" height="987" alt="image" src="https://github.com/user-attachments/assets/42dd2ad2-e2da-4ed7-9d50-62a060576814" />
+
 
 ### 📝 Deep Dive Notes (Pro)
 
@@ -70,8 +70,8 @@ Plans are managed through Clerk's built-in billing—no Stripe integration heada
 | Deep Dive Notes / Month | — | — | 50 | 150 |
 | AI Written Feedback | — | — | — | ✓ |
 
-<!-- TODO: Add pricing page screenshot -->
-<!-- ![Pricing](screenshots/pricing.png) -->
+<img width="1248" height="845" alt="image" src="https://github.com/user-attachments/assets/b6ea5efa-5a3c-4d23-b1d1-da2fc19a8608" />
+
 
 ---
 
