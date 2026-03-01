@@ -29,9 +29,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 function isPlanLimitErrorMessage(message: string): boolean {
-    return message.includes("Limit reached")
-        || message.includes("don't have access to test generation")
-        || message.includes("Subscription required");
+    return message.includes("Limit reached") || message.includes("don't have access to test generation");
 }
 
 export async function createSpaceServerAction(name: string): Promise<ActionResult<Id<"spaces">>> {
@@ -88,18 +86,6 @@ export async function createTestServerAction(args: {
             convex.query(api.planLimits.getPlan, {}),
             convex.query(api.tests.countForUserThisMonth, { userId }),
         ]);
-
-        if (!planStatus.hasActiveSubscription) {
-            return {
-                ok: false,
-                error: "Test generation requires an active subscription.",
-                code: "PLAN_LIMIT",
-                details: {
-                    tier: planStatus.tier,
-                    reason: "TEST_SUBSCRIPTION_REQUIRED",
-                },
-            };
-        }
 
         const maxTests = planStatus.limits.maxTestsPerMonth;
         if (maxTests === 0) {

@@ -299,8 +299,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         setGenError(
                             `Monthly test limit reached (${parsedError.details.testsThisMonth}/${parsedError.details.maxTestsPerMonth}). Upgrade your plan to continue.`
                         );
-                    } else if (parsedError?.code === "TEST_SUBSCRIPTION_REQUIRED") {
-                        setGenError("Test generation requires an active subscription.");
                     } else if (parsedError?.code === "TEST_PLAN_ACCESS_DENIED") {
                         setGenError("Your current plan does not include test generation. Upgrade to continue.");
                     } else {
@@ -350,8 +348,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     setGenError(
                                         `Monthly test limit reached (${payload.details.testsThisMonth}/${payload.details.maxTestsPerMonth}). Upgrade your plan to continue.`
                                     );
-                                } else if (payload.code === "TEST_SUBSCRIPTION_REQUIRED") {
-                                    setGenError("Test generation requires an active subscription.");
                                 } else if (payload.code === "TEST_PLAN_ACCESS_DENIED") {
                                     setGenError("Your current plan does not include test generation. Upgrade to continue.");
                                 } else if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
@@ -508,22 +504,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     message: msg,
                 }),
             });
-            if (!response.ok) {
-                let serverMessage = "Chat failed";
-                try {
-                    const errorPayload = await response.json() as { error?: string };
-                    if (typeof errorPayload.error === "string" && errorPayload.error) {
-                        serverMessage = errorPayload.error;
-                    }
-                } catch {
-                    // ignore malformed error payload
-                }
-                throw new Error(serverMessage);
-            }
+            if (!response.ok) throw new Error("Chat failed");
         } catch (e) {
             console.error("Chat failed", e);
             setChatInput(msg);
-            setToast({ message: e instanceof Error ? e.message : "Chat failed", type: "error" });
         } finally {
             setIsSendingChat(false);
         }
