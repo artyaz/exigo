@@ -213,34 +213,45 @@ export const chat = action({
       content: args.message,
     });
 
-    let aiResponseText = "I'm sorry, I couldn't formulate a response.";
+    const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "AI Tutor misconfigured: GOOGLE_GEMINI_API_KEY is missing in the Convex environment.",
+      );
+    }
 
-    if (process.env.GOOGLE_GEMINI_API_KEY) {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey: process.env.GOOGLE_GEMINI_API_KEY,
-        });
-        const historyPrompt = buildHistoryPrompt(pastMessages, args.message);
-        const prompt = buildTutorPrompt(question, historyPrompt);
-        const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
-        const startedAt = Date.now();
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt,
-        });
-        captureAiGenerationEvent({
-          distinctId: auth.userId,
-          traceId: createAiTraceId(),
-          provider: "google",
-          model,
-          input: [{ role: "user", content: prompt }],
-          response,
-          latencySeconds: (Date.now() - startedAt) / 1000,
-        });
-        aiResponseText = response.text ?? aiResponseText;
-      } catch (error) {
-        console.error("Gemini request failed:", error);
-      }
+    let aiResponseText = "";
+    try {
+      const ai = new GoogleGenAI({
+        apiKey,
+      });
+      const historyPrompt = buildHistoryPrompt(pastMessages, args.message);
+      const prompt = buildTutorPrompt(question, historyPrompt);
+      const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+      const startedAt = Date.now();
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+      });
+      captureAiGenerationEvent({
+        distinctId: auth.userId,
+        traceId: createAiTraceId(),
+        provider: "google",
+        model,
+        input: [{ role: "user", content: prompt }],
+        response,
+        latencySeconds: (Date.now() - startedAt) / 1000,
+      });
+      aiResponseText = (response.text ?? "").trim();
+    } catch (error) {
+      console.error("Gemini request failed:", error);
+      throw new Error(
+        "AI Tutor temporarily unavailable: Gemini request failed.",
+      );
+    }
+
+    if (!aiResponseText) {
+      throw new Error("AI Tutor temporarily unavailable: empty model response.");
     }
 
     await ctx.runMutation(internal.testMessages.saveMessageInternal, {

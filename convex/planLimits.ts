@@ -8,6 +8,7 @@ import {
 } from "../shared/planConfig";
 import {
   getLimitsForAccessLevel,
+  getActiveSubscription,
   parseClerkPlanSlug,
   ACCESS_LEVELS,
   type PlanLimits,
@@ -190,6 +191,7 @@ export const getPlan = query({
       return {
         tier: "free",
         limits: getLimitsForAccessLevel(ACCESS_LEVELS.FREE),
+        hasActiveSubscription: false,
         features: {
           conversational_ai: false,
           deep_dive_limit: getDeepDiveLimitForTier("free"),
@@ -199,6 +201,8 @@ export const getPlan = query({
 
     const auth = await getAuthedContext(ctx);
     const { accessLevel, limits } = auth;
+    const hasActiveSubscription =
+      (await getActiveSubscription(ctx, auth.userId)) !== null;
 
     const isPro = accessLevel >= ACCESS_LEVELS.PRO_SCHOLAR;
 
@@ -212,6 +216,7 @@ export const getPlan = query({
     return {
       tier,
       limits,
+      hasActiveSubscription,
       features: {
         conversational_ai: isPro,
         deep_dive_limit: limits.deepDiveLimit,
