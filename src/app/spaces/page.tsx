@@ -12,6 +12,7 @@ import { RedirectToSignIn, SignedIn, SignedOut, UserButton, useAuth } from "@cle
 import { USER_BUTTON_APPEARANCE } from "~/lib/clerk-shared";
 import { createSpaceServerAction } from "~/app/actions/spaces";
 import { useRef, useEffect } from "react";
+import { LegalCornerLink } from "~/app/_components/legal-ui";
 
 export default function SpacesPage() {
     const { userId, isLoaded } = useAuth();
@@ -187,6 +188,7 @@ export default function SpacesPage() {
                         </section>
                     </div>
                 </div>
+                <LegalCornerLink />
             </SignedIn>
         </>
     );
