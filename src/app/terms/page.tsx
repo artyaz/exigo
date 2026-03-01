@@ -50,6 +50,7 @@ export default function TermsPage() {
                     <h2 className="text-2xl font-semibold tracking-tight">1. Terms of Service</h2>
                     <div className="space-y-4 text-sm leading-relaxed text-white/60 md:text-[15px]">
                         <p>
+                            These Terms of Service are entered into between you and <strong className="text-white">Exigo</strong> (&quot;Exigo,&quot; &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;).
                             By accessing Exigo, you represent that you have legal capacity to enter into this agreement and will comply with applicable laws.
                             If you use Exigo for an organization, you confirm you are authorized to bind that organization.
                         </p>
@@ -101,15 +102,19 @@ export default function TermsPage() {
                     <h2 className="text-2xl font-semibold tracking-tight">3. Refund Policy</h2>
                     <div className="space-y-4 text-sm leading-relaxed text-white/60 md:text-[15px]">
                         <p>
-                            Subscription charges are billed in advance and are generally non-refundable once a billing cycle starts. You can cancel at any time,
-                            and cancellation takes effect at the end of your current paid period unless required otherwise by law.
+                            Exigo follows Paddle&apos;s refund standard. You are eligible for a full refund within <strong className="text-white">14 calendar days</strong>
+                            of the charge date for subscription purchases.
                         </p>
                         <p>
-                            If you believe you were charged in error, contact support within 7 days of the transaction with your account email and payment details.
-                            We review refund requests in good faith and may issue full or partial refunds at our sole discretion or where legally required.
+                            This 14-day refund window applies to both initial subscription payments and renewal payments. After the 14-day window has passed,
+                            payments are non-refundable except where required by applicable law.
                         </p>
                         <p>
-                            Chargebacks or payment disputes may result in temporary account suspension while the matter is investigated.
+                            To request a refund, contact{" "}
+                            <a href="mailto:contact@chmyl.com" className="text-white underline decoration-white/20 underline-offset-2 hover:decoration-white/40">
+                                contact@chmyl.com
+                            </a>
+                            {" "}with your purchase details.
                         </p>
                     </div>
                 </section>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
-import { RedirectToSignIn, SignedIn, SignedOut, useAuth, useUser } from "@clerk/nextjs";
+import { SignedIn, SignedOut, useAuth, useUser } from "@clerk/nextjs";
 import { CheckoutButton, SubscriptionDetailsButton, usePlans, useSubscription } from "@clerk/nextjs/experimental";
 import { useState } from "react";
 
@@ -270,7 +270,90 @@ export default function PricingPage() {
     return (
         <>
             <SignedOut>
-                <RedirectToSignIn />
+                <div className="min-h-screen bg-black text-white px-5 py-10 md:px-10 md:py-12">
+                    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.045)_1px,transparent_1px)] bg-[size:24px_24px]" />
+                    <div className="relative mx-auto flex w-full max-w-6xl flex-col gap-10">
+                        <div className="flex items-center justify-between">
+                            <Link
+                                href="/"
+                                className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/65 transition-colors hover:bg-white/[0.06] hover:text-white spring-interact"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                Back
+                            </Link>
+                            <Link
+                                href="/sign-in"
+                                className="rounded-xl bg-white px-4 py-2 text-sm font-medium text-black hover:bg-neutral-200 spring-interact"
+                            >
+                                Sign in
+                            </Link>
+                        </div>
+
+                        <header className="space-y-3 text-center">
+                            <p className="text-xs uppercase tracking-[0.22em] text-white/45">Pricing</p>
+                            <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">Simple pricing, built in.</h1>
+                            <p className="mx-auto max-w-2xl text-sm text-white/60 md:text-base">
+                                Review plans publicly, then sign in to subscribe.
+                            </p>
+                            <div className="mx-auto flex w-fit items-center rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                                <button
+                                    onClick={() => setBillingCycle("month")}
+                                    className={`rounded-lg px-4 py-1.5 text-sm spring-interact ${billingCycle === "month" ? "bg-white text-black" : "text-white/70 hover:text-white"}`}
+                                >
+                                    Monthly
+                                </button>
+                                <button
+                                    onClick={() => setBillingCycle("annual")}
+                                    className={`rounded-lg px-4 py-1.5 text-sm spring-interact ${billingCycle === "annual" ? "bg-white text-black" : "text-white/70 hover:text-white"}`}
+                                >
+                                    Yearly
+                                </button>
+                            </div>
+                        </header>
+
+                        <section className="mx-auto grid w-full max-w-[1120px] grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
+                            {fallbackPlans.map((plan) => {
+                                const displayed = getDisplayedPlanValues(plan, billingCycle);
+                                return (
+                                    <article
+                                        key={`public-${plan.hintKey}`}
+                                        className="group relative flex min-h-[390px] flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-5 shadow-[0_8px_30px_-18px_rgba(0,0,0,0.8)] md:p-6"
+                                    >
+                                        <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-200 group-hover:opacity-100" style={{ background: "radial-gradient(500px circle at 50% -5%, rgba(255,255,255,0.08), transparent 45%)" }} />
+                                        <div className="relative flex min-h-[145px] flex-col gap-2">
+                                            <h2 className="text-xl font-semibold tracking-tight">{plan.name}</h2>
+                                            <p className="min-h-[66px] text-sm leading-relaxed text-white/60">{plan.description}</p>
+                                            <div className="flex items-baseline gap-1.5 pt-1">
+                                                <span className="text-4xl font-semibold tracking-tight">{displayed.price}</span>
+                                                {displayed.periodLabel && <span className="text-sm text-white/50">{displayed.periodLabel}</span>}
+                                            </div>
+                                            {displayed.billingNote && (
+                                                <p className="text-xs text-white/40">{displayed.billingNote}</p>
+                                            )}
+                                        </div>
+                                        <div className="relative mt-4 border-t border-white/10" />
+                                        <ul className="relative mt-4 flex-1 space-y-2.5 text-sm text-white/75">
+                                            {plan.features.map((feature) => (
+                                                <li key={feature.slug ?? feature.name} className="flex items-start gap-2">
+                                                    <Check className="mt-[1px] h-4 w-4 shrink-0 text-white/55" />
+                                                    <span>{feature.name}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <div className="relative mt-auto pt-5">
+                                            <Link
+                                                href="/sign-in"
+                                                className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-neutral-200 spring-interact"
+                                            >
+                                                Sign in to subscribe
+                                            </Link>
+                                        </div>
+                                    </article>
+                                );
+                            })}
+                        </section>
+                    </div>
+                </div>
             </SignedOut>
 
             <SignedIn>
