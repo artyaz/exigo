@@ -46,6 +46,17 @@ function hasErrorCode(error: unknown, code: string): boolean {
   return err.data?.code === code;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object") {
+    const withMessage = error as { message?: unknown };
+    if (typeof withMessage.message === "string" && withMessage.message) {
+      return withMessage.message;
+    }
+  }
+  return "Unknown error";
+}
+
 export async function POST(req: NextRequest) {
   const requestId = createRequestId(req.headers);
   const startedAt = Date.now();
@@ -109,8 +120,30 @@ export async function POST(req: NextRequest) {
         { status: 403 },
       );
     }
+    const message = getErrorMessage(err);
+    if (message.includes("AI Tutor misconfigured")) {
+      return NextResponse.json(
+        {
+          error:
+            "AI Tutor is misconfigured in the Convex production environment (missing GOOGLE_GEMINI_API_KEY).",
+          code: "AI_TUTOR_MISCONFIGURED",
+          requestId,
+        },
+        { status: 503 },
+      );
+    }
+    if (message.includes("AI Tutor temporarily unavailable")) {
+      return NextResponse.json(
+        {
+          error: message,
+          code: "AI_TUTOR_TEMPORARILY_UNAVAILABLE",
+          requestId,
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Internal server error", code: "INTERNAL_SERVER_ERROR", requestId },
       { status: 500 },
     );
   }

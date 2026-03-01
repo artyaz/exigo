@@ -293,8 +293,25 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    const planStatus = await convex.query(api.planLimits.getPlan, {});
+    const [planStatus, testsThisMonth] = await Promise.all([
+        convex.query(api.planLimits.getPlan, {}),
+        convex.query(api.tests.countForUserThisMonth, { userId }),
+    ]);
     const maxTests = planStatus.limits.maxTestsPerMonth;
+    if (!planStatus.hasActiveSubscription) {
+        return createJsonErrorResponse({
+            status: 403,
+            code: "TEST_SUBSCRIPTION_REQUIRED",
+            message: "Test generation requires an active subscription.",
+            requestId,
+            details: {
+                tier: planStatus.tier,
+                testsThisMonth,
+                maxTestsPerMonth: maxTests,
+                planSource: "convex.subscriptions",
+            },
+        });
+    }
     if (maxTests === 0) {
         return createJsonErrorResponse({
             status: 403,
@@ -310,7 +327,6 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    const testsThisMonth = await convex.query(api.tests.countForUserThisMonth, { userId });
     if (Number.isFinite(maxTests) && testsThisMonth >= maxTests) {
         return createJsonErrorResponse({
             status: 403,
@@ -360,7 +376,60 @@ export async function POST(req: NextRequest) {
     const topicLabel = firstPiece.title ?? firstPiece.content.slice(0, 40);
     const effectiveKnowledgePieceId = knowledgePieceId ?? String(firstPiece._id);
 
-    const testResult = await resolveTestId(convex, testId, spaceId, testType, topicLabel, userId, effectiveKnowledgePieceId);
+    let testResult: { id: Id<"tests">; existingQuestions: { question: string }[] } | Response;
+    try {
+        testResult = await resolveTestId(convex, testId, spaceId, testType, topicLabel, userId, effectiveKnowledgePieceId);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.includes("Subscription required")) {
+            return createJsonErrorResponse({
+                status: 403,
+                code: "TEST_SUBSCRIPTION_REQUIRED",
+                message: "Test generation requires an active subscription.",
+                requestId,
+                details: {
+                    tier: planStatus.tier,
+                    testsThisMonth,
+                    maxTestsPerMonth: maxTests,
+                    planSource: "convex.subscriptions",
+                },
+            });
+        }
+        if (message.includes("don't have access to test generation")) {
+            return createJsonErrorResponse({
+                status: 403,
+                code: "TEST_PLAN_ACCESS_DENIED",
+                message: "Your current plan does not include test generation.",
+                requestId,
+                details: {
+                    tier: planStatus.tier,
+                    testsThisMonth,
+                    maxTestsPerMonth: maxTests,
+                    planSource: "convex.planLimits.getPlan",
+                },
+            });
+        }
+        if (message.includes("Limit reached")) {
+            return createJsonErrorResponse({
+                status: 403,
+                code: "TEST_MONTHLY_LIMIT_REACHED",
+                message: `You have reached your monthly test limit (${testsThisMonth}/${maxTests}).`,
+                requestId,
+                details: {
+                    tier: planStatus.tier,
+                    testsThisMonth,
+                    maxTestsPerMonth: maxTests,
+                    planSource: "convex.planLimits.getPlan",
+                },
+            });
+        }
+        return createJsonErrorResponse({
+            status: 500,
+            code: "TEST_CREATE_FAILED",
+            message: message || "Failed to create or load test.",
+            requestId,
+        });
+    }
     if (testResult instanceof Response) return testResult;
     const { id: activeTestId, existingQuestions } = testResult;
 
