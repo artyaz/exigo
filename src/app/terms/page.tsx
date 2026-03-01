@@ -117,8 +117,8 @@ export default function TermsPage() {
                 <footer className="rounded-2xl border border-white/10 bg-neutral-950/55 p-6 text-sm text-white/60 shadow-[0_2px_14px_-6px_rgba(0,0,0,0.9)] backdrop-blur-sm md:p-8">
                     <p>
                         Questions or legal requests:{" "}
-                        <a href="mailto:legal@exigo.app" className="text-white underline decoration-white/20 underline-offset-2 hover:decoration-white/40">
-                            legal@exigo.app
+                        <a href="mailto:contact@chmyl.com" className="text-white underline decoration-white/20 underline-offset-2 hover:decoration-white/40">
+                            contact@chmyl.com
                         </a>
                     </p>
                 </footer>
