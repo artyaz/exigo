@@ -271,43 +271,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
                 if (!res.ok) {
                     const errBody = await res.text().catch(() => "");
-                    let parsedError: {
-                        error?: string;
-                        message?: string;
-                        code?: string;
-                        details?: { testsThisMonth?: number; maxTestsPerMonth?: number };
-                    } | null = null;
-                    if (errBody.trim().startsWith("{")) {
-                        try {
-                            parsedError = JSON.parse(errBody) as {
-                                error?: string;
-                                message?: string;
-                                code?: string;
-                                details?: { testsThisMonth?: number; maxTestsPerMonth?: number };
-                            };
-                        } catch {
-                            parsedError = null;
-                        }
-                    }
-
-                    const msg = parsedError?.message ?? parsedError?.error ?? (errBody.trim() ? errBody : `Server error (${res.status})`);
-                    if (
-                        parsedError?.code === "TEST_MONTHLY_LIMIT_REACHED" &&
-                        typeof parsedError.details?.testsThisMonth === "number" &&
-                        typeof parsedError.details?.maxTestsPerMonth === "number"
-                    ) {
-                        setGenError(
-                            `Monthly test limit reached (${parsedError.details.testsThisMonth}/${parsedError.details.maxTestsPerMonth}). Upgrade your plan to continue.`
-                        );
-                    } else if (parsedError?.code === "TEST_SUBSCRIPTION_REQUIRED") {
-                        setGenError("Test generation requires an active subscription.");
-                    } else if (parsedError?.code === "TEST_PLAN_ACCESS_DENIED") {
-                        setGenError("Your current plan does not include test generation. Upgrade to continue.");
-                    } else {
-                        setGenError(msg.includes("429") || msg.includes("quota")
-                            ? "API rate limit reached. Please wait a moment and retry."
-                            : msg);
-                    }
+                    const msg = errBody.trim() ? errBody : `Server error (${res.status})`;
+                    setGenError(msg.includes("429") || msg.includes("quota")
+                        ? "API rate limit reached. Please wait a moment and retry."
+                        : msg);
                     lastGeneratedForCount.current = -1;
                     return;
                 }
@@ -329,32 +296,13 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     for (const line of lines) {
                         if (!line.startsWith("data: ")) continue;
                         try {
-                            const payload = JSON.parse(line.slice(6)) as {
-                                type: string;
-                                text?: string;
-                                error?: string;
-                                message?: string;
-                                code?: string;
-                                details?: { testsThisMonth?: number; maxTestsPerMonth?: number };
-                            };
+                            const payload = JSON.parse(line.slice(6)) as { type: string; text?: string; error?: string };
                             if (payload.type === "delta") {
                                 setStreamingText(prev => prev + (payload.text ?? ""));
                             } else if (payload.type === "error") {
                                 hadError = true;
-                                const msg = payload.message ?? payload.error ?? "Generation failed";
-                                if (
-                                    payload.code === "TEST_MONTHLY_LIMIT_REACHED" &&
-                                    typeof payload.details?.testsThisMonth === "number" &&
-                                    typeof payload.details?.maxTestsPerMonth === "number"
-                                ) {
-                                    setGenError(
-                                        `Monthly test limit reached (${payload.details.testsThisMonth}/${payload.details.maxTestsPerMonth}). Upgrade your plan to continue.`
-                                    );
-                                } else if (payload.code === "TEST_SUBSCRIPTION_REQUIRED") {
-                                    setGenError("Test generation requires an active subscription.");
-                                } else if (payload.code === "TEST_PLAN_ACCESS_DENIED") {
-                                    setGenError("Your current plan does not include test generation. Upgrade to continue.");
-                                } else if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
+                                const msg = payload.error ?? "Generation failed";
+                                if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
                                     setGenError("API rate limit reached. Please wait a moment and retry.");
                                 } else {
                                     setGenError(msg);
@@ -508,22 +456,10 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     message: msg,
                 }),
             });
-            if (!response.ok) {
-                let serverMessage = "Chat failed";
-                try {
-                    const errorPayload = await response.json() as { error?: string };
-                    if (typeof errorPayload.error === "string" && errorPayload.error) {
-                        serverMessage = errorPayload.error;
-                    }
-                } catch {
-                    // ignore malformed error payload
-                }
-                throw new Error(serverMessage);
-            }
+            if (!response.ok) throw new Error("Chat failed");
         } catch (e) {
             console.error("Chat failed", e);
             setChatInput(msg);
-            setToast({ message: e instanceof Error ? e.message : "Chat failed", type: "error" });
         } finally {
             setIsSendingChat(false);
         }

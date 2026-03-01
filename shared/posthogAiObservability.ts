@@ -22,16 +22,11 @@ type CaptureAiGenerationParams = {
 };
 
 let posthogClient: PostHog | null = null;
-let warnedMissingPosthogConfig = false;
 
 export function getPosthogClient(): PostHog | null {
-  const key = process.env.POSTHOG_PROJECT_TOKEN ?? process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
   if (!key || !host) {
-    if (!warnedMissingPosthogConfig) {
-      warnedMissingPosthogConfig = true;
-      console.warn("PostHog AI observability disabled: missing POSTHOG_PROJECT_TOKEN/NEXT_PUBLIC_POSTHOG_KEY or NEXT_PUBLIC_POSTHOG_HOST.");
-    }
     return null;
   }
   posthogClient ??= new PostHog(key, {

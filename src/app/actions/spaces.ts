@@ -3,17 +3,13 @@
 import { auth } from "@clerk/nextjs/server";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { getTestLimit } from "../../lib/testLimits";
 import { createAuthedConvexClient } from "../../lib/convexClientAuth";
 import { getErrorAttributes, logError, logInfo } from "../../lib/otlpLogger";
 
 type ActionResult<T> =
     | { ok: true; data: T }
-    | {
-        ok: false;
-        error: string;
-        code: "UNAUTHORIZED" | "PLAN_LIMIT" | "UNKNOWN";
-        details?: Record<string, unknown>;
-    };
+    | { ok: false; error: string; code: "UNAUTHORIZED" | "PLAN_LIMIT" | "UNKNOWN" };
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error && error.message) {
@@ -29,9 +25,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 function isPlanLimitErrorMessage(message: string): boolean {
-    return message.includes("Limit reached")
-        || message.includes("don't have access to test generation")
-        || message.includes("Subscription required");
+    return message.includes("Limit reached") || message.includes("don't have access to test generation");
 }
 
 export async function createSpaceServerAction(name: string): Promise<ActionResult<Id<"spaces">>> {
@@ -77,58 +71,22 @@ export async function createTestServerAction(args: {
     topicTitle: string;
     knowledgePieceId?: string;
 }): Promise<ActionResult<Id<"tests">>> {
-    const { userId, getToken } = await auth();
+    const { userId, has, getToken } = await auth();
     if (!userId) {
         return { ok: false, error: "Unauthorized", code: "UNAUTHORIZED" };
     }
 
+    const maxTests = getTestLimit(has);
+    if (maxTests === 0) {
+        return {
+            ok: false,
+            error: "Test generation is locked on your current plan. Please upgrade to continue.",
+            code: "PLAN_LIMIT",
+        };
+    }
+
     try {
         const convex = await createAuthedConvexClient(getToken, "actions.spaces.createTestServerAction");
-        const [planStatus, testsThisMonth] = await Promise.all([
-            convex.query(api.planLimits.getPlan, {}),
-            convex.query(api.tests.countForUserThisMonth, { userId }),
-        ]);
-
-        if (!planStatus.hasActiveSubscription) {
-            return {
-                ok: false,
-                error: "Test generation requires an active subscription.",
-                code: "PLAN_LIMIT",
-                details: {
-                    tier: planStatus.tier,
-                    reason: "TEST_SUBSCRIPTION_REQUIRED",
-                },
-            };
-        }
-
-        const maxTests = planStatus.limits.maxTestsPerMonth;
-        if (maxTests === 0) {
-            return {
-                ok: false,
-                error: "Test generation is locked on your current plan. Please upgrade to continue.",
-                code: "PLAN_LIMIT",
-                details: {
-                    limit: maxTests,
-                    used: testsThisMonth,
-                    tier: planStatus.tier,
-                    reason: "TEST_PLAN_ACCESS_DENIED",
-                },
-            };
-        }
-        if (Number.isFinite(maxTests) && testsThisMonth >= maxTests) {
-            return {
-                ok: false,
-                error: `You have reached your monthly test limit (${testsThisMonth}/${maxTests}) on the current plan.`,
-                code: "PLAN_LIMIT",
-                details: {
-                    limit: maxTests,
-                    used: testsThisMonth,
-                    tier: planStatus.tier,
-                    reason: "TEST_MONTHLY_LIMIT_REACHED",
-                },
-            };
-        }
-
         const testId = await convex.mutation(api.tests.createEmptyTest, {
             spaceId: args.spaceId as Id<"spaces">,
             type: args.type,
@@ -145,10 +103,6 @@ export async function createTestServerAction(args: {
                 ok: false,
                 error: "You reached your monthly test limit on the current plan. Please upgrade to continue.",
                 code: "PLAN_LIMIT",
-                details: {
-                    reason: "CONVEX_PLAN_LIMIT",
-                    source: "api.tests.createEmptyTest",
-                },
             };
         }
         logError("Create test action failed", {

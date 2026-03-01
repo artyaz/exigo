@@ -8,7 +8,6 @@ import {
 import type { Id } from "./_generated/dataModel";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
-import { getActiveSubscription } from "./subscriptionService";
 
 const QUESTION_TYPE = v.union(v.literal("select"), v.literal("write"));
 
@@ -82,13 +81,6 @@ export const createEmptyTest = mutation({
       throw new Error("Unauthorized");
     }
 
-    const activeSubscription = await getActiveSubscription(ctx, auth.userId);
-    if (!activeSubscription) {
-      throw new Error(
-        "Subscription required: test generation is only available for active subscribers.",
-      );
-    }
-
     const maxAllowed = auth.limits.maxTestsPerMonth;
     if (maxAllowed === 0) {
       throw new Error(
@@ -137,13 +129,6 @@ export const create = mutation({
     const auth = await getAuthedContext(ctx);
     if (args.userId !== auth.userId) {
       throw new Error("Unauthorized");
-    }
-
-    const activeSubscription = await getActiveSubscription(ctx, auth.userId);
-    if (!activeSubscription) {
-      throw new Error(
-        "Subscription required: test generation is only available for active subscribers.",
-      );
     }
 
     const maxAllowed = auth.limits.maxTestsPerMonth;
@@ -304,13 +289,6 @@ export const createWithQuestions = mutation({
     const auth = await getAuthedContext(ctx);
     if (args.userId !== auth.userId) {
       throw new Error("Unauthorized");
-    }
-
-    const activeSubscription = await getActiveSubscription(ctx, auth.userId);
-    if (!activeSubscription) {
-      throw new Error(
-        "Subscription required: test generation is only available for active subscribers.",
-      );
     }
 
     const maxAllowed = auth.limits.maxTestsPerMonth;
