@@ -56,7 +56,7 @@ function getDistinctIdFromJwt(token: string): string | undefined {
 let posthogClient: import("posthog-node").PostHog | null = null;
 
 function getConvexPosthogClient(): import("posthog-node").PostHog | null {
-    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    const key = process.env.POSTHOG_PROJECT_TOKEN ?? process.env.NEXT_PUBLIC_POSTHOG_KEY;
     const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
     if (!key || !host) return null;
     return posthogClient;
@@ -64,7 +64,7 @@ function getConvexPosthogClient(): import("posthog-node").PostHog | null {
 
 async function ensureConvexPosthogClient(): Promise<import("posthog-node").PostHog | null> {
     if (posthogClient) return posthogClient;
-    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    const key = process.env.POSTHOG_PROJECT_TOKEN ?? process.env.NEXT_PUBLIC_POSTHOG_KEY;
     const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
     if (!key || !host) return null;
     const { PostHog } = await import("posthog-node");
@@ -77,7 +77,7 @@ function captureConvexException(
     distinctId: string | undefined,
     properties: Record<string, string>,
 ): void {
-    if (!getConvexPosthogClient() && !process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+    if (!getConvexPosthogClient() && !process.env.POSTHOG_PROJECT_TOKEN && !process.env.NEXT_PUBLIC_POSTHOG_KEY) {
         return;
     }
     ensureConvexPosthogClient()

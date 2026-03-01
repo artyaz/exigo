@@ -59,13 +59,14 @@ export const onRequestError = async (
       : crypto.randomUUID();
 
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+    const key = process.env.POSTHOG_PROJECT_TOKEN ?? process.env.NEXT_PUBLIC_POSTHOG_KEY;
     const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
     if (!key || !host) {
       logWarn("PostHog env vars missing; skipping exception capture", {
         requestId,
         route: request.url ?? "unknown",
-        missingKey: !key,
+        missingProjectToken: !process.env.POSTHOG_PROJECT_TOKEN,
+        missingPublicKey: !process.env.NEXT_PUBLIC_POSTHOG_KEY,
         missingHost: !host,
       });
     } else {
