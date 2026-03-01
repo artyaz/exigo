@@ -6,7 +6,6 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { getTestLimit } from "../../../../lib/testLimits";
 import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 import {
     captureAiGenerationEvent,
@@ -106,6 +105,27 @@ type GenerateBody = {
     knowledgePieceId?: string;
 };
 
+function createJsonErrorResponse(params: {
+    status: number;
+    code: string;
+    message: string;
+    requestId: string;
+    details?: Record<string, unknown>;
+}): Response {
+    return new Response(
+        JSON.stringify({
+            error: params.message,
+            code: params.code,
+            requestId: params.requestId,
+            details: params.details,
+        }),
+        {
+            status: params.status,
+            headers: { "Content-Type": "application/json" },
+        }
+    );
+}
+
 function parseGenerateBody(rawBody: Record<string, unknown>): GenerateBody {
     return {
         spaceId: rawBody.spaceId as string,
@@ -199,18 +219,39 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.json() as Record<string, unknown>;
     const { spaceId, testType, testId, knowledgePieceId } = parseGenerateBody(rawBody);
 
-    if (!spaceId || !testType || !process.env.GOOGLE_GEMINI_API_KEY) {
-        return new Response(JSON.stringify({ error: "Missing params or API key" }), { status: 400 });
+    const missingFields: string[] = [];
+    if (!spaceId) missingFields.push("spaceId");
+    if (!testType) missingFields.push("testType");
+    if (!process.env.GOOGLE_GEMINI_API_KEY) missingFields.push("GOOGLE_GEMINI_API_KEY");
+    if (missingFields.length > 0) {
+        return createJsonErrorResponse({
+            status: 400,
+            code: "INVALID_REQUEST",
+            message: "Missing required request fields or server configuration.",
+            requestId,
+            details: { missingFields },
+        });
     }
 
     const ALLOWED_TYPES = ["select", "write"] as const;
     if (!ALLOWED_TYPES.includes(testType as typeof ALLOWED_TYPES[number])) {
-        return new Response(JSON.stringify({ error: "Invalid testType — must be 'select' or 'write'" }), { status: 400 });
+        return createJsonErrorResponse({
+            status: 400,
+            code: "INVALID_TEST_TYPE",
+            message: "Invalid testType — must be 'select' or 'write'.",
+            requestId,
+            details: { testType },
+        });
     }
 
-    const { userId, has, getToken } = await auth();
+    const { userId, getToken } = await auth();
     if (!userId) {
-        return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+        return createJsonErrorResponse({
+            status: 401,
+            code: "UNAUTHORIZED",
+            message: "Unauthorized",
+            requestId,
+        });
     }
 
     logInfo("Test generation request received", {
@@ -236,26 +277,53 @@ export async function POST(req: NextRequest) {
             ...getErrorAttributes(error),
         });
         if (error instanceof ConvexAuthError) {
-            return new Response(JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }), { status: 401 });
+            return createJsonErrorResponse({
+                status: 401,
+                code: "CONVEX_AUTH_MISSING",
+                message: "Unauthorized: Missing Convex auth token.",
+                requestId,
+            });
         }
         const msg = error instanceof Error ? error.message : "Unauthorized";
-        return new Response(JSON.stringify({ error: msg }), { status: 500 });
+        return createJsonErrorResponse({
+            status: 500,
+            code: "CONVEX_CLIENT_INIT_FAILED",
+            message: msg,
+            requestId,
+        });
     }
 
-    const MAX_TESTS = getTestLimit(has);
-    if (MAX_TESTS === 0) {
-        return new Response(JSON.stringify({
-            error: "Access Denied",
-            message: "You don't have access to test generation. Please upgrade your plan."
-        }), { status: 403 });
+    const planStatus = await convex.query(api.planLimits.getPlan, {});
+    const maxTests = planStatus.limits.maxTestsPerMonth;
+    if (maxTests === 0) {
+        return createJsonErrorResponse({
+            status: 403,
+            code: "TEST_PLAN_ACCESS_DENIED",
+            message: "Your current plan does not include test generation.",
+            requestId,
+            details: {
+                tier: planStatus.tier,
+                testsThisMonth: 0,
+                maxTestsPerMonth: maxTests,
+                planSource: "convex.planLimits.getPlan",
+            },
+        });
     }
 
     const testsThisMonth = await convex.query(api.tests.countForUserThisMonth, { userId });
-    if (testsThisMonth >= MAX_TESTS) {
-        return new Response(JSON.stringify({
-            error: "Limit Reached",
-            message: `You have reached your limit of ${MAX_TESTS} tests for this month. Please upgrade your plan.`
-        }), { status: 403 });
+    if (Number.isFinite(maxTests) && testsThisMonth >= maxTests) {
+        return createJsonErrorResponse({
+            status: 403,
+            code: "TEST_MONTHLY_LIMIT_REACHED",
+            message: `You have reached your monthly test limit (${testsThisMonth}/${maxTests}).`,
+            requestId,
+            details: {
+                tier: planStatus.tier,
+                testsThisMonth,
+                maxTestsPerMonth: maxTests,
+                planSource: "convex.planLimits.getPlan",
+            },
+        });
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
@@ -263,13 +331,25 @@ export async function POST(req: NextRequest) {
     // Verify space ownership before accessing data
     const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces">, userId });
     if (!space) {
-        return new Response(JSON.stringify({ error: "Access denied to this space or space not found" }), { status: 403 });
+        return createJsonErrorResponse({
+            status: 403,
+            code: "SPACE_ACCESS_DENIED",
+            message: "Access denied to this space or space not found.",
+            requestId,
+            details: { spaceId },
+        });
     }
 
 
     const pieces = await convex.query(api.knowledgePieces.getForSpace, { spaceId: spaceId as Id<"spaces"> });
     if (!pieces || pieces.length === 0) {
-        return new Response(JSON.stringify({ error: "No knowledge pieces" }), { status: 400 });
+        return createJsonErrorResponse({
+            status: 400,
+            code: "NO_KNOWLEDGE_PIECES",
+            message: "No knowledge pieces found for this space.",
+            requestId,
+            details: { spaceId },
+        });
     }
 
     const selectedResult = selectKnowledgePieces(pieces, knowledgePieceId);
@@ -290,7 +370,7 @@ export async function POST(req: NextRequest) {
     });
 
     let activeNodes: { _id: Id<"knowledgeNodes">, type: string, content: string }[] = [];
-    const isPro = has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" });
+    const isPro = planStatus.tier === "pro" || planStatus.tier === "educator";
     if (effectiveKnowledgePieceId && isPro) {
         activeNodes = await convex.query(api.knowledgeNodes.getActiveForPiece, {
             knowledgePieceId: effectiveKnowledgePieceId as Id<"knowledgePieces">
@@ -440,7 +520,16 @@ ${knowledgeText}`;
                     ...getErrorAttributes(err),
                 });
                 const msg = err instanceof Error ? err.message : "Unknown error";
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: msg })}\n\n`));
+                controller.enqueue(
+                    encoder.encode(
+                        `data: ${JSON.stringify({
+                            type: "error",
+                            error: msg,
+                            code: "GENERATION_STREAM_FAILED",
+                            requestId,
+                        })}\n\n`
+                    )
+                );
                 controller.close();
             }
         }
