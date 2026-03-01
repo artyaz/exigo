@@ -6,6 +6,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { AuthLayout, AuthDivider, GoogleAuthButton, AuthInput, AuthSubmitButton, AuthErrorAlert, formatErrorMessage } from "~/app/_components/auth-ui";
+import { LegalCornerLink } from "~/app/_components/legal-ui";
 
 /**
  * Complete replacement for Clerk's standard SignIn UI.
@@ -64,46 +65,49 @@ export default function SignInPage() {
     };
 
     return (
-        <AuthLayout
-            title="Welcome Back"
-            subtitle="Sign in to your account to continue"
-        >
-            <div className="space-y-6">
-                <GoogleAuthButton onClick={handleGoogleSignIn} />
-                <AuthDivider text="or continue with email" />
+        <>
+            <AuthLayout
+                title="Welcome Back"
+                subtitle="Sign in to your account to continue"
+            >
+                <div className="space-y-6">
+                    <GoogleAuthButton onClick={handleGoogleSignIn} />
+                    <AuthDivider text="or continue with email" />
 
-                <form onSubmit={handleEmailSignIn} className="space-y-4">
-                    <AuthErrorAlert error={error} />
+                    <form onSubmit={handleEmailSignIn} className="space-y-4">
+                        <AuthErrorAlert error={error} />
 
-                    <div className="space-y-4">
-                        <AuthInput
-                            type="email"
-                            placeholder="Email address"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            icon={Mail}
-                        />
-                        <AuthInput
-                            type="password"
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            icon={Lock}
-                        />
-                    </div>
-                    <AuthSubmitButton isLoading={isLoading}>
-                        Sign In
-                        <ArrowRight className="h-5 w-5" />
-                    </AuthSubmitButton>
-                </form>
-            </div>
+                        <div className="space-y-4">
+                            <AuthInput
+                                type="email"
+                                placeholder="Email address"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                icon={Mail}
+                            />
+                            <AuthInput
+                                type="password"
+                                placeholder="Password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                icon={Lock}
+                            />
+                        </div>
+                        <AuthSubmitButton isLoading={isLoading}>
+                            Sign In
+                            <ArrowRight className="h-5 w-5" />
+                        </AuthSubmitButton>
+                    </form>
+                </div>
 
-            <div className="mt-8 text-center text-sm text-neutral-400">
-                Don&apos;t have an account?{" "}
-                <Link href="/sign-up" className="text-emerald-400 font-semibold hover:text-emerald-300 transition-colors">
-                    Sign up
-                </Link>
-            </div>
-        </AuthLayout>
+                <div className="mt-8 text-center text-sm text-neutral-400">
+                    Don&apos;t have an account?{" "}
+                    <Link href="/sign-up" className="text-emerald-400 font-semibold hover:text-emerald-300 transition-colors">
+                        Sign up
+                    </Link>
+                </div>
+            </AuthLayout>
+            <LegalCornerLink />
+        </>
     );
 }
