@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getPaymentProvider } from "~/server/payments";
 import { clerkClient } from "@clerk/nextjs/server";
-import { slugToTier, tierToAccessLevel } from "../../../../../shared/planConfig";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../../../../convex/_generated/api";
 
 type PaddleSubscriptionEvent = {
   event_type: string;
@@ -22,20 +23,20 @@ type PaddleSubscriptionEvent = {
   };
 };
 
-async function getConvexClient() {
-  const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
-  const adminKey = process.env.CONVEX_DEPLOY_KEY;
-  if (!siteUrl || !adminKey) throw new Error("Missing Convex configuration");
-  return { siteUrl, adminKey };
+function getConvexClient() {
+  const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+  if (!url) throw new Error("Missing NEXT_PUBLIC_CONVEX_URL");
+  return new ConvexHttpClient(url);
 }
 
 async function callConvexMutation(
   name: string,
   args: Record<string, unknown>,
 ) {
-  const { siteUrl, adminKey } = await getConvexClient();
+  const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+  const adminKey = process.env.CONVEX_DEPLOY_KEY;
+  if (!siteUrl || !adminKey) throw new Error("Missing Convex configuration");
 
-  // Use Convex HTTP action to forward to internal mutation
   const response = await fetch(`${siteUrl}/paddleWebhook`, {
     method: "POST",
     headers: {
@@ -51,22 +52,9 @@ async function callConvexMutation(
   }
 }
 
-async function resolvePlanSlug(priceId: string): Promise<string | undefined> {
-  // Look up plan slug by price ID. Since we can't easily query Convex from
-  // the webhook handler, we use a simple env-based mapping.
-  const mapping: Record<string, string> = {};
-  const envPairs = [
-    ["PADDLE_PRICE_PRO_MONTHLY", "pro-monthly"],
-    ["PADDLE_PRICE_PRO_ANNUAL", "pro-annual"],
-    ["PADDLE_PRICE_EDUCATOR_MONTHLY", "educator-monthly"],
-    ["PADDLE_PRICE_EDUCATOR_ANNUAL", "educator-annual"],
-  ];
-  for (const [envKey, slug] of envPairs) {
-    if (!envKey || !slug) continue;
-    const val = process.env[envKey];
-    if (val) mapping[val] = slug;
-  }
-  return mapping[priceId];
+async function resolvePlanFromPriceId(priceId: string) {
+  const convex = getConvexClient();
+  return await convex.query(api.plans.getByPriceId, { priceId });
 }
 
 async function updateClerkMetadata(
@@ -112,9 +100,9 @@ export async function POST(req: NextRequest) {
       event_type === "subscription.updated"
     ) {
       const priceId = data.items?.[0]?.price?.id;
-      const planSlug = priceId ? await resolvePlanSlug(priceId) : undefined;
-      const tier = slugToTier(planSlug);
-      const accessLevel = tierToAccessLevel(tier);
+      const plan = priceId ? await resolvePlanFromPriceId(priceId) : null;
+      const planSlug = plan?.slug;
+      const accessLevel = plan?.accessLevel ?? 0;
 
       const periodStart = data.current_billing_period?.starts_at
         ? new Date(data.current_billing_period.starts_at).getTime()
@@ -145,7 +133,7 @@ export async function POST(req: NextRequest) {
 
       await updateClerkMetadata(
         clerkUserId,
-        planSlug ?? tier,
+        planSlug ?? null,
         periodEnd ?? null,
         paddleSubscriptionId,
       );

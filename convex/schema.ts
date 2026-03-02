@@ -89,15 +89,16 @@ export default defineSchema({
   plans: defineTable({
     name: v.string(),
     slug: v.string(),
-    priceIdSandbox: v.optional(v.string()),
-    priceIdLive: v.optional(v.string()),
+    priceId: v.optional(v.string()),
     accessLevel: v.number(),
     perks: v.array(v.object({
       text: v.string(),
       link: v.optional(v.string()),
     })),
     basePrice: v.number(),
-  }).index("by_slug", ["slug"]),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_price_id", ["priceId"]),
   usage: defineTable({
     userId: v.string(),
     metric: v.string(),

@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 
 export const seed = mutation({
@@ -12,8 +13,6 @@ export const seed = mutation({
       {
         name: "Free",
         slug: "free",
-        priceIdSandbox: undefined,
-        priceIdLive: undefined,
         accessLevel: 0,
         perks: [
           { text: "3 spaces" },
@@ -25,8 +24,7 @@ export const seed = mutation({
       {
         name: "Pro Scholar",
         slug: "pro-monthly",
-        priceIdSandbox: process.env.PADDLE_PRICE_PRO_MONTHLY ?? "",
-        priceIdLive: process.env.PADDLE_PRICE_PRO_MONTHLY_LIVE ?? "",
+        priceId: "",
         accessLevel: 1,
         perks: [
           { text: "Unlimited spaces" },
@@ -39,8 +37,7 @@ export const seed = mutation({
       {
         name: "Pro Scholar",
         slug: "pro-annual",
-        priceIdSandbox: process.env.PADDLE_PRICE_PRO_ANNUAL ?? "",
-        priceIdLive: process.env.PADDLE_PRICE_PRO_ANNUAL_LIVE ?? "",
+        priceId: "",
         accessLevel: 1,
         perks: [
           { text: "Unlimited spaces" },
@@ -53,8 +50,7 @@ export const seed = mutation({
       {
         name: "Educator",
         slug: "educator-monthly",
-        priceIdSandbox: process.env.PADDLE_PRICE_EDUCATOR_MONTHLY ?? "",
-        priceIdLive: process.env.PADDLE_PRICE_EDUCATOR_MONTHLY_LIVE ?? "",
+        priceId: "",
         accessLevel: 2,
         perks: [
           { text: "Unlimited spaces" },
@@ -67,8 +63,7 @@ export const seed = mutation({
       {
         name: "Educator",
         slug: "educator-annual",
-        priceIdSandbox: process.env.PADDLE_PRICE_EDUCATOR_ANNUAL ?? "",
-        priceIdLive: process.env.PADDLE_PRICE_EDUCATOR_ANNUAL_LIVE ?? "",
+        priceId: "",
         accessLevel: 2,
         perks: [
           { text: "Unlimited spaces" },
@@ -85,5 +80,19 @@ export const seed = mutation({
     }
 
     return { seeded: plans.length };
+  },
+});
+
+/** Update the priceId for a plan by slug. Run per-environment after seeding. */
+export const setPriceId = mutation({
+  args: { slug: v.string(), priceId: v.string() },
+  handler: async (ctx, args) => {
+    const plan = await ctx.db
+      .query("plans")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .first();
+    if (!plan) throw new Error(`Plan not found: ${args.slug}`);
+    await ctx.db.patch(plan._id, { priceId: args.priceId });
+    return { updated: args.slug };
   },
 });
