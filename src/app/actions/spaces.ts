@@ -71,12 +71,13 @@ export async function createTestServerAction(args: {
     topicTitle: string;
     knowledgePieceId?: string;
 }): Promise<ActionResult<Id<"tests">>> {
-    const { userId, has, getToken } = await auth();
+    const { userId, getToken, sessionClaims } = await auth();
     if (!userId) {
         return { ok: false, error: "Unauthorized", code: "UNAUTHORIZED" };
     }
 
-    const maxTests = getTestLimit(has);
+    const plan = (sessionClaims as Record<string, unknown> | null)?.privateMetadata as { plan?: string } | undefined;
+    const maxTests = getTestLimit(plan?.plan);
     if (maxTests === 0) {
         return {
             ok: false,

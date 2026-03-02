@@ -7,6 +7,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { getTestLimit } from "../../../../lib/testLimits";
+import { slugToTier } from "../../../../../shared/planConfig";
 import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 import {
     captureAiGenerationEvent,
@@ -208,10 +209,13 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: "Invalid testType — must be 'select' or 'write'" }), { status: 400 });
     }
 
-    const { userId, has, getToken } = await auth();
+    const { userId, getToken, sessionClaims } = await auth();
     if (!userId) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
+
+    const privateMeta = (sessionClaims as Record<string, unknown> | null)?.privateMetadata as { plan?: string } | undefined;
+    const planSlug = privateMeta?.plan;
 
     logInfo("Test generation request received", {
         source: "api.tests.generate",
@@ -242,7 +246,7 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: msg }), { status: 500 });
     }
 
-    const MAX_TESTS = getTestLimit(has);
+    const MAX_TESTS = getTestLimit(planSlug);
     if (MAX_TESTS === 0) {
         return new Response(JSON.stringify({
             error: "Access Denied",
@@ -290,7 +294,8 @@ export async function POST(req: NextRequest) {
     });
 
     let activeNodes: { _id: Id<"knowledgeNodes">, type: string, content: string }[] = [];
-    const isPro = has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" });
+    const tier = slugToTier(planSlug);
+    const isPro = tier === "pro" || tier === "educator";
     if (effectiveKnowledgePieceId && isPro) {
         activeNodes = await convex.query(api.knowledgeNodes.getActiveForPiece, {
             knowledgePieceId: effectiveKnowledgePieceId as Id<"knowledgePieces">

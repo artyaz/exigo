@@ -3,7 +3,8 @@
 import { motion } from "framer-motion";
 import { ArrowLeft, BrainCircuit, Target, Zap, AlertTriangle, TrendingUp } from "lucide-react";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 
 const SPRING_SNAPPY = { type: "spring" as const, stiffness: 400, damping: 30 };
 
@@ -35,11 +36,11 @@ const NODE_TYPES = [
 ];
 
 export default function KnowledgeNodesPage() {
-    const { isLoaded, has } = useAuth();
-    if (!isLoaded) {
+    const access = useQuery(api.plans.myAccessLevel);
+    if (!access) {
         return null;
     }
-    const isPro = has ? (has({ feature: "pro_tests" }) || has({ feature: "unlimited_ai_tests" })) : false;
+    const isPro = access.isPro;
 
     return (
         <div className="min-h-screen bg-black text-white font-sans selection:bg-white/20 px-6 py-20 md:py-32 overflow-hidden relative">

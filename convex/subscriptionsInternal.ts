@@ -7,37 +7,89 @@ function hashId(id: string): string {
   return "*".repeat(id.length);
 }
 
-export const upsert = internalMutation({
+export const upsertFromPaddle = internalMutation({
   args: {
     userId: v.string(),
     accessLevel: v.number(),
-    clerkPlanId: v.optional(v.string()),
-    clerkPlanSlug: v.optional(v.string()),
+    planSlug: v.optional(v.string()),
+    paddleSubscriptionId: v.string(),
+    paddleCustomerId: v.optional(v.string()),
     status: v.union(
       v.literal("active"),
       v.literal("canceled"),
       v.literal("past_due"),
       v.literal("expired"),
     ),
-    periodEnd: v.optional(v.number()),
+    currentPeriodStart: v.optional(v.number()),
+    currentPeriodEnd: v.optional(v.number()),
     canceledAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    console.log("[Subscription] Inserting subscription record", {
+    console.log("[Subscription] Upserting from Paddle", {
       userId: hashId(args.userId),
       accessLevel: args.accessLevel,
       status: args.status,
-      periodEnd: args.periodEnd,
+      paddleSubscriptionId: args.paddleSubscriptionId,
     });
+
+    const existing = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_paddle_sub", (q) =>
+        q.eq("paddleSubscriptionId", args.paddleSubscriptionId),
+      )
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        userId: args.userId,
+        accessLevel: args.accessLevel,
+        planSlug: args.planSlug,
+        paddleCustomerId: args.paddleCustomerId,
+        status: args.status,
+        currentPeriodStart: args.currentPeriodStart,
+        currentPeriodEnd: args.currentPeriodEnd,
+        canceledAt: args.canceledAt,
+      });
+      return existing._id;
+    }
 
     return await ctx.db.insert("subscriptions", {
       userId: args.userId,
       accessLevel: args.accessLevel,
-      clerkPlanId: args.clerkPlanId,
-      clerkPlanSlug: args.clerkPlanSlug,
+      planSlug: args.planSlug,
+      paddleSubscriptionId: args.paddleSubscriptionId,
+      paddleCustomerId: args.paddleCustomerId,
       status: args.status,
-      periodEnd: args.periodEnd,
+      currentPeriodStart: args.currentPeriodStart,
+      currentPeriodEnd: args.currentPeriodEnd,
       canceledAt: args.canceledAt,
+    });
+  },
+});
+
+export const cancelFromPaddle = internalMutation({
+  args: {
+    paddleSubscriptionId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_paddle_sub", (q) =>
+        q.eq("paddleSubscriptionId", args.paddleSubscriptionId),
+      )
+      .first();
+
+    if (!existing) {
+      console.warn(
+        "[Subscription] Cancel: not found",
+        args.paddleSubscriptionId,
+      );
+      return;
+    }
+
+    await ctx.db.patch(existing._id, {
+      status: "canceled",
+      canceledAt: Date.now(),
     });
   },
 });

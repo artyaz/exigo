@@ -70,22 +70,39 @@ export default defineSchema({
   subscriptions: defineTable({
     userId: v.string(),
     accessLevel: v.number(),
-    clerkPlanId: v.optional(v.string()),
-    clerkPlanSlug: v.optional(v.string()),
+    planSlug: v.optional(v.string()),
+    paddleSubscriptionId: v.optional(v.string()),
+    paddleCustomerId: v.optional(v.string()),
     status: v.union(
       v.literal("active"),
       v.literal("canceled"),
       v.literal("past_due"),
       v.literal("expired"),
     ),
-    periodEnd: v.optional(v.number()),
+    currentPeriodStart: v.optional(v.number()),
+    currentPeriodEnd: v.optional(v.number()),
     canceledAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
-    .index("by_status", ["status"]),
-  testsUsage: defineTable({
+    .index("by_status", ["status"])
+    .index("by_paddle_sub", ["paddleSubscriptionId"]),
+  plans: defineTable({
+    name: v.string(),
+    slug: v.string(),
+    priceIdSandbox: v.optional(v.string()),
+    priceIdLive: v.optional(v.string()),
+    accessLevel: v.number(),
+    perks: v.array(v.object({
+      text: v.string(),
+      link: v.optional(v.string()),
+    })),
+    basePrice: v.number(),
+  }).index("by_slug", ["slug"]),
+  usage: defineTable({
     userId: v.string(),
-    month: v.string(),
+    metric: v.string(),
     count: v.number(),
-  }).index("by_user_month", ["userId", "month"]),
+    periodStart: v.number(),
+    periodEnd: v.number(),
+  }).index("by_user_metric", ["userId", "metric"]),
 });

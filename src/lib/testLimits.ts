@@ -1,10 +1,13 @@
-import { MAX_TESTS_SENTINEL } from "../../shared/planConfig";
+import { MAX_TESTS_SENTINEL, slugToTier } from "../../shared/planConfig";
 
-export function getTestLimit(has: (params: { feature: string }) => boolean): number {
-    let limit = 0;
-    if (has({ feature: "unlimited_ai_tests" })) limit = 300;
-    else if (has({ feature: "pro_tests" })) limit = 100;
-    else if (has({ feature: "basic_tests" })) limit = 10;
+const TIER_TEST_LIMITS: Record<string, number> = {
+    free: 10,
+    pro: 100,
+    educator: 300,
+};
 
+export function getTestLimit(plan: string | undefined): number {
+    const tier = slugToTier(plan);
+    const limit = TIER_TEST_LIMITS[tier] ?? 10;
     return Math.min(limit, MAX_TESTS_SENTINEL);
 }

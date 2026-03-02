@@ -1,17 +1,12 @@
-import { UNLIMITED_LIMIT } from "../../shared/planConfig";
+import { UNLIMITED_LIMIT, slugToTier } from "../../shared/planConfig";
 
-export function getKnowledgePieceLimit(has: (params: { feature: string }) => boolean): number {
-    if (has({ feature: "unlimited_knowledge" }) || has({ feature: "unlimited_ai_tests" })) {
-        return UNLIMITED_LIMIT;
-    }
+const TIER_KNOWLEDGE_LIMITS: Record<string, number> = {
+    free: 20,
+    pro: 200,
+    educator: UNLIMITED_LIMIT,
+};
 
-    if (has({ feature: "pro_knowledge" }) || has({ feature: "pro_tests" })) {
-        return 200;
-    }
-
-    if (has({ feature: "basic_knowledge" }) || has({ feature: "basic_tests" })) {
-        return 50;
-    }
-
-    return 20;
+export function getKnowledgePieceLimit(plan: string | undefined): number {
+    const tier = slugToTier(plan);
+    return TIER_KNOWLEDGE_LIMITS[tier] ?? 20;
 }
