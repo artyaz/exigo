@@ -20,19 +20,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve price ID from plans table
+    // Validate plan exists in local plans table.
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
     const plan = await convex.query(api.plans.getBySlug, { slug: body.planSlug });
 
-    if (!plan || !plan.priceId) {
+    if (!plan) {
       return NextResponse.json(
-        { error: "Plan not found or price not configured" },
+        { error: "Plan not found" },
         { status: 400 },
       );
     }
 
     const provider = getPaymentProvider();
-    const result = await provider.createCheckout(userId, plan.priceId);
+    const planPrices = await provider.listPlanPrices();
+    const selectedPrice = planPrices.find((p) => p.slug === plan.slug.toLowerCase());
+    if (!selectedPrice) {
+      return NextResponse.json(
+        { error: "No active Paddle price configured for this plan slug" },
+        { status: 400 },
+      );
+    }
+    const result = await provider.createCheckout(
+      userId,
+      selectedPrice.priceId,
+      { plan_slug: plan.slug.toLowerCase() },
+    );
 
     return NextResponse.json({
       url: result.url,

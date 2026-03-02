@@ -11,7 +11,7 @@ type PaddleSubscriptionEvent = {
     id: string; // subscription ID
     status: string;
     customer_id: string;
-    custom_data?: { clerk_user_id?: string };
+    custom_data?: { clerk_user_id?: string; plan_slug?: string; slug?: string };
     items?: Array<{
       price?: { id: string };
     }>;
@@ -52,9 +52,20 @@ async function callConvexMutation(
   }
 }
 
-async function resolvePlanFromPriceId(priceId: string) {
-  const convex = getConvexClient();
-  return await convex.query(api.plans.getByPriceId, { priceId });
+async function resolvePlanSlug(
+  provider: ReturnType<typeof getPaymentProvider>,
+  data: PaddleSubscriptionEvent["data"],
+): Promise<string | undefined> {
+  const fromCustomData = data.custom_data?.plan_slug ?? data.custom_data?.slug;
+  if (typeof fromCustomData === "string" && fromCustomData.trim().length > 0) {
+    return fromCustomData.trim().toLowerCase();
+  }
+
+  const priceId = data.items?.[0]?.price?.id;
+  if (!priceId) return undefined;
+
+  const prices = await provider.listPlanPrices();
+  return prices.find((p) => p.priceId === priceId)?.slug;
 }
 
 async function updateClerkMetadata(
@@ -99,10 +110,16 @@ export async function POST(req: NextRequest) {
       event_type === "subscription.activated" ||
       event_type === "subscription.updated"
     ) {
-      const priceId = data.items?.[0]?.price?.id;
-      const plan = priceId ? await resolvePlanFromPriceId(priceId) : null;
-      const planSlug = plan?.slug;
-      const accessLevel = plan?.accessLevel ?? 0;
+      const planSlug = await resolvePlanSlug(provider, data);
+      if (!planSlug) {
+        throw new Error("Paddle webhook missing plan slug in custom_data");
+      }
+      const convex = getConvexClient();
+      const plan = await convex.query(api.plans.getBySlug, { slug: planSlug });
+      if (!plan) {
+        throw new Error(`Unknown plan slug in Paddle webhook: ${planSlug}`);
+      }
+      const accessLevel = plan.accessLevel;
 
       const periodStart = data.current_billing_period?.starts_at
         ? new Date(data.current_billing_period.starts_at).getTime()
@@ -133,7 +150,7 @@ export async function POST(req: NextRequest) {
 
       await updateClerkMetadata(
         clerkUserId,
-        planSlug ?? null,
+        planSlug,
         periodEnd ?? null,
         paddleSubscriptionId,
       );

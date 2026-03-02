@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { ArrowLeft, Check, Loader2 } from "lucide-react";
-import { SignedIn, SignedOut, useAuth, useUser } from "@clerk/nextjs";
+import { SignedIn, SignedOut, useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { slugToTier } from "../../../shared/planConfig";
 
 type BillingPeriod = "month" | "annual";
@@ -273,9 +273,34 @@ function PricingCards({
 export default function PricingPage() {
     const { isLoaded } = useUser();
     const [billingCycle, setBillingCycle] = useState<BillingPeriod>("month");
+    const [paddlePrices, setPaddlePrices] = useState<Record<string, number>>({});
 
     const rawPlans = useQuery(api.plans.list) ?? [];
-    const plans = groupPlans(rawPlans);
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch("/api/plans/prices");
+                if (!res.ok) return;
+                const data = (await res.json()) as { prices?: Record<string, number> };
+                if (!cancelled && data.prices) {
+                    setPaddlePrices(data.prices);
+                }
+            } catch {
+                // Keep DB fallback prices if Paddle fetch fails.
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const plans = groupPlans(
+        rawPlans.map((plan) => ({
+            ...plan,
+            basePrice: paddlePrices[plan.slug] ?? plan.basePrice,
+        })),
+    );
     const meta = usePrivateMetadata();
 
     if (!isLoaded) {

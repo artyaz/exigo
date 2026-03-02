@@ -3,6 +3,12 @@ export interface CheckoutResult {
   transactionId: string;
 }
 
+export interface PlanPrice {
+  slug: string;
+  priceId: string;
+  amountCents: number;
+}
+
 export interface IPaymentProvider {
   /**
    * Create a hosted checkout session and return the redirect URL.
@@ -12,7 +18,13 @@ export interface IPaymentProvider {
   createCheckout(
     userId: string,
     priceId: string,
+    customData?: Record<string, string>,
   ): Promise<CheckoutResult>;
+
+  /**
+   * Fetch active provider prices keyed by the plan slug stored in provider custom data.
+   */
+  listPlanPrices(): Promise<PlanPrice[]>;
 
   /**
    * Verify the authenticity of an incoming webhook request.
