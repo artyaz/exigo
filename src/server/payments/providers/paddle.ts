@@ -39,7 +39,9 @@ export class PaddleProvider implements IPaymentProvider {
           clerk_user_id: userId,
           ...(customData ?? {}),
         },
-        checkout: { url: process.env.PADDLE_CHECKOUT_SUCCESS_URL ?? "/" },
+        // `checkout.url` is the payment-link base URL, not a post-payment success redirect.
+        // Setting to null tells Paddle to generate its hosted checkout URL.
+        checkout: { url: null },
       }),
     });
 

@@ -21,7 +21,6 @@ export const env = createEnv({
     PADDLE_WEBHOOK_SECRET: z.string().optional(),
     PADDLE_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
     PADDLE_SUBSCRIPTION_PRODUCT_ID: z.string().optional(),
-    PADDLE_CHECKOUT_SUCCESS_URL: z.string().optional(),
   },
 
   /**
@@ -52,7 +51,6 @@ export const env = createEnv({
     PADDLE_WEBHOOK_SECRET: process.env.PADDLE_WEBHOOK_SECRET,
     PADDLE_ENVIRONMENT: process.env.PADDLE_ENVIRONMENT,
     PADDLE_SUBSCRIPTION_PRODUCT_ID: process.env.PADDLE_SUBSCRIPTION_PRODUCT_ID,
-    PADDLE_CHECKOUT_SUCCESS_URL: process.env.PADDLE_CHECKOUT_SUCCESS_URL,
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
     NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
