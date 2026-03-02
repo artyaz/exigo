@@ -82,6 +82,9 @@ export default defineSchema({
     currentPeriodStart: v.optional(v.number()),
     currentPeriodEnd: v.optional(v.number()),
     canceledAt: v.optional(v.number()),
+    // Legacy Clerk-era fields kept temporarily for schema migration compatibility.
+    clerkPlanSlug: v.optional(v.string()),
+    periodEnd: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
