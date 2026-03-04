@@ -49,12 +49,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(result.url, 302);
   } catch (error) {
     console.error("[Checkout] Failed:", error);
-    const message = error instanceof Error
-      ? error.message
-      : `Checkout creation failed: ${String(error)}`;
-    const status = getCheckoutErrorStatus(message);
+    const internalMessage = error instanceof Error ? error.message : String(error);
+    const status = getCheckoutErrorStatus(internalMessage);
+    const publicMessage = status === 400 ? internalMessage : "Checkout creation failed";
     return NextResponse.json(
-      { error: message },
+      { error: publicMessage },
       { status },
     );
   }
@@ -67,15 +66,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await req.json()) as { planSlug: string };
-    if (!body.planSlug) {
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Malformed JSON" }, { status: 400 });
+    }
+
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("planSlug" in body) ||
+      typeof (body as Record<string, unknown>).planSlug !== "string" ||
+      !(body as Record<string, unknown>).planSlug
+    ) {
       return NextResponse.json(
         { error: "Missing planSlug" },
         { status: 400 },
       );
     }
 
-    const result = await createCheckoutForSlug(userId, body.planSlug);
+    const result = await createCheckoutForSlug(userId, (body as { planSlug: string }).planSlug);
 
     return NextResponse.json({
       url: result.url,
@@ -83,12 +94,11 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[Checkout] Failed:", error);
-    const message = error instanceof Error
-      ? error.message
-      : `Checkout creation failed: ${String(error)}`;
-    const status = getCheckoutErrorStatus(message);
+    const internalMessage = error instanceof Error ? error.message : String(error);
+    const status = getCheckoutErrorStatus(internalMessage);
+    const publicMessage = status === 400 ? internalMessage : "Checkout creation failed";
     return NextResponse.json(
-      { error: message },
+      { error: publicMessage },
       { status },
     );
   }

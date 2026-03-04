@@ -97,14 +97,28 @@ export async function POST(req: NextRequest) {
     const event = JSON.parse(rawBody) as PaddleSubscriptionEvent;
     const { event_type, data } = event;
 
+    const paddleSubscriptionId = data.id;
+    const paddleCustomerId = data.customer_id;
+
+    // Handle cancellation before requiring clerkUserId — it only needs the subscription ID
+    if (event_type === "subscription.canceled") {
+      await callConvexMutation("cancelFromPaddle", {
+        paddleSubscriptionId,
+      });
+
+      const clerkUserId = data.custom_data?.clerk_user_id;
+      if (clerkUserId) {
+        await updateClerkMetadata(clerkUserId, null, null, null);
+      }
+
+      return NextResponse.json({ received: true, action: "canceled" });
+    }
+
     const clerkUserId = data.custom_data?.clerk_user_id;
     if (!clerkUserId) {
       console.warn("[Paddle Webhook] No clerk_user_id in custom_data, skipping");
       return NextResponse.json({ received: true, skipped: "no_user_id" });
     }
-
-    const paddleSubscriptionId = data.id;
-    const paddleCustomerId = data.customer_id;
 
     if (
       event_type === "subscription.activated" ||
@@ -128,14 +142,21 @@ export async function POST(req: NextRequest) {
         ? new Date(data.current_billing_period.ends_at).getTime()
         : undefined;
 
-      const status =
-        data.status === "active" || data.status === "trialing"
-          ? "active"
-          : data.status === "canceled"
-            ? "canceled"
-            : data.status === "past_due"
-              ? "past_due"
-              : "active";
+      const knownStatuses: Record<string, string> = {
+        active: "active",
+        trialing: "active",
+        canceled: "canceled",
+        past_due: "past_due",
+        paused: "paused",
+      };
+      const status = knownStatuses[data.status];
+      if (!status) {
+        console.warn(`[Paddle Webhook] Unrecognized subscription status: ${data.status}`);
+        return NextResponse.json(
+          { error: `Unrecognized subscription status: ${data.status}` },
+          { status: 400 },
+        );
+      }
 
       await callConvexMutation("upsertFromPaddle", {
         userId: clerkUserId,
@@ -156,16 +177,6 @@ export async function POST(req: NextRequest) {
       );
 
       return NextResponse.json({ received: true, action: "upserted" });
-    }
-
-    if (event_type === "subscription.canceled") {
-      await callConvexMutation("cancelFromPaddle", {
-        paddleSubscriptionId,
-      });
-
-      await updateClerkMetadata(clerkUserId, null, null, null);
-
-      return NextResponse.json({ received: true, action: "canceled" });
     }
 
     return NextResponse.json({ received: true, skipped: event_type });

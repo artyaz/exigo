@@ -78,6 +78,7 @@ export default defineSchema({
       v.literal("canceled"),
       v.literal("past_due"),
       v.literal("expired"),
+      v.literal("paused"),
     ),
     currentPeriodStart: v.optional(v.number()),
     currentPeriodEnd: v.optional(v.number()),

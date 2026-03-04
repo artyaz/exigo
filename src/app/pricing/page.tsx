@@ -78,6 +78,13 @@ function groupPlans(
         if (existing && isAnnual) {
             existing.annualSlug = plan.slug;
             existing.annualPrice = plan.basePrice;
+        } else if (existing && !isAnnual) {
+            // Monthly variant arrived after annual — fill in monthly fields
+            existing.slug = plan.slug;
+            existing.name = plan.name;
+            existing.basePrice = plan.basePrice;
+            existing.accessLevel = plan.accessLevel;
+            existing.perks = plan.perks;
         } else if (!existing && !isAnnual) {
             grouped.set(tier, {
                 slug: plan.slug,
@@ -152,14 +159,13 @@ function PricingCards({
 }) {
     const [loadingSlug, setLoadingSlug] = useState<string | null>(null);
 
-    const currentTier = slugToTier(currentPlanSlug);
-
     return (
         <section className="mx-auto grid w-full max-w-[1120px] grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
             {plans.map((plan) => {
                 const displayed = getDisplayValues(plan, billingCycle);
-                const planTier = slugToTier(plan.slug);
-                const isCurrent = planTier === currentTier;
+                const isCurrent =
+                    currentPlanSlug !== undefined &&
+                    (plan.slug === currentPlanSlug || plan.annualSlug === currentPlanSlug);
 
                 return (
                     <article

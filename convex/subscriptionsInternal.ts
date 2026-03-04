@@ -19,6 +19,7 @@ export const upsertFromPaddle = internalMutation({
       v.literal("canceled"),
       v.literal("past_due"),
       v.literal("expired"),
+      v.literal("paused"),
     ),
     currentPeriodStart: v.optional(v.number()),
     currentPeriodEnd: v.optional(v.number()),
@@ -29,7 +30,7 @@ export const upsertFromPaddle = internalMutation({
       userId: hashId(args.userId),
       accessLevel: args.accessLevel,
       status: args.status,
-      paddleSubscriptionId: args.paddleSubscriptionId,
+      paddleSubscriptionId: hashId(args.paddleSubscriptionId),
     });
 
     const existing = await ctx.db

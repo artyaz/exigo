@@ -2,7 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 
-const VALID_STATUSES = ["active", "canceled", "past_due", "expired"] as const;
+const VALID_STATUSES = ["active", "canceled", "past_due", "expired", "paused"] as const;
 type SubscriptionStatus = (typeof VALID_STATUSES)[number];
 const MAX_ACCESS_LEVEL = 2;
 
@@ -72,12 +72,29 @@ const paddleWebhook = httpAction(async (ctx, request) => {
 
   const p = payload as Record<string, unknown>;
   const mutation = p.mutation as string;
+
+  if (typeof p.args !== "object" || p.args === null) {
+    return new Response(
+      JSON.stringify({ error: "Missing or invalid args object" }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
   const args = p.args as Record<string, unknown>;
 
   if (mutation === "upsertFromPaddle") {
     if (typeof args.userId !== "string" || args.userId.trim() === "") {
       return new Response(
         JSON.stringify({ error: "Missing or invalid userId" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (
+      typeof args.paddleSubscriptionId !== "string" ||
+      !args.paddleSubscriptionId.trim()
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid paddleSubscriptionId" }),
         { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
@@ -132,7 +149,7 @@ const paddleWebhook = httpAction(async (ctx, request) => {
     }
 
     console.log("[Webhook] Canceling Paddle subscription", {
-      paddleSubscriptionId: args.paddleSubscriptionId,
+      paddleSubscriptionId: hashId(args.paddleSubscriptionId as string),
     });
 
     await ctx.runMutation(internal.subscriptionsInternal.cancelFromPaddle, {

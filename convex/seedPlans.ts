@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 
-export const seed = mutation({
+export const seed = internalMutation({
   args: {},
   handler: async (ctx) => {
     const existing = await ctx.db.query("plans").collect();
@@ -84,15 +84,19 @@ export const seed = mutation({
 });
 
 /** Update the priceId for a plan by slug. Run per-environment after seeding. */
-export const setPriceId = mutation({
+export const setPriceId = internalMutation({
   args: { slug: v.string(), priceId: v.string() },
   handler: async (ctx, args) => {
+    const trimmed = args.priceId.trim();
+    if (trimmed.length === 0) {
+      throw new Error(`Invalid priceId for slug "${args.slug}": must be a non-empty string`);
+    }
     const plan = await ctx.db
       .query("plans")
       .withIndex("by_slug", (q) => q.eq("slug", args.slug))
       .first();
     if (!plan) throw new Error(`Plan not found: ${args.slug}`);
-    await ctx.db.patch(plan._id, { priceId: args.priceId });
+    await ctx.db.patch(plan._id, { priceId: trimmed });
     return { updated: args.slug };
   },
 });

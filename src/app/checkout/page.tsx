@@ -21,10 +21,12 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
+    if (planSlug === null) return; // still loading from URL
     if (!planSlug) {
       setError("Missing planSlug");
       return;
     }
+    setError(null);
     if (!token) {
       setError("Missing NEXT_PUBLIC_PADDLE_CLIENT_TOKEN");
       return;
@@ -32,6 +34,7 @@ export default function CheckoutPage() {
 
     let cancelled = false;
     const loadTransaction = async () => {
+      setError(null);
       try {
         const res = await fetch("/api/checkout", {
           method: "POST",
@@ -39,15 +42,16 @@ export default function CheckoutPage() {
           body: JSON.stringify({ planSlug }),
         });
         if (!res.ok) {
-          setError(await res.text());
+          if (!cancelled) setError(await res.text());
           return;
         }
         const data = (await res.json()) as { transactionId?: string };
         if (!data.transactionId) {
-          setError("Missing transactionId");
+          if (!cancelled) setError("Missing transactionId");
           return;
         }
         if (!cancelled) {
+          setError(null);
           setTransactionId(data.transactionId);
         }
       } catch (e) {
@@ -118,6 +122,7 @@ export default function CheckoutPage() {
               src="https://cdn.paddle.com/paddle/v2/paddle.js"
               strategy="afterInteractive"
               onLoad={() => setIsScriptLoaded(true)}
+              onError={() => setError("Failed to load Paddle checkout script")}
             />
           )}
 

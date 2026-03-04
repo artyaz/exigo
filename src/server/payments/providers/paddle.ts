@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import type { IPaymentProvider, CheckoutResult, PlanPrice } from "../types";
 
 function getPaddleBaseUrl(): string {
@@ -99,7 +99,7 @@ export class PaddleProvider implements IPaymentProvider {
 
     for (const row of rows) {
       if (row.status && row.status !== "active") continue;
-      if (productId && row.product_id && row.product_id !== productId) continue;
+      if (productId && (!row.product_id || row.product_id !== productId)) continue;
 
       const slugCandidate =
         row.custom_data?.plan_slug ??
@@ -137,13 +137,23 @@ export class PaddleProvider implements IPaymentProvider {
     const ts = tsEntry.replace("ts=", "");
     const h1 = h1Entry.replace("h1=", "");
 
+    // Replay-attack protection: reject timestamps older than 5 seconds
+    const tsNum = Number(ts);
+    if (!Number.isFinite(tsNum)) return false;
+    const tolerance = Number(process.env.PADDLE_WEBHOOK_TOLERANCE_SECONDS) || 5;
+    if (Math.abs(Date.now() / 1000 - tsNum) > tolerance) return false;
+
     const payload = typeof rawBody === "string" ? rawBody : rawBody.toString("utf-8");
     const signedPayload = `${ts}:${payload}`;
     const expectedSignature = createHmac("sha256", this.webhookSecret)
       .update(signedPayload)
       .digest("hex");
 
-    return h1 === expectedSignature;
+    // Timing-safe comparison
+    const a = Buffer.from(h1, "utf-8");
+    const b = Buffer.from(expectedSignature, "utf-8");
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
   }
 
   async cancelSubscription(subscriptionId: string): Promise<void> {

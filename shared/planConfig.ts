@@ -30,7 +30,7 @@ export function getDeepDiveLimitForTier(tier: string): number {
  * Resolve a plan slug (e.g. "pro-monthly", "educator-annual") to a tier key.
  */
 export function slugToTier(slug: string | undefined | null): PlanTier {
-    if (!slug) return "free";
+    if (typeof slug !== "string" || !slug) return "free";
     const s = slug.toLowerCase();
     if (s.startsWith("educator")) return "educator";
     if (s.startsWith("pro")) return "pro";

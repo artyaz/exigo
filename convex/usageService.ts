@@ -5,8 +5,12 @@ import { getEffectiveLimits } from "./subscriptionService";
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
+const ALLOWED_METRICS = ["tests", "deepDives"] as const;
+export type MetricName = (typeof ALLOWED_METRICS)[number];
+const vMetric = v.union(v.literal("tests"), v.literal("deepDives"));
+
 export const getUsage = query({
-  args: { userId: v.string(), metric: v.string() },
+  args: { userId: v.string(), metric: vMetric },
   handler: async (ctx, args) => {
     const now = Date.now();
     const usage = await ctx.db
@@ -29,7 +33,7 @@ export const getUsage = query({
 });
 
 export const incrementUsage = mutation({
-  args: { userId: v.string(), metric: v.string() },
+  args: { userId: v.string(), metric: vMetric },
   handler: async (ctx, args) => {
     const now = Date.now();
     const existing = await ctx.db
@@ -65,7 +69,7 @@ export const incrementUsage = mutation({
 });
 
 export const checkUsageLimit = query({
-  args: { userId: v.string(), metric: v.string() },
+  args: { userId: v.string(), metric: vMetric },
   handler: async (ctx, args) => {
     const now = Date.now();
     const limits = await getEffectiveLimits(ctx, args.userId);

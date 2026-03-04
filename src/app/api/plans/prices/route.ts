@@ -8,6 +8,9 @@ export async function GET() {
     const bySlug: Record<string, number> = {};
 
     for (const price of prices) {
+      if (bySlug[price.slug] !== undefined) {
+        console.warn(`[Plans Prices] Duplicate slug "${price.slug}" (price: ${price.priceId}) — overwriting previous entry`);
+      }
       bySlug[price.slug] = price.amountCents;
     }
 
