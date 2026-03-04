@@ -113,8 +113,12 @@ const paddleWebhook = httpAction(async (ctx, request) => {
       );
     }
 
+    // Normalize validated ID fields once
+    const userId = args.userId.trim();
+    const paddleSubscriptionId = args.paddleSubscriptionId.trim();
+
     console.log("[Webhook] Upserting Paddle subscription", {
-      userId: hashId(args.userId as string),
+      userId: hashId(userId),
       accessLevel: args.accessLevel,
       status: args.status,
     });
@@ -138,10 +142,10 @@ const paddleWebhook = httpAction(async (ctx, request) => {
       ? args.canceledAt : undefined;
 
     await ctx.runMutation(internal.subscriptionsInternal.upsertFromPaddle, {
-      userId: args.userId as string,
+      userId,
       accessLevel: args.accessLevel as number,
       planSlug,
-      paddleSubscriptionId: args.paddleSubscriptionId as string,
+      paddleSubscriptionId,
       paddleCustomerId,
       status: args.status as SubscriptionStatus,
       currentPeriodStart,
@@ -166,12 +170,14 @@ const paddleWebhook = httpAction(async (ctx, request) => {
       );
     }
 
+    const cancelSubId = args.paddleSubscriptionId.trim();
+
     console.log("[Webhook] Canceling Paddle subscription", {
-      paddleSubscriptionId: hashId(args.paddleSubscriptionId as string),
+      paddleSubscriptionId: hashId(cancelSubId),
     });
 
     await ctx.runMutation(internal.subscriptionsInternal.cancelFromPaddle, {
-      paddleSubscriptionId: args.paddleSubscriptionId as string,
+      paddleSubscriptionId: cancelSubId,
     });
 
     return new Response(JSON.stringify({ success: true }), {

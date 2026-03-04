@@ -129,7 +129,8 @@ export class PaddleProvider implements IPaymentProvider {
           : null;
       if (!slug) continue;
 
-      const amountCents = Number(row.unit_price?.amount ?? "0");
+      if (row.unit_price?.amount == null) continue;
+      const amountCents = Number(row.unit_price.amount);
       if (!Number.isFinite(amountCents) || amountCents < 0) continue;
 
       results.push({

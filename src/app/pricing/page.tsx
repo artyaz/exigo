@@ -68,10 +68,15 @@ function groupPlans(
         isFree: true,
     });
 
+    const KNOWN_TIERS = new Set(["pro", "educator"]);
+
     for (const plan of rawPlans) {
         if (plan.slug === "free") continue;
 
         const tier = slugToTier(plan.slug);
+        // Skip plans with unknown slugs to avoid polluting the free tier card
+        if (!KNOWN_TIERS.has(tier)) continue;
+
         const isAnnual = plan.slug.includes("annual");
 
         const existing = grouped.get(tier);
