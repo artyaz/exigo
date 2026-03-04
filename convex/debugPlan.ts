@@ -40,6 +40,12 @@ export const debugPlan = query({
     const accessLevel = await getEffectiveAccessLevel(ctx, userId);
     const limits = getLimitsForAccessLevel(accessLevel);
 
+    // Read subscription from Convex
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+
     return {
       enabled: true,
       authenticated: true,
@@ -49,6 +55,14 @@ export const debugPlan = query({
         accessLevelName: getAccessLevelName(accessLevel),
         limits,
       },
+      subscription: subscription
+        ? {
+            planSlug: subscription.planSlug,
+            status: subscription.status,
+            paddleSubscriptionId: subscription.paddleSubscriptionId,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+          }
+        : null,
     };
   },
 });

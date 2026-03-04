@@ -2,7 +2,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import {
   getLimitsForAccessLevel,
-  parseClerkPlanSlug,
+  parseSlugToAccessLevel,
 } from "./subscriptionService";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
@@ -11,7 +11,7 @@ const ACCESS_LEVEL = v.union(v.literal(0), v.literal(1), v.literal(2));
 export const createSpaceWithMockIdentity = internalMutation({
   args: { name: v.string(), userId: v.string(), mockTier: v.string() },
   handler: async (ctx, args) => {
-    const accessLevel = parseClerkPlanSlug(args.mockTier);
+    const accessLevel = parseSlugToAccessLevel(args.mockTier);
     const limits = getLimitsForAccessLevel(accessLevel);
 
     const existingSubscription = await ctx.db
@@ -77,13 +77,13 @@ export const setSubscriptionForTest = internalMutation({
         userId: args.userId,
         accessLevel: args.accessLevel,
         status: args.status ?? "active",
-        periodEnd: args.periodEnd,
+        currentPeriodEnd: args.periodEnd,
       });
     } else {
       await ctx.db.patch(existingSubscription._id, {
         accessLevel: args.accessLevel,
         status: args.status ?? "active",
-        periodEnd: args.periodEnd,
+        currentPeriodEnd: args.periodEnd,
       });
       return existingSubscription._id;
     }

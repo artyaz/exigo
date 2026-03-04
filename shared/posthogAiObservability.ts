@@ -1,5 +1,3 @@
-import { PostHog } from "posthog-node";
-
 export type AiMessage = {
   role: "user" | "system" | "assistant";
   content: string;
@@ -21,19 +19,45 @@ type CaptureAiGenerationParams = {
   httpStatus?: number;
 };
 
-let posthogClient: PostHog | null = null;
+type PosthogCaptureParams = {
+  distinctId: string;
+  event: string;
+  properties?: Record<string, unknown>;
+};
 
-export function getPosthogClient(): PostHog | null {
+type PosthogClient = {
+  capture: (params: PosthogCaptureParams) => void;
+};
+
+let posthogClient: PosthogClient | null = null;
+
+export function getPosthogClient(): PosthogClient | null {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
   if (!key || !host) {
     return null;
   }
-  posthogClient ??= new PostHog(key, {
-    host,
-    flushAt: 1,
-    flushInterval: 0,
-  });
+  posthogClient ??= {
+    capture: ({ distinctId, event, properties }) => {
+      const normalizedHost = host.replace(/\/+$/, "");
+      const url = `${normalizedHost}/capture/`;
+      void fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          api_key: key,
+          event,
+          distinct_id: distinctId,
+          properties: {
+            token: key,
+            ...(properties ?? {}),
+          },
+        }),
+      }).catch(() => undefined);
+    },
+  };
   return posthogClient;
 }
 

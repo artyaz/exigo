@@ -1,10 +1,13 @@
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
+import type { SubscriptionStatus } from "../shared/subscriptionStatuses";
 import {
   PLAN_LIMIT_CODE,
   UNLIMITED_LIMIT,
   MAX_TESTS_SENTINEL,
   DEEP_DIVE_LIMITS_BY_TIER,
+  slugToTier,
+  tierToAccessLevel,
 } from "../shared/planConfig";
 
 export const ACCESS_LEVELS = {
@@ -15,7 +18,7 @@ export const ACCESS_LEVELS = {
 
 export type AccessLevel = (typeof ACCESS_LEVELS)[keyof typeof ACCESS_LEVELS];
 
-export type SubscriptionStatus = "active" | "canceled" | "past_due" | "expired";
+export type { SubscriptionStatus };
 
 export interface PlanLimits {
   maxSpaces: number;
@@ -96,7 +99,7 @@ export function getAccessLevelName(accessLevel: AccessLevel): string {
     case ACCESS_LEVELS.EDUCATOR:
       return "educator";
     case ACCESS_LEVELS.PRO_SCHOLAR:
-      return "pro_scholar";
+      return "pro";
     default:
       return "free";
   }
@@ -114,25 +117,10 @@ export function isProOrHigher(accessLevel: AccessLevel): boolean {
   return accessLevel >= ACCESS_LEVELS.PRO_SCHOLAR;
 }
 
-export function parseClerkPlanSlug(slug: string | undefined): AccessLevel {
-  if (!slug) return ACCESS_LEVELS.FREE;
-  const normalized = slug.toLowerCase().trim();
-
-  if (normalized === "educator") return ACCESS_LEVELS.EDUCATOR;
-  if (normalized === "pro_scholar" || normalized === "pro-scholar")
-    return ACCESS_LEVELS.PRO_SCHOLAR;
-  if (
-    normalized === "basic_tests" ||
-    normalized === "free_user" ||
-    normalized === "free"
-  )
-    return ACCESS_LEVELS.FREE;
-
-  if (/educator|teacher/.test(normalized)) return ACCESS_LEVELS.EDUCATOR;
-  if (/pro|scholar|premium|plus/.test(normalized))
-    return ACCESS_LEVELS.PRO_SCHOLAR;
-
-  return ACCESS_LEVELS.FREE;
+export function parseSlugToAccessLevel(slug: string | undefined): AccessLevel {
+  const tier = slugToTier(slug);
+  const level = tierToAccessLevel(tier);
+  return normalizeAccessLevel(level);
 }
 
 export async function getActiveSubscription(
@@ -159,8 +147,12 @@ export async function getActiveSubscription(
     );
   }
 
+  // Check for canceled subscriptions still within their period
   const canceledWithTime = subscriptions.filter(
-    (s) => s.status === "canceled" && s.periodEnd && s.periodEnd > now,
+    (s) =>
+      s.status === "canceled" &&
+      s.currentPeriodEnd &&
+      s.currentPeriodEnd > now,
   );
 
   if (canceledWithTime.length > 0) {
@@ -182,104 +174,7 @@ export async function getEffectiveAccessLevel(
   if (subscription) {
     return normalizeAccessLevel(subscription.accessLevel);
   }
-
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity?.subject === userId) {
-    const identityLike = identity as unknown as Record<string, unknown>;
-    const slug = detectPlanSlugFromIdentity(identityLike);
-    if (slug) {
-      return parseClerkPlanSlug(slug);
-    }
-  }
-
   return ACCESS_LEVELS.FREE;
-}
-
-function detectPlanSlugFromIdentity(
-  identityLike: Record<string, unknown>,
-): string {
-  const planValues: unknown[] = [];
-
-  const addValues = (target: unknown) => {
-    if (!target || typeof target !== "object") return;
-    const t = target as Record<string, unknown>;
-    for (const key of [
-      "plan",
-      "tier",
-      "subscriptionPlan",
-      "subscriptionTier",
-    ]) {
-      if (Object.prototype.hasOwnProperty.call(t, key)) {
-        planValues.push(t[key]);
-      }
-    }
-  };
-
-  addValues(identityLike);
-  addValues(identityLike.publicMetadata);
-  addValues(identityLike.privateMetadata);
-  addValues((identityLike as Record<string, unknown>).unsafeMetadata);
-
-  const org = (identityLike as Record<string, unknown>).organization as
-    | Record<string, unknown>
-    | undefined;
-  if (org) {
-    addValues(org.publicMetadata);
-    addValues(org.privateMetadata);
-    addValues(org.unsafeMetadata);
-  }
-
-  const isMatch = (candidates: string[]) => {
-    return planValues.some((val) => {
-      const normalized = String(val ?? "")
-        .trim()
-        .toLowerCase();
-      return candidates.some((c) => normalized.includes(c));
-    });
-  };
-
-  if (isMatch(["educator", "teacher"])) return "educator";
-  if (isMatch(["pro", "scholar", "premium", "plus"])) return "pro_scholar";
-  if (isMatch(["basic", "starter"])) return "basic_tests";
-
-  const checkFeature = (feature: string): boolean => {
-    const searchTargets = [
-      identityLike,
-      identityLike.publicMetadata,
-      (identityLike as Record<string, unknown>).unsafeMetadata,
-    ];
-    const org = (identityLike as Record<string, unknown>).organization as
-      | Record<string, unknown>
-      | undefined;
-    if (org) {
-      searchTargets.push(org.publicMetadata, org.unsafeMetadata);
-    }
-    for (const target of searchTargets) {
-      if (target && typeof target === "object") {
-        const t = target as Record<string, unknown>;
-        const val = t[feature];
-        if (val === true || val === "true" || val === 1 || val === "1") {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
-
-  if (
-    checkFeature("unlimited_ai_tests") ||
-    checkFeature("unlimited_knowledge")
-  ) {
-    return "educator";
-  }
-  if (checkFeature("pro_tests") || checkFeature("pro_knowledge")) {
-    return "pro_scholar";
-  }
-  if (checkFeature("basic_tests") || checkFeature("basic_knowledge")) {
-    return "basic_tests";
-  }
-
-  return "";
 }
 
 export async function getEffectiveLimits(
@@ -306,21 +201,7 @@ export async function getEffectiveAccessLevelForAction(
     { userId },
   );
 
-  const normalizedLevel = normalizeAccessLevel(subscriptionAccessLevel);
-  if (normalizedLevel > ACCESS_LEVELS.FREE) {
-    return normalizedLevel;
-  }
-
-  const identity = await ctx.auth.getUserIdentity();
-  if (identity?.subject === userId) {
-    const identityLike = identity as unknown as Record<string, unknown>;
-    const slug = detectPlanSlugFromIdentity(identityLike);
-    if (slug) {
-      return parseClerkPlanSlug(slug);
-    }
-  }
-
-  return ACCESS_LEVELS.FREE;
+  return normalizeAccessLevel(subscriptionAccessLevel);
 }
 
 export async function getEffectiveLimitsForAction(
@@ -331,41 +212,57 @@ export async function getEffectiveLimitsForAction(
   return getLimitsForAccessLevel(accessLevel);
 }
 
-export function getCurrentMonth(): string {
-  const now = new Date();
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
 export async function getTestsUsedThisMonth(
   ctx: QueryCtx | MutationCtx,
   userId: string,
 ): Promise<number> {
-  const month = getCurrentMonth();
+  const now = Date.now();
   const usage = await ctx.db
-    .query("testsUsage")
-    .withIndex("by_user_month", (q) =>
-      q.eq("userId", userId).eq("month", month),
+    .query("usage")
+    .withIndex("by_user_metric", (q) =>
+      q.eq("userId", userId).eq("metric", "tests"),
     )
     .first();
-  return usage?.count ?? 0;
+
+  if (!usage) return 0;
+  // Check if the usage period is still valid
+  if (usage.periodEnd < now) return 0;
+  return usage.count;
 }
 
 export async function incrementTestsUsage(
   ctx: MutationCtx,
   userId: string,
 ): Promise<void> {
-  const month = getCurrentMonth();
+  const now = Date.now();
   const existing = await ctx.db
-    .query("testsUsage")
-    .withIndex("by_user_month", (q) =>
-      q.eq("userId", userId).eq("month", month),
+    .query("usage")
+    .withIndex("by_user_metric", (q) =>
+      q.eq("userId", userId).eq("metric", "tests"),
     )
     .first();
 
-  if (existing) {
+  if (existing && existing.periodEnd > now) {
     await ctx.db.patch(existing._id, { count: existing.count + 1 });
   } else {
-    await ctx.db.insert("testsUsage", { userId, month, count: 1 });
+    // Start a new 30-day period
+    const periodStart = now;
+    const periodEnd = now + 30 * 24 * 60 * 60 * 1000;
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        count: 1,
+        periodStart,
+        periodEnd,
+      });
+    } else {
+      await ctx.db.insert("usage", {
+        userId,
+        metric: "tests",
+        count: 1,
+        periodStart,
+        periodEnd,
+      });
+    }
   }
 }
 

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, type Mock } from "vitest";
-import { getServerPlanLimitsForUser } from "./planLimits";
+import {
+  getLimitsForAccessLevel,
+  parseSlugToAccessLevel,
+  ACCESS_LEVELS,
+} from "./subscriptionService";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 interface MockCtx {
@@ -20,7 +24,7 @@ interface MockCtx {
     getUserIdentity: Mock<
       () => Promise<{
         subject: string;
-        publicMetadata?: Record<string, unknown>;
+        privateMetadata?: Record<string, unknown>;
       } | null>
     >;
   };
@@ -28,7 +32,7 @@ interface MockCtx {
 
 const createMockCtx = (
   userId: string,
-  identityData: Record<string, unknown> = {},
+  plan?: string,
 ): MockCtx => {
   return {
     db: {
@@ -40,14 +44,22 @@ const createMockCtx = (
     auth: {
       getUserIdentity: vi
         .fn()
-        .mockResolvedValue({ subject: userId, ...identityData }),
+        .mockResolvedValue({
+          subject: userId,
+          privateMetadata: plan ? { plan } : {},
+        }),
     },
   };
 };
 
+function getLimitsForPlan(plan: string | undefined) {
+  const accessLevel = parseSlugToAccessLevel(plan);
+  return getLimitsForAccessLevel(accessLevel);
+}
+
 async function createSpaceHandler(
   ctx: MockCtx,
-  args: { name: string; userId: string },
+  args: { name: string; userId: string; plan?: string },
 ) {
   const identity = await ctx.auth.getUserIdentity();
   const authenticatedUserId = identity?.subject;
@@ -61,10 +73,7 @@ async function createSpaceHandler(
     .collect()) as unknown[];
   const currentCount = mockSpaces.length;
 
-  const serverLimit = getServerPlanLimitsForUser(
-    args.userId,
-    identity,
-  ).maxSpaces;
+  const serverLimit = getLimitsForPlan(args.plan).maxSpaces;
   if (serverLimit !== UNLIMITED_LIMIT && currentCount >= serverLimit) {
     throw new Error(
       `Limit reached: You can only have ${serverLimit} spaces on your current plan.`,
@@ -79,7 +88,7 @@ async function createSpaceHandler(
 
 async function addKnowledgePieceHandler(
   ctx: MockCtx,
-  args: { spaceId: string; content: string },
+  args: { spaceId: string; content: string; plan?: string },
 ) {
   const identity = await ctx.auth.getUserIdentity();
   const userId = identity?.subject;
@@ -97,10 +106,7 @@ async function addKnowledgePieceHandler(
     .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
     .collect()) as unknown[];
 
-  const serverLimit = getServerPlanLimitsForUser(
-    userId,
-    identity,
-  ).maxKnowledgePiecesPerSpace;
+  const serverLimit = getLimitsForPlan(args.plan).maxKnowledgePiecesPerSpace;
   const projectedTotal = existingPieces.length + 1;
   if (serverLimit !== UNLIMITED_LIMIT && projectedTotal > serverLimit) {
     throw new Error(
@@ -121,6 +127,7 @@ async function createEmptyTestHandler(
     userId: string;
     type: string;
     questionCount: number;
+    plan?: string;
   },
 ) {
   const identity = await ctx.auth.getUserIdentity();
@@ -129,7 +136,7 @@ async function createEmptyTestHandler(
     throw new Error("Unauthorized");
   }
 
-  const limits = getServerPlanLimitsForUser(userId, identity);
+  const limits = getLimitsForPlan(args.plan);
   const maxAllowed = limits.maxTestsPerMonth;
   if (maxAllowed === 0) {
     throw new Error(
@@ -163,7 +170,7 @@ async function createEmptyTestHandler(
 
 async function bulkImportHandler(
   ctx: MockCtx,
-  args: { spaceId: string; pieces: { content: string }[] },
+  args: { spaceId: string; pieces: { content: string }[]; plan?: string },
 ) {
   const identity = await ctx.auth.getUserIdentity();
   const userId = identity?.subject;
@@ -181,10 +188,7 @@ async function bulkImportHandler(
     .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
     .collect()) as unknown[];
 
-  const serverLimit = getServerPlanLimitsForUser(
-    userId,
-    identity,
-  ).maxKnowledgePiecesPerSpace;
+  const serverLimit = getLimitsForPlan(args.plan).maxKnowledgePiecesPerSpace;
   const nonEmptyIncomingCount = args.pieces.filter(
     (piece) => piece.content.trim() !== "",
   ).length;
@@ -258,15 +262,13 @@ describe("Convex Limit Enforcement & Security", () => {
     });
 
     it("allows unlimited spaces on Pro plan", async () => {
-      const ctx = createMockCtx("user_pro", {
-        publicMetadata: { plan: "pro" },
-      });
+      const ctx = createMockCtx("user_pro", "pro-monthly");
       const mockCollect = vi.fn().mockResolvedValue(new Array(10).fill({}));
       ctx.db.query.mockReturnValue({
         withIndex: () => ({ collect: mockCollect }),
       });
 
-      await createSpaceHandler(ctx, { name: "Pro Space", userId: "user_pro" });
+      await createSpaceHandler(ctx, { name: "Pro Space", userId: "user_pro", plan: "pro-monthly" });
       expect(ctx.db.insert).toHaveBeenCalled();
     });
   });
@@ -324,9 +326,7 @@ describe("Convex Limit Enforcement & Security", () => {
     });
 
     it("allows test creation on pro plan with many tests", async () => {
-      const ctx = createMockCtx("user_pro", {
-        publicMetadata: { plan: "pro" },
-      });
+      const ctx = createMockCtx("user_pro", "pro-monthly");
       ctx.db.get.mockResolvedValue({ userId: "user_pro" });
       const mockCollect = vi.fn().mockResolvedValue(new Array(50).fill({}));
       ctx.db.query.mockReturnValue({
@@ -338,6 +338,7 @@ describe("Convex Limit Enforcement & Security", () => {
         userId: "user_pro",
         type: "select",
         questionCount: 5,
+        plan: "pro-monthly",
       });
       expect(ctx.db.insert).toHaveBeenCalled();
     });

@@ -1,15 +1,12 @@
-import { UNLIMITED_LIMIT } from "../../shared/planConfig";
+import { UNLIMITED_LIMIT, slugToTier } from "../../shared/planConfig";
 
-export function getSpaceLimit(has: (params: { feature: string }) => boolean): number {
-    if (
-        has({ feature: "unlimited_ai_tests" }) ||
-        has({ feature: "unlimited_knowledge" }) ||
-        has({ feature: "pro_tests" }) ||
-        has({ feature: "pro_knowledge" })
-    ) {
-        return UNLIMITED_LIMIT;
-    }
+const TIER_SPACE_LIMITS: Record<string, number> = {
+    free: 3,
+    pro: UNLIMITED_LIMIT,
+    educator: UNLIMITED_LIMIT,
+};
 
-    // Free + Basic tiers are capped to 3 spaces.
-    return 3;
+export function getSpaceLimit(plan: string | undefined): number {
+    const tier = slugToTier(plan);
+    return TIER_SPACE_LIMITS[tier] ?? 3;
 }

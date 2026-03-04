@@ -1,15 +1,15 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { SUBSCRIPTION_STATUSES } from "../shared/subscriptionStatuses";
+import type { SubscriptionStatus } from "../shared/subscriptionStatuses";
 
-const VALID_STATUSES = ["active", "canceled", "past_due", "expired"] as const;
-type SubscriptionStatus = (typeof VALID_STATUSES)[number];
 const MAX_ACCESS_LEVEL = 2;
 
 function isValidStatus(value: unknown): value is SubscriptionStatus {
   return (
     typeof value === "string" &&
-    VALID_STATUSES.includes(value as SubscriptionStatus)
+    (SUBSCRIPTION_STATUSES as readonly string[]).includes(value)
   );
 }
 
@@ -23,22 +23,13 @@ function isValidAccessLevel(value: unknown): value is number {
   );
 }
 
-function isValidTimestamp(value: unknown): value is number {
-  return (
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    Number.isInteger(value) &&
-    value >= 0
-  );
-}
-
 function hashId(id: string): string {
   if (id.length > 8) return `${id.slice(0, 4)}...${id.slice(-4)}`;
   if (id.length >= 4) return `${id.slice(0, 2)}...${id.slice(-2)}`;
   return "*".repeat(id.length);
 }
 
-const clerkWebhook = httpAction(async (ctx, request) => {
+const paddleWebhook = httpAction(async (ctx, request) => {
   const deployKey = process.env.CONVEX_DEPLOY_KEY;
 
   if (!deployKey) {
@@ -80,76 +71,123 @@ const clerkWebhook = httpAction(async (ctx, request) => {
   }
 
   const p = payload as Record<string, unknown>;
+  const mutation = p.mutation as string;
 
-  if (typeof p.userId !== "string" || p.userId.trim() === "") {
+  if (typeof p.args !== "object" || p.args === null) {
     return new Response(
-      JSON.stringify({ error: "Missing or invalid userId" }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      },
+      JSON.stringify({ error: "Missing or invalid args object" }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
     );
   }
+  const args = p.args as Record<string, unknown>;
 
-  if (!isValidAccessLevel(p.accessLevel)) {
-    return new Response(
-      JSON.stringify({ error: "Missing or invalid accessLevel" }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
+  if (mutation === "upsertFromPaddle") {
+    if (typeof args.userId !== "string" || args.userId.trim() === "") {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid userId" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
 
-  if (!isValidStatus(p.status)) {
-    return new Response(
-      JSON.stringify({ error: "Missing or invalid status" }),
-      {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
+    if (
+      typeof args.paddleSubscriptionId !== "string" ||
+      !args.paddleSubscriptionId.trim()
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid paddleSubscriptionId" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
 
-  if (p.clerkPlanSlug !== undefined && typeof p.clerkPlanSlug !== "string") {
-    return new Response(JSON.stringify({ error: "Invalid clerkPlanSlug" }), {
-      status: 400,
+    if (!isValidAccessLevel(args.accessLevel)) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid accessLevel" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!isValidStatus(args.status)) {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid status" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    // Normalize validated ID fields once
+    const userId = args.userId.trim();
+    const paddleSubscriptionId = args.paddleSubscriptionId.trim();
+
+    console.log("[Webhook] Upserting Paddle subscription", {
+      userId: hashId(userId),
+      accessLevel: args.accessLevel,
+      status: args.status,
+    });
+
+    // Validate optional string fields — must be strings or undefined
+    const planSlug =
+      typeof args.planSlug === "string" && args.planSlug.trim().length > 0
+        ? args.planSlug.trim()
+        : undefined;
+    const paddleCustomerId =
+      typeof args.paddleCustomerId === "string" && args.paddleCustomerId.trim().length > 0
+        ? args.paddleCustomerId.trim()
+        : undefined;
+
+    // Validate optional timestamp fields — only pass finite numbers
+    const currentPeriodStart = typeof args.currentPeriodStart === "number" && Number.isFinite(args.currentPeriodStart)
+      ? args.currentPeriodStart : undefined;
+    const currentPeriodEnd = typeof args.currentPeriodEnd === "number" && Number.isFinite(args.currentPeriodEnd)
+      ? args.currentPeriodEnd : undefined;
+    const canceledAt = typeof args.canceledAt === "number" && Number.isFinite(args.canceledAt)
+      ? args.canceledAt : undefined;
+
+    await ctx.runMutation(internal.subscriptionsInternal.upsertFromPaddle, {
+      userId,
+      accessLevel: args.accessLevel as number,
+      planSlug,
+      paddleSubscriptionId,
+      paddleCustomerId,
+      status: args.status as SubscriptionStatus,
+      currentPeriodStart,
+      currentPeriodEnd,
+      canceledAt,
+    });
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  if (p.periodEnd !== undefined && !isValidTimestamp(p.periodEnd)) {
-    return new Response(JSON.stringify({ error: "Invalid periodEnd" }), {
-      status: 400,
+  if (mutation === "cancelFromPaddle") {
+    if (
+      typeof args.paddleSubscriptionId !== "string" ||
+      !args.paddleSubscriptionId.trim()
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Missing paddleSubscriptionId" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    const cancelSubId = args.paddleSubscriptionId.trim();
+
+    console.log("[Webhook] Canceling Paddle subscription", {
+      paddleSubscriptionId: hashId(cancelSubId),
+    });
+
+    await ctx.runMutation(internal.subscriptionsInternal.cancelFromPaddle, {
+      paddleSubscriptionId: cancelSubId,
+    });
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  if (p.canceledAt !== undefined && !isValidTimestamp(p.canceledAt)) {
-    return new Response(JSON.stringify({ error: "Invalid canceledAt" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  console.log("[Webhook] Syncing subscription", {
-    userId: hashId(p.userId),
-    accessLevel: p.accessLevel,
-    status: p.status,
-  });
-
-  await ctx.runMutation(internal.subscriptionsInternal.upsert, {
-    userId: p.userId,
-    accessLevel: p.accessLevel,
-    clerkPlanId: undefined,
-    clerkPlanSlug: p.clerkPlanSlug as string | undefined,
-    status: p.status as SubscriptionStatus,
-    periodEnd: p.periodEnd as number | undefined,
-    canceledAt: p.canceledAt as number | undefined,
-  });
-
-  return new Response(JSON.stringify({ success: true }), {
-    status: 200,
+  return new Response(JSON.stringify({ error: "Unknown mutation" }), {
+    status: 400,
     headers: { "Content-Type": "application/json" },
   });
 });
@@ -157,9 +195,9 @@ const clerkWebhook = httpAction(async (ctx, request) => {
 const http = httpRouter();
 
 http.route({
-  path: "/clerkWebhook",
+  path: "/paddleWebhook",
   method: "POST",
-  handler: clerkWebhook,
+  handler: paddleWebhook,
 });
 
 export default http;
