@@ -1,5 +1,6 @@
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
+import type { SubscriptionStatus } from "../shared/subscriptionStatuses";
 import {
   PLAN_LIMIT_CODE,
   UNLIMITED_LIMIT,
@@ -17,7 +18,7 @@ export const ACCESS_LEVELS = {
 
 export type AccessLevel = (typeof ACCESS_LEVELS)[keyof typeof ACCESS_LEVELS];
 
-export type SubscriptionStatus = "active" | "canceled" | "past_due" | "expired";
+export type { SubscriptionStatus };
 
 export interface PlanLimits {
   maxSpaces: number;

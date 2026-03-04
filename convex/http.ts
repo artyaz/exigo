@@ -1,15 +1,15 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { SUBSCRIPTION_STATUSES } from "../shared/subscriptionStatuses";
+import type { SubscriptionStatus } from "../shared/subscriptionStatuses";
 
-const VALID_STATUSES = ["active", "canceled", "past_due", "expired", "paused"] as const;
-type SubscriptionStatus = (typeof VALID_STATUSES)[number];
 const MAX_ACCESS_LEVEL = 2;
 
 function isValidStatus(value: unknown): value is SubscriptionStatus {
   return (
     typeof value === "string" &&
-    VALID_STATUSES.includes(value as SubscriptionStatus)
+    (SUBSCRIPTION_STATUSES as readonly string[]).includes(value)
   );
 }
 
@@ -119,6 +119,16 @@ const paddleWebhook = httpAction(async (ctx, request) => {
       status: args.status,
     });
 
+    // Validate optional string fields — must be strings or undefined
+    const planSlug =
+      typeof args.planSlug === "string" && args.planSlug.trim().length > 0
+        ? args.planSlug.trim()
+        : undefined;
+    const paddleCustomerId =
+      typeof args.paddleCustomerId === "string" && args.paddleCustomerId.trim().length > 0
+        ? args.paddleCustomerId.trim()
+        : undefined;
+
     // Validate optional timestamp fields — only pass finite numbers
     const currentPeriodStart = typeof args.currentPeriodStart === "number" && Number.isFinite(args.currentPeriodStart)
       ? args.currentPeriodStart : undefined;
@@ -130,9 +140,9 @@ const paddleWebhook = httpAction(async (ctx, request) => {
     await ctx.runMutation(internal.subscriptionsInternal.upsertFromPaddle, {
       userId: args.userId as string,
       accessLevel: args.accessLevel as number,
-      planSlug: args.planSlug as string | undefined,
+      planSlug,
       paddleSubscriptionId: args.paddleSubscriptionId as string,
-      paddleCustomerId: args.paddleCustomerId as string | undefined,
+      paddleCustomerId,
       status: args.status as SubscriptionStatus,
       currentPeriodStart,
       currentPeriodEnd,
@@ -148,7 +158,7 @@ const paddleWebhook = httpAction(async (ctx, request) => {
   if (mutation === "cancelFromPaddle") {
     if (
       typeof args.paddleSubscriptionId !== "string" ||
-      !args.paddleSubscriptionId
+      !args.paddleSubscriptionId.trim()
     ) {
       return new Response(
         JSON.stringify({ error: "Missing paddleSubscriptionId" }),

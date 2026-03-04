@@ -57,8 +57,8 @@ export class PaddleProvider implements IPaymentProvider {
       body: JSON.stringify({
         items: [{ price_id: priceId, quantity: 1 }],
         custom_data: {
-          clerk_user_id: userId,
           ...(customData ?? {}),
+          clerk_user_id: userId,
         },
         checkout: { url: null },
       }),
@@ -148,7 +148,7 @@ export class PaddleProvider implements IPaymentProvider {
     }
 
     // Paddle sends: ts=<timestamp>;h1=<hash>
-    const parts = signature.split(";");
+    const parts = signature.split(";").map((p) => p.trim());
     const tsEntry = parts.find((p) => p.startsWith("ts="));
     const h1Entry = parts.find((p) => p.startsWith("h1="));
     if (!tsEntry || !h1Entry) return false;
@@ -159,7 +159,8 @@ export class PaddleProvider implements IPaymentProvider {
     // Replay-attack protection: reject timestamps older than 5 seconds
     const tsNum = Number(ts);
     if (!Number.isFinite(tsNum)) return false;
-    const tolerance = Number(process.env.PADDLE_WEBHOOK_TOLERANCE_SECONDS) || 5;
+    const rawTolerance = Number(process.env.PADDLE_WEBHOOK_TOLERANCE_SECONDS);
+    const tolerance = Number.isFinite(rawTolerance) && rawTolerance >= 0 ? rawTolerance : 5;
     if (Math.abs(Date.now() / 1000 - tsNum) > tolerance) return false;
 
     const payload = typeof rawBody === "string" ? rawBody : rawBody.toString("utf-8");

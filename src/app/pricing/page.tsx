@@ -133,6 +133,17 @@ function getDisplayValues(plan: PlanCard, period: BillingPeriod) {
         };
     }
 
+    // Annual-only plan viewed in monthly mode — derive monthly equivalent
+    if (plan.annualSlug && plan.annualPrice && plan.slug === plan.annualSlug) {
+        const monthly = plan.annualPrice / 12;
+        return {
+            price: formatPrice(Math.round(monthly)),
+            periodLabel: "/month",
+            billingNote: "Billed annually",
+            checkoutSlug: plan.annualSlug,
+        };
+    }
+
     return {
         price: formatPrice(plan.basePrice),
         periodLabel: "/month",
@@ -144,6 +155,29 @@ function getDisplayValues(plan: PlanCard, period: BillingPeriod) {
 function handleCheckout(planSlug: string) {
     const query = new URLSearchParams({ planSlug }).toString();
     window.location.href = `/checkout?${query}`;
+}
+
+type PlanAction =
+    | { type: "sign-in" }
+    | { type: "current" }
+    | { type: "default" }
+    | { type: "checkout"; slug: string; isLoading: boolean }
+    | { type: "not-configured" };
+
+function resolvePlanAction(
+    plan: PlanCard,
+    displayed: ReturnType<typeof getDisplayValues>,
+    isAuthenticated: boolean,
+    isCurrent: boolean,
+    loadingSlug: string | null,
+): PlanAction {
+    if (!isAuthenticated) return { type: "sign-in" };
+    if (isCurrent) return { type: "current" };
+    if (plan.isFree) return { type: "default" };
+    if (displayed.checkoutSlug) {
+        return { type: "checkout", slug: displayed.checkoutSlug, isLoading: loadingSlug === displayed.checkoutSlug };
+    }
+    return { type: "not-configured" };
 }
 
 function PricingCards({
@@ -166,6 +200,7 @@ function PricingCards({
                 const isCurrent =
                     currentPlanSlug !== undefined &&
                     displayed.checkoutSlug === currentPlanSlug;
+                const action = resolvePlanAction(plan, displayed, isAuthenticated, isCurrent, loadingSlug);
 
                 return (
                     <article
@@ -221,39 +256,37 @@ function PricingCards({
                             ))}
                         </ul>
                         <div className="relative mt-auto pt-5">
-                            {!isAuthenticated ? (
+                            {action.type === "sign-in" ? (
                                 <Link
                                     href="/sign-in"
                                     className="flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-neutral-200 spring-interact"
                                 >
                                     Sign in to subscribe
                                 </Link>
-                            ) : isCurrent ? (
+                            ) : action.type === "current" ? (
                                 <button
                                     disabled
                                     className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/50"
                                 >
                                     Current plan
                                 </button>
-                            ) : plan.isFree ? (
+                            ) : action.type === "default" ? (
                                 <button
                                     disabled
                                     className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/40"
                                 >
                                     Default
                                 </button>
-                            ) : displayed.checkoutSlug ? (
+                            ) : action.type === "checkout" ? (
                                 <button
                                     onClick={() => {
-                                        const slug = displayed.checkoutSlug;
-                                        if (!slug) return;
-                                        setLoadingSlug(slug);
-                                        handleCheckout(slug);
+                                        setLoadingSlug(action.slug);
+                                        handleCheckout(action.slug);
                                     }}
                                     disabled={loadingSlug !== null}
                                     className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-neutral-200 spring-interact disabled:opacity-50"
                                 >
-                                    {loadingSlug === displayed.checkoutSlug ? (
+                                    {action.isLoading ? (
                                         <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                                     ) : (
                                         "Switch to this plan"

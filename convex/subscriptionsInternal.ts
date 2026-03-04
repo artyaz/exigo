@@ -2,6 +2,11 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { GenericQueryCtx } from "convex/server";
 import type { DataModel } from "./_generated/dataModel";
+import { SUBSCRIPTION_STATUSES } from "../shared/subscriptionStatuses";
+
+const vSubscriptionStatus = v.union(
+  ...SUBSCRIPTION_STATUSES.map((s) => v.literal(s)),
+);
 
 function hashId(id: string): string {
   if (id.length > 8) return `${id.slice(0, 4)}...${id.slice(-4)}`;
@@ -28,13 +33,7 @@ export const upsertFromPaddle = internalMutation({
     planSlug: v.optional(v.string()),
     paddleSubscriptionId: v.string(),
     paddleCustomerId: v.optional(v.string()),
-    status: v.union(
-      v.literal("active"),
-      v.literal("canceled"),
-      v.literal("past_due"),
-      v.literal("expired"),
-      v.literal("paused"),
-    ),
+    status: vSubscriptionStatus,
     currentPeriodStart: v.optional(v.number()),
     currentPeriodEnd: v.optional(v.number()),
     canceledAt: v.optional(v.number()),

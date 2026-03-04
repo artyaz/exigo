@@ -3,11 +3,12 @@
 import Link from "next/link";
 import Script from "next/script";
 import { Loader2 } from "lucide-react";
-import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 
 export default function CheckoutPage() {
   const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
+  const { isSignedIn } = useAuth();
 
   const [planSlug, setPlanSlug] = useState<string | null | undefined>(undefined);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
@@ -26,6 +27,7 @@ export default function CheckoutPage() {
       setError("Missing planSlug");
       return;
     }
+    if (!isSignedIn) return; // wait for auth
     setError(null);
     if (!token) {
       setError("Missing NEXT_PUBLIC_PADDLE_CLIENT_TOKEN");
@@ -64,7 +66,7 @@ export default function CheckoutPage() {
     return () => {
       cancelled = true;
     };
-  }, [planSlug, token]);
+  }, [planSlug, token, isSignedIn]);
 
   useEffect(() => {
     if (!token || !transactionId || !isScriptLoaded || isCheckoutOpened) return;
