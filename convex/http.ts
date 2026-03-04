@@ -119,6 +119,14 @@ const paddleWebhook = httpAction(async (ctx, request) => {
       status: args.status,
     });
 
+    // Validate optional timestamp fields — only pass finite numbers
+    const currentPeriodStart = typeof args.currentPeriodStart === "number" && Number.isFinite(args.currentPeriodStart)
+      ? args.currentPeriodStart : undefined;
+    const currentPeriodEnd = typeof args.currentPeriodEnd === "number" && Number.isFinite(args.currentPeriodEnd)
+      ? args.currentPeriodEnd : undefined;
+    const canceledAt = typeof args.canceledAt === "number" && Number.isFinite(args.canceledAt)
+      ? args.canceledAt : undefined;
+
     await ctx.runMutation(internal.subscriptionsInternal.upsertFromPaddle, {
       userId: args.userId as string,
       accessLevel: args.accessLevel as number,
@@ -126,9 +134,9 @@ const paddleWebhook = httpAction(async (ctx, request) => {
       paddleSubscriptionId: args.paddleSubscriptionId as string,
       paddleCustomerId: args.paddleCustomerId as string | undefined,
       status: args.status as SubscriptionStatus,
-      currentPeriodStart: args.currentPeriodStart as number | undefined,
-      currentPeriodEnd: args.currentPeriodEnd as number | undefined,
-      canceledAt: args.canceledAt as number | undefined,
+      currentPeriodStart,
+      currentPeriodEnd,
+      canceledAt,
     });
 
     return new Response(JSON.stringify({ success: true }), {

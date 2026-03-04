@@ -22,6 +22,7 @@ export const env = createEnv({
     PADDLE_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
     PADDLE_CHECKOUT_BASE_URL: z.string().url().optional(),
     PADDLE_SUBSCRIPTION_PRODUCT_ID: z.string().optional(),
+    CONVEX_DEPLOY_KEY: z.string().optional(),
   },
 
   /**
@@ -34,6 +35,7 @@ export const env = createEnv({
     NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
     NEXT_PUBLIC_POSTHOG_HOST: z.string().url().optional(),
     NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: z.string().optional(),
+    NEXT_PUBLIC_CONVEX_SITE_URL: z.string().url().optional(),
   },
 
   /**
@@ -54,6 +56,8 @@ export const env = createEnv({
     PADDLE_ENVIRONMENT: process.env.PADDLE_ENVIRONMENT,
     PADDLE_CHECKOUT_BASE_URL: process.env.PADDLE_CHECKOUT_BASE_URL,
     PADDLE_SUBSCRIPTION_PRODUCT_ID: process.env.PADDLE_SUBSCRIPTION_PRODUCT_ID,
+    CONVEX_DEPLOY_KEY: process.env.CONVEX_DEPLOY_KEY,
+    NEXT_PUBLIC_CONVEX_SITE_URL: process.env.NEXT_PUBLIC_CONVEX_SITE_URL,
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
     NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,

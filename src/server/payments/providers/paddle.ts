@@ -12,6 +12,25 @@ function getHostedCheckoutBaseUrl(): string {
   return process.env.PADDLE_CHECKOUT_BASE_URL ?? "https://pay.paddle.com/checkout";
 }
 
+const DEFAULT_TIMEOUT_MS = 15_000;
+
+function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal })
+    .catch((err: unknown) => {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(`Paddle API request timed out after ${timeoutMs}ms: ${url}`);
+      }
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
+}
+
 export class PaddleProvider implements IPaymentProvider {
   private apiKey: string;
   private webhookSecret?: string;
@@ -29,7 +48,7 @@ export class PaddleProvider implements IPaymentProvider {
     customData?: Record<string, string>,
   ): Promise<CheckoutResult> {
     const baseUrl = getPaddleBaseUrl();
-    const response = await fetch(`${baseUrl}/transactions`, {
+    const response = await fetchWithTimeout(`${baseUrl}/transactions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${this.apiKey}`,
@@ -70,7 +89,7 @@ export class PaddleProvider implements IPaymentProvider {
 
   async listPlanPrices(): Promise<PlanPrice[]> {
     const baseUrl = getPaddleBaseUrl();
-    const response = await fetch(`${baseUrl}/prices?per_page=200`, {
+    const response = await fetchWithTimeout(`${baseUrl}/prices?per_page=200`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${this.apiKey}`,
@@ -158,7 +177,7 @@ export class PaddleProvider implements IPaymentProvider {
 
   async cancelSubscription(subscriptionId: string): Promise<void> {
     const baseUrl = getPaddleBaseUrl();
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${baseUrl}/subscriptions/${subscriptionId}/cancel`,
       {
         method: "POST",

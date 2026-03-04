@@ -1,10 +1,24 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import type { GenericQueryCtx } from "convex/server";
+import type { DataModel } from "./_generated/dataModel";
 
 function hashId(id: string): string {
   if (id.length > 8) return `${id.slice(0, 4)}...${id.slice(-4)}`;
   if (id.length >= 4) return `${id.slice(0, 2)}...${id.slice(-2)}`;
   return "*".repeat(id.length);
+}
+
+async function findByPaddleSubId(
+  ctx: GenericQueryCtx<DataModel>,
+  paddleSubscriptionId: string,
+) {
+  return ctx.db
+    .query("subscriptions")
+    .withIndex("by_paddle_sub", (q) =>
+      q.eq("paddleSubscriptionId", paddleSubscriptionId),
+    )
+    .first();
 }
 
 export const upsertFromPaddle = internalMutation({
@@ -33,16 +47,18 @@ export const upsertFromPaddle = internalMutation({
       paddleSubscriptionId: hashId(args.paddleSubscriptionId),
     });
 
-    const existing = await ctx.db
-      .query("subscriptions")
-      .withIndex("by_paddle_sub", (q) =>
-        q.eq("paddleSubscriptionId", args.paddleSubscriptionId),
-      )
-      .first();
+    const existing = await findByPaddleSubId(ctx, args.paddleSubscriptionId);
 
     if (existing) {
+      if (existing.userId !== args.userId) {
+        console.warn("[Subscription] userId mismatch on existing subscription", {
+          existingUserId: hashId(existing.userId),
+          incomingUserId: hashId(args.userId),
+          paddleSubscriptionId: hashId(args.paddleSubscriptionId),
+        });
+      }
+
       await ctx.db.patch(existing._id, {
-        userId: args.userId,
         accessLevel: args.accessLevel,
         planSlug: args.planSlug,
         paddleCustomerId: args.paddleCustomerId,
@@ -73,17 +89,12 @@ export const cancelFromPaddle = internalMutation({
     paddleSubscriptionId: v.string(),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("subscriptions")
-      .withIndex("by_paddle_sub", (q) =>
-        q.eq("paddleSubscriptionId", args.paddleSubscriptionId),
-      )
-      .first();
+    const existing = await findByPaddleSubId(ctx, args.paddleSubscriptionId);
 
     if (!existing) {
       console.warn(
         "[Subscription] Cancel: not found",
-        args.paddleSubscriptionId,
+        hashId(args.paddleSubscriptionId),
       );
       return;
     }

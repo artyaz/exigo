@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 export default function CheckoutPage() {
   const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
 
-  const [planSlug, setPlanSlug] = useState<string | null>(null);
+  const [planSlug, setPlanSlug] = useState<string | null | undefined>(undefined);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [isCheckoutOpened, setIsCheckoutOpened] = useState(false);
@@ -21,7 +21,7 @@ export default function CheckoutPage() {
   }, []);
 
   useEffect(() => {
-    if (planSlug === null) return; // still loading from URL
+    if (planSlug === undefined) return; // still loading from URL
     if (!planSlug) {
       setError("Missing planSlug");
       return;

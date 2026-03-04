@@ -9,7 +9,11 @@ export async function GET() {
 
     for (const price of prices) {
       if (bySlug[price.slug] !== undefined) {
-        console.warn(`[Plans Prices] Duplicate slug "${price.slug}" (price: ${price.priceId}) — overwriting previous entry`);
+        console.error(`[Plans Prices] Duplicate slug "${price.slug}" — price ${price.priceId} conflicts with existing entry`);
+        return NextResponse.json(
+          { error: `Duplicate price slug: ${price.slug}` },
+          { status: 500 },
+        );
       }
       bySlug[price.slug] = price.amountCents;
     }

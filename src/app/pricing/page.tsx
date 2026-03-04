@@ -165,7 +165,7 @@ function PricingCards({
                 const displayed = getDisplayValues(plan, billingCycle);
                 const isCurrent =
                     currentPlanSlug !== undefined &&
-                    (plan.slug === currentPlanSlug || plan.annualSlug === currentPlanSlug);
+                    displayed.checkoutSlug === currentPlanSlug;
 
                 return (
                     <article
