@@ -20,6 +20,7 @@ export const env = createEnv({
     PADDLE_API_KEY: z.string().optional(),
     PADDLE_WEBHOOK_SECRET: z.string().optional(),
     PADDLE_ENVIRONMENT: z.enum(["sandbox", "live"]).default("sandbox"),
+    PADDLE_CHECKOUT_BASE_URL: z.string().url().optional(),
     PADDLE_SUBSCRIPTION_PRODUCT_ID: z.string().optional(),
   },
 
@@ -32,6 +33,7 @@ export const env = createEnv({
     NEXT_PUBLIC_CONVEX_URL: z.string().url().optional(),
     NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
     NEXT_PUBLIC_POSTHOG_HOST: z.string().url().optional(),
+    NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: z.string().optional(),
   },
 
   /**
@@ -50,10 +52,12 @@ export const env = createEnv({
     PADDLE_API_KEY: process.env.PADDLE_API_KEY,
     PADDLE_WEBHOOK_SECRET: process.env.PADDLE_WEBHOOK_SECRET,
     PADDLE_ENVIRONMENT: process.env.PADDLE_ENVIRONMENT,
+    PADDLE_CHECKOUT_BASE_URL: process.env.PADDLE_CHECKOUT_BASE_URL,
     PADDLE_SUBSCRIPTION_PRODUCT_ID: process.env.PADDLE_SUBSCRIPTION_PRODUCT_ID,
     NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL,
     NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

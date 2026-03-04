@@ -8,17 +8,19 @@ function getPaddleBaseUrl(): string {
     : "https://sandbox-api.paddle.com";
 }
 
+function getHostedCheckoutBaseUrl(): string {
+  return process.env.PADDLE_CHECKOUT_BASE_URL ?? "https://pay.paddle.com/checkout";
+}
+
 export class PaddleProvider implements IPaymentProvider {
   private apiKey: string;
-  private webhookSecret: string;
+  private webhookSecret?: string;
 
   constructor() {
     const apiKey = process.env.PADDLE_API_KEY;
-    const webhookSecret = process.env.PADDLE_WEBHOOK_SECRET;
     if (!apiKey) throw new Error("PADDLE_API_KEY is not set");
-    if (!webhookSecret) throw new Error("PADDLE_WEBHOOK_SECRET is not set");
     this.apiKey = apiKey;
-    this.webhookSecret = webhookSecret;
+    this.webhookSecret = process.env.PADDLE_WEBHOOK_SECRET;
   }
 
   async createCheckout(
@@ -39,8 +41,6 @@ export class PaddleProvider implements IPaymentProvider {
           clerk_user_id: userId,
           ...(customData ?? {}),
         },
-        // `checkout.url` is the payment-link base URL, not a post-payment success redirect.
-        // Setting to null tells Paddle to generate its hosted checkout URL.
         checkout: { url: null },
       }),
     });
@@ -51,11 +51,19 @@ export class PaddleProvider implements IPaymentProvider {
     }
 
     const body = (await response.json()) as {
-      data: { id: string; checkout: { url: string } };
+      data: {
+        id: string;
+        url?: string;
+        checkout?: { url?: string };
+      };
     };
+    const hostedCheckoutUrl =
+      body.data.url ??
+      body.data.checkout?.url ??
+      `${getHostedCheckoutBaseUrl()}?_ptxn=${body.data.id}`;
 
     return {
-      url: body.data.checkout.url,
+      url: hostedCheckoutUrl,
       transactionId: body.data.id,
     };
   }
@@ -116,6 +124,10 @@ export class PaddleProvider implements IPaymentProvider {
   }
 
   verifyWebhook(rawBody: string | Buffer, signature: string): boolean {
+    if (!this.webhookSecret) {
+      throw new Error("PADDLE_WEBHOOK_SECRET is not set");
+    }
+
     // Paddle sends: ts=<timestamp>;h1=<hash>
     const parts = signature.split(";");
     const tsEntry = parts.find((p) => p.startsWith("ts="));

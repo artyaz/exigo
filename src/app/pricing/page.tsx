@@ -125,20 +125,9 @@ function getDisplayValues(plan: PlanCard, period: BillingPeriod) {
     };
 }
 
-async function handleCheckout(planSlug: string) {
-    const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planSlug }),
-    });
-
-    if (!res.ok) {
-        console.error("Checkout failed", await res.text());
-        return;
-    }
-
-    const { url } = (await res.json()) as { url: string };
-    window.location.href = url;
+function handleCheckout(planSlug: string) {
+    const query = new URLSearchParams({ planSlug }).toString();
+    window.location.href = `/checkout?${query}`;
 }
 
 function PricingCards({
@@ -240,10 +229,9 @@ function PricingCards({
                                 </button>
                             ) : displayed.checkoutSlug ? (
                                 <button
-                                    onClick={async () => {
+                                    onClick={() => {
                                         setLoadingSlug(displayed.checkoutSlug!);
-                                        await handleCheckout(displayed.checkoutSlug!);
-                                        setLoadingSlug(null);
+                                        handleCheckout(displayed.checkoutSlug!);
                                     }}
                                     disabled={loadingSlug !== null}
                                     className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-neutral-200 spring-interact disabled:opacity-50"
