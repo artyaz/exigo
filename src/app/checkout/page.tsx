@@ -4,18 +4,21 @@ import Link from "next/link";
 import Script from "next/script";
 import { Loader2 } from "lucide-react";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function CheckoutPage() {
-  const params = useSearchParams();
-  const planSlug = params.get("planSlug");
   const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
 
+  const [planSlug, setPlanSlug] = useState<string | null>(null);
   const [isScriptLoaded, setIsScriptLoaded] = useState(false);
   const [transactionId, setTransactionId] = useState<string | null>(null);
   const [isCheckoutOpened, setIsCheckoutOpened] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setPlanSlug(params.get("planSlug"));
+  }, []);
 
   useEffect(() => {
     if (!planSlug) {

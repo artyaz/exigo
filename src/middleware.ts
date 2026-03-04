@@ -9,12 +9,6 @@ type PrivateMetadata = {
     paddleSubscriptionId?: string;
 };
 
-function getPrivateMetadata(sessionClaims: Record<string, unknown> | null): PrivateMetadata {
-    if (!sessionClaims) return {};
-    const meta = sessionClaims.privateMetadata as PrivateMetadata | undefined;
-    return meta ?? {};
-}
-
 function hasValidSubscription(meta: PrivateMetadata): boolean {
     if (!meta.plan || !meta.expiresAt) return false;
     return meta.expiresAt > Date.now();

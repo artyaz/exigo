@@ -4,9 +4,7 @@ import { PaddleProvider } from "./providers/paddle";
 let _provider: IPaymentProvider | null = null;
 
 export function getPaymentProvider(): IPaymentProvider {
-  if (!_provider) {
-    _provider = new PaddleProvider();
-  }
+  _provider ??= new PaddleProvider();
   return _provider;
 }
 

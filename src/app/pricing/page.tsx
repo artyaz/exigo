@@ -30,8 +30,17 @@ type PrivateMetadata = {
 function usePrivateMetadata(): PrivateMetadata {
     const { user } = useUser();
     if (!user) return {};
-    const meta = (user as any).privateMetadata as PrivateMetadata | undefined;
-    return meta ?? {};
+    const metadata = (user as unknown as { privateMetadata?: unknown }).privateMetadata;
+    if (!metadata || typeof metadata !== "object") return {};
+
+    const meta = metadata as Record<string, unknown>;
+    return {
+        plan: typeof meta.plan === "string" ? meta.plan : undefined,
+        expiresAt: typeof meta.expiresAt === "number" ? meta.expiresAt : undefined,
+        paddleSubscriptionId: typeof meta.paddleSubscriptionId === "string"
+            ? meta.paddleSubscriptionId
+            : undefined,
+    };
 }
 
 function groupPlans(
@@ -230,8 +239,10 @@ function PricingCards({
                             ) : displayed.checkoutSlug ? (
                                 <button
                                     onClick={() => {
-                                        setLoadingSlug(displayed.checkoutSlug!);
-                                        handleCheckout(displayed.checkoutSlug!);
+                                        const slug = displayed.checkoutSlug;
+                                        if (!slug) return;
+                                        setLoadingSlug(slug);
+                                        handleCheckout(slug);
                                     }}
                                     disabled={loadingSlug !== null}
                                     className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-neutral-200 spring-interact disabled:opacity-50"
@@ -266,7 +277,7 @@ export default function PricingPage() {
     const rawPlans = useQuery(api.plans.list) ?? [];
     useEffect(() => {
         let cancelled = false;
-        (async () => {
+        void (async () => {
             try {
                 const res = await fetch("/api/plans/prices");
                 if (!res.ok) return;
