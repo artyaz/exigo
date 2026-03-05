@@ -36,7 +36,7 @@ class FreeLimitStrategy implements LimitStrategy {
   getLimits(): PlanLimits {
     return {
       maxSpaces: 3,
-      maxTestsPerMonth: 10,
+      maxTestsPerMonth: 3,
       maxKnowledgePiecesPerSpace: 20,
       deepDiveLimit: DEEP_DIVE_LIMITS_BY_TIER.free,
     };
