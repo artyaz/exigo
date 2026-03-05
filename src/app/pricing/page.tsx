@@ -185,6 +185,42 @@ function resolvePlanAction(
     return { type: "not-configured" };
 }
 
+function SubscriptionBanner({ meta }: { meta: PrivateMetadata }) {
+    if (!meta.plan) return null;
+
+    const tier = slugToTier(meta.plan);
+    const planLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+    const isAnnual = meta.plan.includes("annual");
+
+    const nextChargeDate = meta.expiresAt
+        ? new Date(meta.expiresAt).toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+          })
+        : null;
+
+    return (
+        <div className="mx-auto w-full max-w-[1120px] rounded-xl border border-white/10 bg-white/[0.03] px-5 py-4">
+            <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
+                <div className="flex items-center gap-3">
+                    <span className="rounded-lg bg-white/10 px-2.5 py-1 text-xs font-medium uppercase tracking-wider text-white/80">
+                        {planLabel}
+                    </span>
+                    <span className="text-sm text-white/60">
+                        {isAnnual ? "Annual" : "Monthly"} subscription
+                    </span>
+                </div>
+                {nextChargeDate && (
+                    <p className="text-sm text-white/45">
+                        Next charge: {nextChargeDate}
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+}
+
 function PricingCards({
     plans,
     billingCycle,
@@ -426,6 +462,8 @@ export default function PricingPage() {
                             </p>
                             <BillingToggle value={billingCycle} onChange={setBillingCycle} />
                         </header>
+
+                        <SubscriptionBanner meta={meta} />
 
                         <PricingCards
                             plans={plans}

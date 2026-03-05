@@ -121,6 +121,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (
+      event_type === "subscription.created" ||
       event_type === "subscription.activated" ||
       event_type === "subscription.updated"
     ) {
