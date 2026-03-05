@@ -1,7 +1,7 @@
 import { MAX_TESTS_SENTINEL, slugToTier } from "../../shared/planConfig";
 
 const TIER_TEST_LIMITS: Record<string, number> = {
-    free: 10,
+    free: 3,
     pro: 100,
     educator: 300,
 };

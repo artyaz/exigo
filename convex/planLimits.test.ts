@@ -40,7 +40,7 @@ describe("getLimitsForAccessLevel", () => {
   it("returns free tier limits", () => {
     const limits = getLimitsForAccessLevel(ACCESS_LEVELS.FREE);
     expect(limits.maxSpaces).toBe(3);
-    expect(limits.maxTestsPerMonth).toBe(10);
+    expect(limits.maxTestsPerMonth).toBe(3);
     expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
   });
 
