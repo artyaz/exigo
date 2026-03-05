@@ -195,11 +195,15 @@ function SubscriptionBanner({ subscription }: { subscription: SubscriptionInfo }
                         {isAnnual ? "Annual" : "Monthly"} subscription
                     </span>
                 </div>
-                {nextChargeDate && (
+                {nextChargeDate && subscription.status !== "canceled" ? (
                     <p className="text-sm text-white/45">
                         Next charge: {nextChargeDate}
                     </p>
-                )}
+                ) : subscription.status === "canceled" && nextChargeDate ? (
+                    <p className="text-sm text-white/45">
+                        Access until: {nextChargeDate}
+                    </p>
+                ) : null}
             </div>
         </div>
     );
