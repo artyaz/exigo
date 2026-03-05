@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useUser } from "@clerk/nextjs";
 
 export default function Home() {
+  const { isSignedIn } = useUser();
+
   return (
     <main className="relative min-h-screen bg-black px-6 py-12 text-white md:px-10">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
@@ -19,7 +24,7 @@ export default function Home() {
 
           <div className="flex flex-wrap gap-3">
             <Link
-              href="/sign-up"
+              href={isSignedIn ? "/spaces" : "/sign-up"}
               className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-neutral-200 spring-interact"
             >
               Get started
