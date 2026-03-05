@@ -6,8 +6,6 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { getTestLimit } from "../../../../lib/testLimits";
-import { slugToTier } from "../../../../../shared/planConfig";
 import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 import {
     captureAiGenerationEvent,
@@ -209,13 +207,10 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: "Invalid testType — must be 'select' or 'write'" }), { status: 400 });
     }
 
-    const { userId, getToken, sessionClaims } = await auth();
+    const { userId, getToken } = await auth();
     if (!userId) {
         return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
-
-    const privateMeta = (sessionClaims as Record<string, unknown> | null)?.privateMetadata as { plan?: string } | undefined;
-    const planSlug = privateMeta?.plan;
 
     logInfo("Test generation request received", {
         source: "api.tests.generate",
@@ -246,7 +241,8 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: msg }), { status: 500 });
     }
 
-    const MAX_TESTS = getTestLimit(planSlug);
+    const planStatus = await convex.query(api.planLimits.getPlan, {});
+    const MAX_TESTS = planStatus.limits.maxTestsPerMonth;
     if (MAX_TESTS === 0) {
         return new Response(JSON.stringify({
             error: "Access Denied",
@@ -294,8 +290,7 @@ export async function POST(req: NextRequest) {
     });
 
     let activeNodes: { _id: Id<"knowledgeNodes">, type: string, content: string }[] = [];
-    const tier = slugToTier(planSlug);
-    const isPro = tier === "pro" || tier === "educator";
+    const isPro = planStatus.tier === "pro" || planStatus.tier === "educator";
     if (effectiveKnowledgePieceId && isPro) {
         activeNodes = await convex.query(api.knowledgeNodes.getActiveForPiece, {
             knowledgePieceId: effectiveKnowledgePieceId as Id<"knowledgePieces">
