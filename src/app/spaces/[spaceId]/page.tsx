@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { addKnowledgePieceAction, bulkImportKnowledgeAction } from "../../actions/knowledge";
+import { LearnTab } from "../../_components/learn/LearnTab";
 import { createTestServerAction } from "../../actions/spaces";
 import { RESOLUTION_THRESHOLD } from "../../../../shared/planConfig";
 import {
@@ -78,7 +79,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
 
     // Main tabs
-    const [mainTab, setMainTab] = useState<"tests" | "knowledge">("tests");
+    const [mainTab, setMainTab] = useState<"tests" | "knowledge" | "learn">("tests");
 
     // Knowledge sub-mode
     const [knowledgeMode, setKnowledgeMode] = useState<"add" | "bulk">("add");
@@ -369,6 +370,16 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                         {pieces && pieces.length > 0 && (
                             <span className="text-[10px] font-mono text-tertiary bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">{pieces.length}</span>
                         )}
+                    </button>
+                    <button
+                        onClick={() => setMainTab("learn")}
+                        className={`px-4 py-2.5 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${mainTab === "learn"
+                            ? "border-white text-primary"
+                            : "border-transparent text-secondary hover:text-primary"
+                            }`}
+                    >
+                        <Zap className="w-3.5 h-3.5" />
+                        Learn
                     </button>
                 </div>
 
@@ -852,7 +863,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                 </div>
                             )}
                         </motion.div>
-                    ) : (
+                    ) : mainTab === "knowledge" ? (
                         <motion.div
                             key="knowledge-tab"
                             initial={{ opacity: 0, y: 6 }}
@@ -1010,6 +1021,17 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                                     </div>
                                 )}
                             </section>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="learn-tab"
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.15 }}
+                            className="flex flex-col gap-6"
+                        >
+                            <LearnTab spaceId={spaceId} userId={userId ?? ""} />
                         </motion.div>
                     )}
                 </AnimatePresence>

@@ -110,4 +110,65 @@ export default defineSchema({
     periodStart: v.number(),
     periodEnd: v.number(),
   }).index("by_user_metric", ["userId", "metric"]),
+  courses: defineTable({
+    spaceId: v.id("spaces"),
+    userId: v.string(),
+    rawTopic: v.string(),
+    refinedTitle: v.string(),
+    courseDescription: v.string(),
+    phase: v.union(
+      v.literal("baseline"),
+      v.literal("module_generation"),
+      v.literal("lesson"),
+      v.literal("lesson_summary"),
+      v.literal("module_complete"),
+      v.literal("completed"),
+    ),
+    currentModuleIndex: v.number(),
+    currentLessonIndex: v.number(),
+    baselineResults: v.optional(v.string()),
+  })
+    .index("by_space", ["spaceId"])
+    .index("by_user", ["userId"]),
+  courseModules: defineTable({
+    courseId: v.id("courses"),
+    moduleIndex: v.number(),
+    moduleTitle: v.string(),
+    adaptationRationale: v.string(),
+    subTopics: v.string(),
+  })
+    .index("by_course", ["courseId"]),
+  courseLessons: defineTable({
+    courseId: v.id("courses"),
+    moduleId: v.id("courseModules"),
+    lessonIndex: v.number(),
+    title: v.string(),
+    focusArea: v.string(),
+    targetsWeakness: v.boolean(),
+    masteryGoals: v.optional(v.string()),
+    verifierLogs: v.optional(v.string()),
+    summaryMarkdown: v.optional(v.string()),
+    knowledgePieceId: v.optional(v.id("knowledgePieces")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("goals_set"),
+      v.literal("teaching"),
+      v.literal("summarized"),
+      v.literal("integrated"),
+    ),
+  })
+    .index("by_module", ["moduleId"])
+    .index("by_course", ["courseId"]),
+  courseLessonMessages: defineTable({
+    courseId: v.id("courses"),
+    lessonId: v.id("courseLessons"),
+    role: v.union(
+      v.literal("teacher"),
+      v.literal("user"),
+      v.literal("system"),
+    ),
+    content: v.string(),
+    messageType: v.optional(v.string()),
+  })
+    .index("by_lesson", ["lessonId"]),
 });

@@ -10,6 +10,13 @@
 
 import type * as auth from "../auth.js";
 import type * as authDecorators from "../authDecorators.js";
+import type * as courseAi from "../courseAi.js";
+import type * as courseLessonMessages from "../courseLessonMessages.js";
+import type * as courseLessons from "../courseLessons.js";
+import type * as courseModules from "../courseModules.js";
+import type * as courseOrchestrator from "../courseOrchestrator.js";
+import type * as coursePrompts from "../coursePrompts.js";
+import type * as courses from "../courses.js";
 import type * as crons from "../crons.js";
 import type * as debugPlan from "../debugPlan.js";
 import type * as deepDives from "../deepDives.js";
@@ -39,6 +46,13 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authDecorators: typeof authDecorators;
+  courseAi: typeof courseAi;
+  courseLessonMessages: typeof courseLessonMessages;
+  courseLessons: typeof courseLessons;
+  courseModules: typeof courseModules;
+  courseOrchestrator: typeof courseOrchestrator;
+  coursePrompts: typeof coursePrompts;
+  courses: typeof courses;
   crons: typeof crons;
   debugPlan: typeof debugPlan;
   deepDives: typeof deepDives;
