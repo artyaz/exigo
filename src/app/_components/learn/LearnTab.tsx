@@ -24,8 +24,8 @@ const LESSON_STATUS: Record<string, { label: string; color: string; bg: string }
   goals_set: { label: "Ready", color: "text-blue-400", bg: "bg-blue-500/10" },
   teaching: { label: "In Progress", color: "text-emerald-400", bg: "bg-emerald-500/10" },
   completed: { label: "Completed", color: "text-amber-400", bg: "bg-amber-500/10" },
-  summarized: { label: "Summarized", color: "text-purple-400", bg: "bg-purple-500/10" },
-  integrated: { label: "Integrated", color: "text-teal-400", bg: "bg-teal-500/10" },
+  summarized: { label: "Reviewed", color: "text-purple-400", bg: "bg-purple-500/10" },
+  integrated: { label: "Done", color: "text-teal-400", bg: "bg-teal-500/10" },
 };
 
 export function LearnTab({ spaceId, userId, spaceName }: { spaceId: string; userId: string; spaceName: string }) {

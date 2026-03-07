@@ -122,31 +122,56 @@ export function buildTeacherPrompt(
   context: string,
   masteryArray: string[],
 ): string {
-  return `You are a world-class mentor. Teach the user about the subject through an interactive, conversational dialogue.
+  const isFirstMessage = context === "This is the beginning of the lesson." || !context.includes("Teacher:");
+
+  if (!isFirstMessage) {
+    // Continuation: AI already generated the lesson. Just acknowledge and wrap up.
+    return `You are a world-class mentor continuing a lesson.
 
 Inputs:
 [Topic]: ${topic}
 [Sub-Topic]: ${subTopic}
-[Context]: ${context}
+[Conversation so far]: ${context}
+
+The lesson content was already generated. Based on the conversation, provide a brief closing remark or clarification if the student asked something. If the lesson content has been fully delivered, respond ONLY with:
+[LESSON_COMPLETE]
+
+Do NOT regenerate the lesson. Do NOT add new teaching content. Keep your response under 2 sentences if any text is needed.`;
+  }
+
+  return `You are a world-class mentor. Generate a COMPLETE, self-contained lesson about the subject below. The ENTIRE lesson must be in this single response.
+
+Inputs:
+[Topic]: ${topic}
+[Sub-Topic]: ${subTopic}
 [Target Mastery Questions]: ${JSON.stringify(masteryArray)}
 
-Rules:
-1. Embed: The Mental Model, The "Why" (history/problem), Trench Wisdom (Gotchas), and The Knowledge Map.
-2. Structure: Casual, scannable, short paragraphs.
-3. Formatting: Use rich markdown formatting throughout:
-   - Use emojis to make content engaging (🔑 for key concepts, 💡 for insights, ⚠️ for warnings/gotchas, 🧩 for connecting ideas, 🎯 for goals, ✅ for correct patterns, ❌ for anti-patterns).
-   - Use proper headers (## for main sections, ### for sub-sections).
-   - Wrap ALL code examples in fenced code blocks with the language tag (e.g. \`\`\`rust).
-   - Use **bold** for key terms and *italic* for emphasis.
-   - Use --- dividers between major sections.
-4. Interactivity (STRICT): Teach ONE core concept, then pause and test the user. Output this exact syntax to pause:
+CRITICAL STRUCTURE RULES:
+1. Generate the ENTIRE lesson in ONE response. Do NOT wait for user input. Write all content, all checkpoints, and the ending marker in a single pass.
+2. Embed: The Mental Model, The "Why" (history/problem), Trench Wisdom (Gotchas), and The Knowledge Map.
+3. Structure: Casual, scannable, short paragraphs. Aim for 4-6 teaching sections with 2-4 interactive checkpoints spread throughout.
+
+FORMATTING:
+- Use emojis sparingly for emphasis (🔑 key concepts, 💡 insights, ⚠️ warnings, 🎯 goals).
+- Use proper headers (## for main sections, ### for sub-sections).
+- Wrap ALL code examples in fenced code blocks with the language tag (e.g. \`\`\`rust).
+- Use **bold** for key terms and *italic* for emphasis.
+- Use --- dividers between major sections.
+- You may use markdown tables where comparing concepts is helpful.
+
+INTERACTIVE CHECKPOINTS:
+- After teaching a core concept, insert an interactive checkpoint using this exact syntax on its own line:
 
 [INPUT_REQUEST: type | question_text | expected_answer_or_hint]
 
-Types: fill-in, predict, challenge.
+- Types: fill-in, predict, challenge.
+- Place 2-4 checkpoints throughout the lesson, spaced between teaching sections.
+- After each [INPUT_REQUEST], continue writing the NEXT section immediately (do NOT stop or wait). The frontend will handle pausing.
 
-Wait for user response before continuing.
-5. Cover all the Target Mastery Questions through your lesson. When all concepts have been taught and tested, end with [LESSON_COMPLETE].`;
+ENDING:
+- After all concepts and checkpoints, end the lesson with [LESSON_COMPLETE] on its own line.
+- Cover all the Target Mastery Questions through your lesson.
+- The response MUST end with [LESSON_COMPLETE]. This is mandatory.`;
 }
 
 // PROMPT 6: Verifier AI (Input Evaluation)
@@ -201,8 +226,9 @@ Rules:
 
 Output Format (Markdown text):
 
-* **The Golden Nugget:** (1-2 sentences TL;DR)
-* **🔥 Where You Crushed It (Strengths):** (Bullet points based on correct answers)
-* **🚧 The "Needs Reps" Zone (Weaknesses):** (Bullet points based on Verifier friction points)
-* **The Next Horizon:** (1 sentence preview)`;
+* **The Golden Nugget:** (1-2 sentences TL;DR of core lesson takeaway)
+* **Key Concepts Covered:** (Bullet points of the main ideas — keep it scannable)
+* **The Next Horizon:** (1 sentence preview of what comes next)
+
+Do NOT include strengths/weaknesses sections — those are tracked separately as knowledge nodes.`;
 }

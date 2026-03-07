@@ -731,16 +731,6 @@ export const summarizeLesson = action({
       });
     }
 
-    // 3. Trigger Exigo test generation for the new knowledge piece
-    await ctx.runMutation(api.tests.createEmptyTest, {
-      spaceId: course.spaceId,
-      type: "select",
-      questionCount: 5,
-      topicTitle: lesson.title,
-      userId: auth.userId,
-      knowledgePieceId: pieceId,
-    });
-
     // 4. Update lesson status
     await ctx.runMutation(internal.courseLessons.updateStatusInternal, {
       lessonId: args.lessonId,

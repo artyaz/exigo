@@ -3,11 +3,11 @@
 import { useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
-import { useState, useEffect, useRef, use, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useRef, use, useCallback, useMemo, type RefObject } from "react";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft, Loader2, Zap, CheckCircle2, ChevronRight, ChevronLeft,
-  CornerDownLeft, XCircle,
+  ArrowLeft, Loader2, CheckCircle2, ChevronRight, ChevronLeft,
+  CornerDownLeft, XCircle, SkipForward,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
@@ -20,151 +20,193 @@ import {
   completeLessonAction,
   summarizeLessonAction,
 } from "../../../../actions/learn";
+import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
 
-/* ─── Basic markdown renderer ─── */
-function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
-  const result: ReactNode[] = [];
-  const tokenRegex = /(\*\*(.+?)\*\*|`(.+?)`|\*([^*]+?)\*|\[([^\]]+)\]\(([^)]+)\))/g;
+/* ─── Lesson section parser ─── */
+interface LessonSection {
+  content: string;
+  inputRequest?: {
+    type: string;
+    question: string;
+    expectedAnswer: string;
+  };
+}
+
+function parseLessonSections(fullText: string): LessonSection[] {
+  const sections: LessonSection[] = [];
+  const inputRegex = /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  let partIdx = 0;
 
-  while ((match = tokenRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      result.push(text.slice(lastIndex, match.index));
-    }
-    const key = `${keyPrefix}-${partIdx++}`;
-    if (match[2] !== undefined) {
-      result.push(<strong key={key} className="font-semibold text-white">{match[2]}</strong>);
-    } else if (match[3] !== undefined) {
-      result.push(<code key={key} className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-white/90 border border-white/[0.06]">{match[3]}</code>);
-    } else if (match[4] !== undefined) {
-      result.push(<em key={key} className="italic text-white/80">{match[4]}</em>);
-    } else if (match[5] !== undefined && match[6] !== undefined) {
-      result.push(<a key={key} href={match[6]} target="_blank" rel="noopener noreferrer" className="text-blue-400/80 hover:text-blue-300 underline underline-offset-2">{match[5]}</a>);
-    }
+  while ((match = inputRegex.exec(fullText)) !== null) {
+    const content = fullText.slice(lastIndex, match.index).trim();
+    sections.push({
+      content,
+      inputRequest: {
+        type: match[1]!.trim(),
+        question: match[2]!.trim(),
+        expectedAnswer: match[3]?.trim() ?? "",
+      },
+    });
     lastIndex = match.index + match[0].length;
   }
-  if (lastIndex < text.length) {
-    result.push(text.slice(lastIndex));
+
+  // Remaining content after last INPUT_REQUEST
+  const remaining = fullText.slice(lastIndex).trim();
+  if (remaining) {
+    sections.push({ content: remaining });
   }
-  return result;
+
+  return sections;
 }
 
-function renderMarkdown(text: string): ReactNode[] {
-  const result: ReactNode[] = [];
+function useActiveFocusTarget({
+  containerRef,
+  enabled,
+  contentVersion,
+}: {
+  containerRef: RefObject<HTMLDivElement | null>;
+  enabled: boolean;
+  contentVersion: string;
+}) {
+  const [activeFocusTarget, setActiveFocusTarget] = useState<string | null>(null);
 
-  // First pass: split by fenced code blocks
-  const blocks = text.split(/(```[\s\S]*?```)/g);
-  let blockIdx = 0;
-
-  for (const block of blocks) {
-    const codeMatch = /^```(\w+)?\n([\s\S]*?)```$/.exec(block);
-    if (codeMatch) {
-      const lang = codeMatch[1];
-      const code = codeMatch[2] ?? "";
-      result.push(
-        <div key={`codeblock-${blockIdx}`} className="relative my-3">
-          {lang && (
-            <span className="absolute top-2 right-3 text-[10px] font-mono text-white/30 select-none">{lang}</span>
-          )}
-          <pre className="bg-[#0D0D0D] border border-white/[0.06] rounded-xl p-4 overflow-x-auto text-[13px] font-mono text-white/80">
-            <code>{code}</code>
-          </pre>
-        </div>
-      );
-      blockIdx++;
-      continue;
+  useEffect(() => {
+    if (!enabled) {
+      setActiveFocusTarget(null);
+      return;
     }
 
-    // Non-code block: process line by line
-    const lines = block.split("\n");
-    lines.forEach((line, lineIdx) => {
-      const key = `${blockIdx}-${lineIdx}`;
-      if (lineIdx > 0) result.push(<br key={`br-${key}`} />);
+    const container = containerRef.current;
+    if (!container) {
+      setActiveFocusTarget(null);
+      return;
+    }
 
-      // Horizontal divider
-      if (/^---+\s*$/.test(line)) {
-        result.push(<hr key={`hr-${key}`} className="border-white/[0.06] my-4" />);
+    let animationFrameId = 0;
+
+    const updateActiveTarget = () => {
+      animationFrameId = 0;
+
+      const focusTargets = Array.from(
+        container.querySelectorAll<HTMLElement>("[data-focus-target]")
+      );
+
+      if (focusTargets.length === 0) {
+        setActiveFocusTarget(null);
         return;
       }
 
-      // Headers (check longest first)
-      const h4Match = /^####\s+(.*)/.exec(line);
-      if (h4Match) {
-        result.push(<span key={`h4-${key}`} className="block text-sm font-medium text-white/90 mt-3 mb-1">{renderInlineMarkdown(h4Match[1] ?? "", key)}</span>);
-        return;
+      const viewportAnchor = window.innerHeight * 0.34;
+      const visibleTargets = focusTargets.filter((target) => {
+        const rect = target.getBoundingClientRect();
+        return rect.bottom >= viewportAnchor * 0.45 && rect.top <= window.innerHeight * 0.82;
+      });
+
+      const candidateTargets = visibleTargets.length > 0 ? visibleTargets : focusTargets;
+      let bestTarget: HTMLElement | null = null;
+      let smallestDistance = Number.POSITIVE_INFINITY;
+
+      for (const target of candidateTargets) {
+        const rect = target.getBoundingClientRect();
+        const targetMidpoint = rect.top + rect.height / 2;
+        const targetDistance = Math.abs(targetMidpoint - viewportAnchor);
+
+        if (targetDistance < smallestDistance) {
+          smallestDistance = targetDistance;
+          bestTarget = target;
+        }
       }
-      const h3Match = /^###\s+(.*)/.exec(line);
-      if (h3Match) {
-        result.push(<span key={`h3-${key}`} className="block text-sm font-semibold text-white mt-4 mb-1">{renderInlineMarkdown(h3Match[1] ?? "", key)}</span>);
-        return;
-      }
-      const h2Match = /^##\s+(.*)/.exec(line);
-      if (h2Match) {
-        result.push(<span key={`h2-${key}`} className="block text-base font-semibold text-white mt-5 mb-2">{renderInlineMarkdown(h2Match[1] ?? "", key)}</span>);
-        return;
-      }
-      const h1Match = /^#\s+(.*)/.exec(line);
-      if (h1Match) {
-        result.push(<span key={`h1-${key}`} className="block text-lg font-bold text-white mt-6 mb-2">{renderInlineMarkdown(h1Match[1] ?? "", key)}</span>);
+
+      setActiveFocusTarget(bestTarget?.dataset.focusTarget ?? null);
+    };
+
+    const scheduleUpdate = () => {
+      if (animationFrameId !== 0) {
         return;
       }
 
-      // Ordered list
-      const orderedMatch = /^(\s*)\d+\.\s+(.*)/.exec(line);
-      if (orderedMatch) {
-        const indent = orderedMatch[1] ?? "";
-        const content = orderedMatch[2] ?? "";
-        const num = line.trimStart().match(/^(\d+)\./)?.[1] ?? "1";
-        result.push(
-          <span key={`ol-${key}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
-            <span className="text-white/40 select-none shrink-0">{num}.</span>
-            <span>{renderInlineMarkdown(content, key)}</span>
-          </span>
-        );
-        return;
+      animationFrameId = window.requestAnimationFrame(updateActiveTarget);
+    };
+
+    scheduleUpdate();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      if (animationFrameId !== 0) {
+        window.cancelAnimationFrame(animationFrameId);
       }
 
-      // Bullet list
-      const bulletMatch = /^(\s*)[*-]\s+(.*)/.exec(line);
-      if (bulletMatch) {
-        const indent = bulletMatch[1] ?? "";
-        const content = bulletMatch[2] ?? "";
-        result.push(
-          <span key={`li-${key}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
-            <span className="text-white/40 select-none shrink-0">•</span>
-            <span>{renderInlineMarkdown(content, key)}</span>
-          </span>
-        );
-        return;
-      }
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [containerRef, contentVersion, enabled]);
 
-      // Regular line
-      result.push(...renderInlineMarkdown(line, key));
-    });
-
-    blockIdx++;
-  }
-
-  return result;
+  return activeFocusTarget;
 }
 
-/** Strip [INPUT_REQUEST: ...] and [LESSON_COMPLETE] tokens from display text */
-function stripProtocolTokens(text: string): string {
-  return text
-    .replace(/\[INPUT_REQUEST:\s*[^\]]+\]/g, "")
-    .replace(/\[LESSON_COMPLETE\]/g, "")
-    .trim();
+function FocusModeToggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={enabled}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-[family-name:var(--font-geist-mono)] uppercase tracking-[0.12em] transition-all ${
+        enabled
+          ? "border-cyan-400/40 bg-cyan-400/12 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.08)]"
+          : "border-white/10 bg-white/[0.03] text-white/45 hover:border-white/20 hover:text-white/70"
+      }`}
+      title="Toggle focus mode (F)"
+    >
+      <span>{enabled ? "Focus On" : "Focus Off"}</span>
+      <kbd className="rounded-md border border-current/20 bg-black/30 px-1.5 py-0.5 text-[10px] tracking-[0.08em]">
+        F
+      </kbd>
+    </button>
+  );
 }
 
 export default function CoursePage({ params }: { params: Promise<{ spaceId: string; courseId: string }> }) {
   const { userId } = useAuth();
   const { spaceId, courseId } = use(params);
+  const [focusModeEnabled, setFocusModeEnabled] = useState(false);
 
   const course = useQuery(api.courses.get, userId ? { courseId: courseId as Id<"courses"> } : "skip");
   const modules = useQuery(api.courseModules.getForCourse, userId ? { courseId: courseId as Id<"courses"> } : "skip");
   const lessons = useQuery(api.courseLessons.getForCourse, userId ? { courseId: courseId as Id<"courses"> } : "skip");
+
+  const toggleFocusMode = useCallback(() => {
+    setFocusModeEnabled((previousValue) => !previousValue);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      if (event.key.toLowerCase() !== "f") {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLInputElement
+        || activeElement instanceof HTMLTextAreaElement
+        || activeElement instanceof HTMLSelectElement
+        || (activeElement instanceof HTMLElement && activeElement.isContentEditable)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      setFocusModeEnabled((previousValue) => !previousValue);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   if (!userId || course === undefined) {
     return (
@@ -179,7 +221,7 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
       <div className="min-h-screen bg-black text-white p-6 md:p-12">
         <div className="max-w-3xl mx-auto text-center py-20">
           <p className="text-secondary">Course not found.</p>
-          <Link href={`/spaces/${spaceId}`} className="text-sm text-white/60 hover:text-white mt-4 inline-block">
+          <Link href={`/spaces/${spaceId}?tab=learn`} className="text-sm text-white/60 hover:text-white mt-4 inline-block">
             ← Back to space
           </Link>
         </div>
@@ -189,20 +231,19 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
 
   return (
     <div className="min-h-screen bg-black text-white p-6 md:p-12">
-      <div className="max-w-3xl mx-auto space-y-8">
-        {/* Header */}
+      <div className="max-w-[680px] mx-auto space-y-8">
+        {/* Compact breadcrumb header */}
         {course.phase !== "baseline" && (
-          <header className="flex items-center gap-4">
+          <header className="flex items-center gap-3">
             <Link
-              href={`/spaces/${spaceId}`}
-              className="p-2 -ml-2 rounded-xl text-secondary hover:text-primary hover:bg-white/5 spring-interact"
+              href={`/spaces/${spaceId}?tab=learn`}
+              className="p-1.5 -ml-1.5 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/5 spring-interact"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4" />
             </Link>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-primary">{course.refinedTitle}</h1>
-              <p className="text-sm text-secondary">{course.courseDescription}</p>
-            </div>
+            <span className="text-[11px] font-[family-name:var(--font-geist-mono)] uppercase tracking-[0.15em] text-white/30">
+              {course.refinedTitle}
+            </span>
           </header>
         )}
 
@@ -220,6 +261,8 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
             courseId={courseId}
             currentModuleIndex={course.currentModuleIndex}
             currentLessonIndex={course.currentLessonIndex}
+            focusModeEnabled={focusModeEnabled}
+            onToggleFocusMode={toggleFocusMode}
             modules={modules}
             lessons={lessons}
           />
@@ -229,6 +272,8 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
           <SummaryPhase
             courseId={courseId}
             currentLessonIndex={course.currentLessonIndex}
+            focusModeEnabled={focusModeEnabled}
+            onToggleFocusMode={toggleFocusMode}
             lessons={lessons}
           />
         )}
@@ -277,7 +322,9 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
 
   useEffect(() => {
     if (baselineResults) {
-      void advanceCourseAction(courseId).catch(() => {});
+      void advanceCourseAction(courseId).catch((advanceError: unknown) => {
+        setError(advanceError instanceof Error ? advanceError.message : "Failed to advance baseline");
+      });
     }
   }, [baselineResults, courseId]);
 
@@ -324,6 +371,14 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
     void generateNextQuestion([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Pre-generate next question as soon as current one finishes
+  useEffect(() => {
+    if (questions.length > 0 && questions.length < 5 && !isLoading) {
+      void generateNextQuestion(questions);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questions.length, isLoading]);
 
   if (baselineResults) {
     return (
@@ -537,7 +592,7 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
                       <h2 className="text-lg md:text-xl font-semibold leading-relaxed text-white tracking-tight">{q.question_text}</h2>
                     </div>
 
-                    <div className="flex-1 px-8 py-6">
+                    <div className="flex-1 flex flex-col px-8 py-6">
                       {q.userAnswer ? (
                         <div className="space-y-4">
                           <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
@@ -663,12 +718,16 @@ function LessonPhase({
   courseId,
   currentModuleIndex,
   currentLessonIndex,
+  focusModeEnabled,
+  onToggleFocusMode,
   modules,
   lessons,
 }: {
   courseId: string;
   currentModuleIndex: number;
   currentLessonIndex: number;
+  focusModeEnabled: boolean;
+  onToggleFocusMode: () => void;
   modules: Array<{ _id: string; moduleIndex: number; moduleTitle: string; subTopics: string }>;
   lessons: Array<{ _id: string; moduleId: string; lessonIndex: number; title: string; focusArea: string; status: string; masteryGoals?: string }>;
 }) {
@@ -678,83 +737,104 @@ function LessonPhase({
     .sort((a, b) => a.lessonIndex - b.lessonIndex);
   const currentLesson = moduleLessons[currentLessonIndex];
 
-  const [messages, setMessages] = useState<Array<{ role: string; content: string; messageType?: string }>>([]);
-  const [userInput, setUserInput] = useState("");
+  // Full streamed text from AI
+  const [fullText, setFullText] = useState("");
   const [isTeaching, setIsTeaching] = useState(false);
+  // Progressive reveal: how many sections to show
+  const [revealedCount, setRevealedCount] = useState(0);
+  // Current input request state for retry flow
   const [currentInputRequest, setCurrentInputRequest] = useState<{
     type: string;
     question: string;
     expectedAnswer: string;
   } | null>(null);
+  const [userInput, setUserInput] = useState("");
   const [lastVerification, setLastVerification] = useState<{
     is_correct: boolean;
     feedback_block: string;
   } | null>(null);
   const [isLessonComplete, setIsLessonComplete] = useState(false);
-  const [pendingContinueInput, setPendingContinueInput] = useState<string | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+
+  const lessonContentRef = useRef<HTMLDivElement>(null);
+  const contentEndRef = useRef<HTMLDivElement>(null);
 
   const lessonMessages = useQuery(
     api.courseLessonMessages.getForLesson,
     currentLesson ? { lessonId: currentLesson._id as Id<"courseLessons"> } : "skip"
   );
 
+  // Parse sections from accumulated text
+  const sections = useMemo(() => parseLessonSections(fullText), [fullText]);
+  const totalSections = sections.length;
+  const hasLessonCompleteMarker = fullText.includes("[LESSON_COMPLETE]");
+  const focusContentVersion = `${revealedCount}:${fullText.length}:${currentInputRequest?.question ?? ""}:${lastVerification?.feedback_block ?? ""}`;
+  const activeFocusTarget = useActiveFocusTarget({
+    containerRef: lessonContentRef,
+    enabled: focusModeEnabled,
+    contentVersion: focusContentVersion,
+  });
+
+  // Auto-scroll on new section revealed or verification feedback
+  useEffect(() => {
+    contentEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [revealedCount, lastVerification]);
+
+  // Restore from DB on mount
   useEffect(() => {
     if (initialized || !lessonMessages) return;
 
     if (lessonMessages.length > 0) {
-      // Restore messages from DB
-      const restored = lessonMessages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        messageType: m.messageType ?? undefined,
-      }));
-      setMessages(restored);
+      // Find the main teacher lesson message (the full lesson)
+      const teacherMessages = lessonMessages.filter((m) => m.role === "teacher");
+      if (teacherMessages.length > 0) {
+        // Concatenate all teacher messages to reconstruct the full lesson
+        const reconstructed = teacherMessages.map(m => m.content).join("\n\n");
+        setFullText(reconstructed);
 
-      // Restore input request state from last message
-      const lastTeacherMsg = [...lessonMessages].reverse().find((m) => m.role === "teacher");
-      if (lastTeacherMsg?.messageType === "input_request") {
-        const match = lastTeacherMsg.content.match(
-          /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/
-        );
-        if (match) {
-          setCurrentInputRequest({
-            type: match[1]!.trim(),
-            question: match[2]!.trim(),
-            expectedAnswer: match[3]?.trim() ?? "",
-          });
+        // Check if lesson was completed
+        const lastMsg = teacherMessages[teacherMessages.length - 1];
+        if (lastMsg?.messageType === "lesson_complete" || reconstructed.includes("[LESSON_COMPLETE]")) {
+          setIsLessonComplete(true);
+          // Reveal all sections
+          const parsed = parseLessonSections(reconstructed);
+          setRevealedCount(parsed.length);
+        } else {
+          // Figure out how far the user got based on verification messages
+          const verifications = lessonMessages.filter((m) => m.messageType === "verification");
+          const parsed = parseLessonSections(reconstructed);
+          // Each verification means one checkpoint was passed
+          const checkpoint = Math.min(verifications.length + 1, parsed.length);
+          setRevealedCount(checkpoint);
+
+          // If stopped at a checkpoint, restore the input request
+          if (checkpoint <= parsed.length) {
+            const currentSection = parsed[checkpoint - 1];
+            if (currentSection?.inputRequest) {
+              setCurrentInputRequest(currentSection.inputRequest);
+            }
+          }
         }
-      }
-
-      // Check if lesson was already completed
-      if (lastTeacherMsg?.messageType === "lesson_complete") {
-        setIsLessonComplete(true);
       }
     }
 
     setInitialized(true);
   }, [lessonMessages, initialized]);
 
-  const teach = useCallback(async (userMessage?: string, skipLocalMessage?: boolean) => {
+  const teach = useCallback(async () => {
     if (!currentLesson) return;
     setIsTeaching(true);
     setError(null);
-    setLastVerification(null);
-
-    // Add user message to local state immediately
-    if (userMessage && !skipLocalMessage) {
-      setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
-    }
-
-    // Add empty teacher message that we'll stream into
-    setMessages((prev) => [...prev, { role: "teacher", content: "", messageType: "narrative" }]);
+    setFullText("");
+    setRevealedCount(1);
 
     try {
       const res = await fetch("/api/learn/teach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonId: currentLesson._id, userMessage }),
+        body: JSON.stringify({ lessonId: currentLesson._id }),
       });
 
       if (!res.ok) {
@@ -767,6 +847,7 @@ function LessonPhase({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let accumulated = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -788,32 +869,27 @@ function LessonPhase({
             };
 
             if (payload.type === "delta" && payload.text) {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const lastTeacher = updated[updated.length - 1];
-                if (lastTeacher && lastTeacher.role === "teacher") {
-                  updated[updated.length - 1] = {
-                    ...lastTeacher,
-                    content: lastTeacher.content + payload.text,
-                  };
-                }
-                return updated;
-              });
+              accumulated += payload.text;
+              setFullText(accumulated);
+
+              // Auto-reveal: check if we've streamed past the current revealed section
+              // and we're not waiting on an input request
+              const currentSections = parseLessonSections(accumulated);
+              // Reveal the first section immediately while streaming
+              if (currentSections.length > 0) {
+                setRevealedCount(prev => Math.max(prev, 1));
+              }
             } else if (payload.type === "done") {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const lastTeacher = updated[updated.length - 1];
-                if (lastTeacher && lastTeacher.role === "teacher") {
-                  updated[updated.length - 1] = {
-                    ...lastTeacher,
-                    content: payload.fullText ?? lastTeacher.content,
-                    messageType: payload.inputRequest ? "input_request" : payload.isComplete ? "lesson_complete" : "narrative",
-                  };
-                }
-                return updated;
-              });
-              setCurrentInputRequest(payload.inputRequest ?? null);
+              const final = payload.fullText ?? accumulated;
+              setFullText(final);
               setIsLessonComplete(payload.isComplete ?? false);
+
+              // Pause at first input request
+              const parsed = parseLessonSections(final);
+              if (parsed.length > 0 && parsed[0]?.inputRequest) {
+                setCurrentInputRequest(parsed[0].inputRequest);
+                setRevealedCount(1);
+              }
             } else if (payload.type === "error") {
               setError(payload.error ?? "Teaching failed");
             }
@@ -829,7 +905,7 @@ function LessonPhase({
 
   // Start teaching on mount only if no DB messages
   useEffect(() => {
-    if (currentLesson && initialized && messages.length === 0) {
+    if (currentLesson && initialized && fullText.length === 0 && !lessonMessages?.length) {
       void teach();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -841,7 +917,6 @@ function LessonPhase({
     const input = userInput.trim();
     setUserInput("");
 
-    // Verify the input
     try {
       const verifyResult = await verifyInputAction(
         currentLesson._id,
@@ -852,24 +927,41 @@ function LessonPhase({
 
       if (verifyResult.ok) {
         setLastVerification(verifyResult.data);
-        setMessages((prev) => [
-          ...prev,
-          { role: "user", content: input },
-          { role: "system", content: verifyResult.data.feedback_block, messageType: "verification" },
-        ]);
+
+        if (verifyResult.data.is_correct) {
+          // Correct: advance to next section
+          setTimeout(() => {
+            setCurrentInputRequest(null);
+            setLastVerification(null);
+            const nextIdx = revealedCount;
+            setRevealedCount(nextIdx + 1);
+            // Check if next section also has an input request
+            if (sections[nextIdx]?.inputRequest) {
+              setCurrentInputRequest(sections[nextIdx].inputRequest);
+            }
+          }, 1200);
+        }
+        // If incorrect: keep currentInputRequest active for retry
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed");
-      return;
     }
+  };
 
+  const handleSkip = () => {
     setCurrentInputRequest(null);
-    setPendingContinueInput(input);
+    setLastVerification(null);
+    const nextIdx = revealedCount;
+    setRevealedCount(nextIdx + 1);
+    // Check if next section has an input request
+    if (sections[nextIdx]?.inputRequest) {
+      setCurrentInputRequest(sections[nextIdx].inputRequest);
+    }
   };
 
   const handleSummarize = async () => {
     if (!currentLesson) return;
-    setIsTeaching(true);
+    setIsSummarizing(true);
     try {
       await completeLessonAction(currentLesson._id);
       await summarizeLessonAction(currentLesson._id);
@@ -877,7 +969,7 @@ function LessonPhase({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Summary failed");
     } finally {
-      setIsTeaching(false);
+      setIsSummarizing(false);
     }
   };
 
@@ -885,97 +977,165 @@ function LessonPhase({
     return <div className="text-center py-12 text-secondary">Loading lesson...</div>;
   }
 
+  // Progress calculation
+  const progressPct = totalSections > 0 ? Math.min((revealedCount / totalSections) * 100, 100) : 0;
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      {/* Lesson title */}
-      <h2 className="text-xl font-semibold text-primary tracking-tight">{currentLesson.title}</h2>
+      {/* Progress bar */}
+      <div className="w-full h-[2px] bg-white/[0.06] rounded-full overflow-hidden">
+        <motion.div
+          className="h-full bg-gradient-to-r from-emerald-500/80 to-emerald-400/60"
+          initial={{ width: 0 }}
+          animate={{ width: `${progressPct}%` }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+        />
+      </div>
 
-      {/* Lesson content */}
-      <div className="space-y-5 overflow-y-auto pr-2">
-        {messages.map((msg, i) => (
+      {/* Lesson eyebrow + title */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="lesson-eyebrow flex items-center gap-2">
+            <span>MODULE {currentModuleIndex + 1}</span>
+            <span className="text-white/15">/</span>
+            <span>LESSON {currentLessonIndex + 1}</span>
+          </p>
+          <h2 className="text-[22px] font-semibold text-white tracking-tight">{currentLesson.title}</h2>
+          <p className="mt-1 text-sm text-white/40 font-[family-name:var(--font-geist-mono)]">{currentLesson.focusArea}</p>
+        </div>
+
+        <FocusModeToggle enabled={focusModeEnabled} onToggle={onToggleFocusMode} />
+      </div>
+
+      {/* Lesson content — progressive reveal */}
+      <div ref={lessonContentRef} className="space-y-0">
+        {sections.slice(0, revealedCount).map((section, i) => (
           <motion.div
             key={i}
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className={
-              msg.role === "teacher"
-                ? "text-sm text-white/85 leading-relaxed"
-                : msg.role === "user"
-                ? "text-sm bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-3 text-white/80 ml-6"
-                : msg.messageType === "verification"
-                ? "text-xs bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 text-emerald-300"
-                : "text-xs text-white/50"
-            }
+            transition={{ duration: 0.4, delay: i === revealedCount - 1 ? 0.1 : 0 }}
           >
-            <div className="whitespace-pre-wrap leading-relaxed">
-              {msg.role === "teacher" ? renderMarkdown(stripProtocolTokens(msg.content)) : msg.content}
-            </div>
+            <LessonMarkdown
+              content={section.content}
+              sectionKey={`lesson-section-${i}`}
+              focusModeEnabled={focusModeEnabled}
+              activeFocusTarget={activeFocusTarget}
+            />
+
+            {/* Show input request checkpoint if this is the last revealed section and has one */}
+            {i === revealedCount - 1 && currentInputRequest && section.inputRequest && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="lesson-callout my-6"
+              >
+                <p className="text-[11px] font-[family-name:var(--font-geist-mono)] uppercase tracking-[0.15em] text-white/30 mb-2">
+                  {currentInputRequest.type === "challenge" ? "🎯 Challenge" : currentInputRequest.type === "predict" ? "🔮 Predict" : "✍️ Fill in"}
+                </p>
+                <p className="text-white/80 text-[15px] mb-4 leading-relaxed">
+                  {currentInputRequest.question}
+                </p>
+
+                {/* Verification feedback */}
+                {lastVerification && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    className={`rounded-lg px-4 py-3 mb-3 text-sm ${
+                      lastVerification.is_correct
+                        ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
+                        : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+                    }`}
+                  >
+                    {lastVerification.feedback_block}
+                    {lastVerification.is_correct && (
+                      <span className="block mt-1 text-xs text-emerald-400/60">✓ Correct — continuing...</span>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* Input area (show when not correct yet) */}
+                {!lastVerification?.is_correct && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={userInput}
+                      onChange={(e) => setUserInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSubmitInput()}
+                      placeholder="Type your answer..."
+                      className="flex-1 bg-neutral-950 border border-white/10 rounded-lg px-3 py-2.5 text-[15px] text-primary placeholder:text-neutral-600 focus-ring"
+                    />
+                    <button
+                      disabled={!userInput.trim()}
+                      onClick={handleSubmitInput}
+                      className="bg-white text-black font-medium px-4 py-2.5 rounded-lg spring-interact disabled:opacity-50 hover:opacity-90 text-sm flex items-center gap-1.5"
+                    >
+                      <CornerDownLeft className="w-3.5 h-3.5" />
+                      Submit
+                    </button>
+                  </div>
+                )}
+
+                {/* Skip button */}
+                {!lastVerification?.is_correct && (
+                  <button
+                    onClick={handleSkip}
+                    className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1"
+                  >
+                    <SkipForward className="w-3 h-3" />
+                    Skip this question
+                  </button>
+                )}
+              </motion.div>
+            )}
           </motion.div>
         ))}
 
-        {isTeaching && (
-          <div className="flex items-center gap-2 text-secondary text-sm py-2">
+        {/* Streaming indicator */}
+        {(isTeaching || isSummarizing) && (
+          <div className="flex items-center gap-2 text-white/30 text-sm py-4">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Teaching...</span>
+            <span className="font-[family-name:var(--font-geist-mono)] text-xs">
+              {isSummarizing ? "Generating summary..." : "Generating lesson..."}
+            </span>
           </div>
         )}
+
+        <div ref={contentEndRef} />
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {/* Input area */}
-      {currentInputRequest && !isTeaching && (
-        <div className="border-l-2 border-white/20 pl-4 space-y-3">
-          <p className="text-xs text-white/50">
-            {currentInputRequest.question}
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSubmitInput()}
-              placeholder="Type your answer..."
-              className="flex-1 bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-primary placeholder:text-neutral-600 focus-ring"
-            />
-            <button
-              disabled={!userInput.trim()}
-              onClick={handleSubmitInput}
-              className="bg-white text-black font-medium px-4 py-2 rounded-lg spring-interact disabled:opacity-50 hover:opacity-90 text-sm flex items-center gap-1"
-            >
-              <CornerDownLeft className="w-3.5 h-3.5" />
-              Submit
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Continue teaching button */}
-      {!currentInputRequest && !isTeaching && !isLessonComplete && messages.length > 0 && (
-        <button
-          onClick={() => {
-            const input = pendingContinueInput;
-            setPendingContinueInput(null);
-            void teach(input ?? undefined, !!input);
-          }}
-          className="w-full bg-white/5 border border-white/10 text-primary font-medium py-3 rounded-xl spring-interact hover:bg-white/10 text-sm"
-        >
-          Continue Lesson →
-        </button>
-      )}
-
       {/* Lesson complete */}
-      {isLessonComplete && !isTeaching && (
-        <div className="glass-card rounded-xl p-6 text-center space-y-4">
-          <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400" />
-          <h3 className="text-base font-medium text-primary">Lesson Complete!</h3>
-          <button
-            onClick={handleSummarize}
-            className="bg-white text-black font-medium px-6 py-3 rounded-xl spring-interact hover:opacity-90 text-sm"
+      {hasLessonCompleteMarker && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
+        currentLesson && ["summarized", "integrated"].includes(currentLesson.status) ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="lesson-callout text-center py-6 space-y-4"
           >
-            Generate Summary & Knowledge Piece →
-          </button>
-        </div>
+            <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400" />
+            <h3 className="text-base font-medium text-primary">Summary Generated</h3>
+            <p className="text-sm text-white/40">Your knowledge piece has been saved.</p>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="lesson-callout text-center py-6 space-y-4"
+          >
+            <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400" />
+            <h3 className="text-base font-medium text-primary">Lesson Complete</h3>
+            <p className="text-sm text-white/40">Ready to generate your summary and knowledge piece.</p>
+            <button
+              onClick={handleSummarize}
+              className="bg-white text-black font-medium px-6 py-3 rounded-xl spring-interact hover:opacity-90 text-sm"
+            >
+              Generate Summary →
+            </button>
+          </motion.div>
+        )
       )}
     </motion.div>
   );
@@ -985,15 +1145,25 @@ function LessonPhase({
 function SummaryPhase({
   courseId,
   currentLessonIndex,
+  focusModeEnabled,
+  onToggleFocusMode,
   lessons,
 }: {
   courseId: string;
   currentLessonIndex: number;
+  focusModeEnabled: boolean;
+  onToggleFocusMode: () => void;
   lessons: Array<{ _id: string; lessonIndex: number; summaryMarkdown?: string; status: string }>;
 }) {
   const currentLesson = lessons.find((l) => l.lessonIndex === currentLessonIndex);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const summaryContentRef = useRef<HTMLDivElement>(null);
+  const activeFocusTarget = useActiveFocusTarget({
+    containerRef: summaryContentRef,
+    enabled: focusModeEnabled,
+    contentVersion: currentLesson?.summaryMarkdown ?? "",
+  });
 
   const handleAdvance = async () => {
     setIsAdvancing(true);
@@ -1008,13 +1178,19 @@ function SummaryPhase({
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <h2 className="text-lg font-medium text-primary">Lesson Summary</h2>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-medium text-primary">Lesson Summary</h2>
+        <FocusModeToggle enabled={focusModeEnabled} onToggle={onToggleFocusMode} />
+      </div>
 
       {currentLesson?.summaryMarkdown ? (
-        <div className="glass-card rounded-2xl p-6">
-          <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-sm text-primary/90">
-            {renderMarkdown(currentLesson.summaryMarkdown)}
-          </div>
+        <div ref={summaryContentRef} className="glass-card rounded-2xl p-6">
+          <LessonMarkdown
+            content={currentLesson.summaryMarkdown}
+            sectionKey={`summary-${currentLesson._id}`}
+            focusModeEnabled={focusModeEnabled}
+            activeFocusTarget={activeFocusTarget}
+          />
         </div>
       ) : (
         <div className="flex justify-center py-12">

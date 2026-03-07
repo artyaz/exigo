@@ -83,7 +83,8 @@ export const advanceCourse = action({
         );
         const currentLesson: Doc<"courseLessons"> | undefined = lessonSorted[course.currentLessonIndex];
 
-        if (!currentLesson || currentLesson.status !== "completed") {
+        const lessonDoneStatuses = ["completed", "summarized", "integrated"];
+        if (!currentLesson || !lessonDoneStatuses.includes(currentLesson.status)) {
           return { nextPhase: "lesson" as const };
         }
 

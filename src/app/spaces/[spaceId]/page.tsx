@@ -11,7 +11,7 @@ import {
     X, Shuffle, Target, ArrowDown, ArrowUp, TrendingUp, AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { addKnowledgePieceAction, bulkImportKnowledgeAction } from "../../actions/knowledge";
 import { LearnTab } from "../../_components/learn/LearnTab";
@@ -68,6 +68,7 @@ function getNodeTypeInfo(nodeType: "feels_hard" | "struggle" | "improvement") {
 
 export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId: string }> }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { userId } = useAuth();
     const { spaceId } = use(params);
     const sId = spaceId as Id<"spaces">;
@@ -78,8 +79,12 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     const updateTitle = useMutation(api.knowledgePieces.updateTitle);
 
 
-    // Main tabs
-    const [mainTab, setMainTab] = useState<"tests" | "knowledge" | "learn">("tests");
+    // Main tabs — honour ?tab= param from learn page back link
+    const [mainTab, setMainTab] = useState<"tests" | "knowledge" | "learn">(() => {
+      const tab = searchParams.get("tab");
+      if (tab === "learn" || tab === "knowledge") return tab;
+      return "tests";
+    });
 
     // Knowledge sub-mode
     const [knowledgeMode, setKnowledgeMode] = useState<"add" | "bulk">("add");
