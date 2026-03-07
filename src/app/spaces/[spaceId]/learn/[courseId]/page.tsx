@@ -60,7 +60,7 @@ function parseLessonSections(fullText: string): LessonSection[] {
   return sections;
 }
 
-function useActiveFocusTarget({
+function useActiveFocusTargets({
   containerRef,
   enabled,
   contentVersion,
@@ -69,23 +69,23 @@ function useActiveFocusTarget({
   enabled: boolean;
   contentVersion: string;
 }) {
-  const [activeFocusTarget, setActiveFocusTarget] = useState<string | null>(null);
+  const [activeFocusTargets, setActiveFocusTargets] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!enabled) {
-      setActiveFocusTarget(null);
+      setActiveFocusTargets(new Set());
       return;
     }
 
     const container = containerRef.current;
     if (!container) {
-      setActiveFocusTarget(null);
+      setActiveFocusTargets(new Set());
       return;
     }
 
     let animationFrameId = 0;
 
-    const updateActiveTarget = () => {
+    const updateActiveTargets = () => {
       animationFrameId = 0;
 
       const focusTargets = Array.from(
@@ -93,40 +93,37 @@ function useActiveFocusTarget({
       );
 
       if (focusTargets.length === 0) {
-        setActiveFocusTarget(null);
+        setActiveFocusTargets(new Set());
         return;
       }
 
-      const viewportAnchor = window.innerHeight * 0.34;
-      const visibleTargets = focusTargets.filter((target) => {
-        const rect = target.getBoundingClientRect();
-        return rect.bottom >= viewportAnchor * 0.45 && rect.top <= window.innerHeight * 0.82;
-      });
+      // Collect elements in the focus band (generous viewport region)
+      const bandTop = window.innerHeight * 0.15;
+      const bandBottom = window.innerHeight * 0.75;
+      const anchor = window.innerHeight * 0.34;
 
-      const candidateTargets = visibleTargets.length > 0 ? visibleTargets : focusTargets;
-      let bestTarget: HTMLElement | null = null;
-      let smallestDistance = Number.POSITIVE_INFINITY;
+      const scored = focusTargets
+        .map((target) => {
+          const rect = target.getBoundingClientRect();
+          const mid = rect.top + rect.height / 2;
+          const inBand = rect.bottom >= bandTop && rect.top <= bandBottom;
+          return { id: target.dataset.focusTarget!, distance: Math.abs(mid - anchor), inBand };
+        })
+        .filter((s) => s.inBand);
 
-      for (const target of candidateTargets) {
-        const rect = target.getBoundingClientRect();
-        const targetMidpoint = rect.top + rect.height / 2;
-        const targetDistance = Math.abs(targetMidpoint - viewportAnchor);
+      // Pick closest elements — up to 5, or all within 200px of best
+      scored.sort((a, b) => a.distance - b.distance);
+      const threshold = scored.length > 0 ? scored[0]!.distance + 200 : 0;
+      const active = new Set(
+        scored.filter((s) => s.distance <= threshold).slice(0, 5).map((s) => s.id)
+      );
 
-        if (targetDistance < smallestDistance) {
-          smallestDistance = targetDistance;
-          bestTarget = target;
-        }
-      }
-
-      setActiveFocusTarget(bestTarget?.dataset.focusTarget ?? null);
+      setActiveFocusTargets(active);
     };
 
     const scheduleUpdate = () => {
-      if (animationFrameId !== 0) {
-        return;
-      }
-
-      animationFrameId = window.requestAnimationFrame(updateActiveTarget);
+      if (animationFrameId !== 0) return;
+      animationFrameId = window.requestAnimationFrame(updateActiveTargets);
     };
 
     scheduleUpdate();
@@ -134,16 +131,13 @@ function useActiveFocusTarget({
     window.addEventListener("resize", scheduleUpdate);
 
     return () => {
-      if (animationFrameId !== 0) {
-        window.cancelAnimationFrame(animationFrameId);
-      }
-
+      if (animationFrameId !== 0) window.cancelAnimationFrame(animationFrameId);
       window.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [containerRef, contentVersion, enabled]);
 
-  return activeFocusTarget;
+  return activeFocusTargets;
 }
 
 function FocusModeToggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void }) {
@@ -400,12 +394,11 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
         courseId, q.question_text, q.reference_answer, answer
       );
 
-      const updatedQuestions = questions.map(qu =>
+      setQuestions(prev => prev.map(qu =>
         qu.id === questionId
           ? { ...qu, userAnswer: answer, isCorrect: evalResult.ok ? evalResult.data.is_correct : undefined, feedback: evalResult.ok ? evalResult.data.feedback : undefined }
           : qu
-      );
-      setQuestions(updatedQuestions);
+      ));
 
       setTimeout(() => {
         if (currentIndex < 4) {
@@ -413,34 +406,39 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
         }
       }, 800);
 
-      if (updatedQuestions.length < 5) {
-        void generateNextQuestion(updatedQuestions);
-      }
-
-      const answeredCount = updatedQuestions.filter(qu => qu.userAnswer).length;
-      if (answeredCount === 5) {
-        setIsSubmitting(true);
-        try {
-          const baselineData = JSON.stringify(updatedQuestions.map(qu => ({
-            step: parseInt(qu.id.split('-')[1]!),
-            question: qu.question_text,
-            answer: qu.userAnswer,
-            isCorrect: qu.isCorrect ?? false,
-          })));
-          await submitBaselineAction(courseId, baselineData);
-          await advanceCourseAction(courseId);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to submit baseline");
-        } finally {
-          setIsSubmitting(false);
-        }
-      }
+      // Pre-gen effect handles generating next question — no explicit call needed
     } catch (err) {
       setError(err instanceof Error ? err.message : "Evaluation failed");
     } finally {
       setIsEvaluating(false);
     }
   };
+
+  // Submit when all 5 questions are answered
+  useEffect(() => {
+    const answeredCount = questions.filter(qu => qu.userAnswer).length;
+    if (answeredCount < 5 || isSubmitting) return;
+
+    setIsSubmitting(true);
+    const submit = async () => {
+      try {
+        const baselineData = JSON.stringify(questions.map(qu => ({
+          step: parseInt(qu.id.split('-')[1]!),
+          question: qu.question_text,
+          answer: qu.userAnswer,
+          isCorrect: qu.isCorrect ?? false,
+        })));
+        await submitBaselineAction(courseId, baselineData);
+        await advanceCourseAction(courseId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to submit baseline");
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+    void submit();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questions]);
 
   return (
     <div className="h-[calc(100vh-12rem)] flex flex-col">
@@ -771,7 +769,7 @@ function LessonPhase({
   const totalSections = sections.length;
   const hasLessonCompleteMarker = fullText.includes("[LESSON_COMPLETE]");
   const focusContentVersion = `${revealedCount}:${fullText.length}:${currentInputRequest?.question ?? ""}:${lastVerification?.feedback_block ?? ""}`;
-  const activeFocusTarget = useActiveFocusTarget({
+  const activeFocusTargets = useActiveFocusTargets({
     containerRef: lessonContentRef,
     enabled: focusModeEnabled,
     contentVersion: focusContentVersion,
@@ -911,6 +909,31 @@ function LessonPhase({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialized]);
 
+  // Advance past the current revealed boundary, skipping sections without checkpoints
+  const advanceToNextCheckpoint = () => {
+    setCurrentInputRequest(null);
+    setLastVerification(null);
+    let nextIdx = revealedCount;
+    // Keep advancing while the next section has no checkpoint
+    while (nextIdx < sections.length) {
+      nextIdx += 1;
+      const section = sections[nextIdx - 1]; // section at the index we just revealed
+      // If this newly revealed section's NEXT section has a checkpoint, pause there
+      const upcoming = sections[nextIdx];
+      if (upcoming?.inputRequest) {
+        setRevealedCount(nextIdx + 1);
+        setCurrentInputRequest(upcoming.inputRequest);
+        return;
+      }
+      // If we've revealed everything, stop
+      if (nextIdx >= sections.length) {
+        setRevealedCount(nextIdx);
+        return;
+      }
+    }
+    setRevealedCount(nextIdx);
+  };
+
   const handleSubmitInput = async () => {
     if (!userInput.trim() || !currentInputRequest || !currentLesson) return;
 
@@ -929,16 +952,9 @@ function LessonPhase({
         setLastVerification(verifyResult.data);
 
         if (verifyResult.data.is_correct) {
-          // Correct: advance to next section
+          // Correct: advance to next checkpoint after brief delay
           setTimeout(() => {
-            setCurrentInputRequest(null);
-            setLastVerification(null);
-            const nextIdx = revealedCount;
-            setRevealedCount(nextIdx + 1);
-            // Check if next section also has an input request
-            if (sections[nextIdx]?.inputRequest) {
-              setCurrentInputRequest(sections[nextIdx].inputRequest);
-            }
+            advanceToNextCheckpoint();
           }, 1200);
         }
         // If incorrect: keep currentInputRequest active for retry
@@ -949,14 +965,7 @@ function LessonPhase({
   };
 
   const handleSkip = () => {
-    setCurrentInputRequest(null);
-    setLastVerification(null);
-    const nextIdx = revealedCount;
-    setRevealedCount(nextIdx + 1);
-    // Check if next section has an input request
-    if (sections[nextIdx]?.inputRequest) {
-      setCurrentInputRequest(sections[nextIdx].inputRequest);
-    }
+    advanceToNextCheckpoint();
   };
 
   const handleSummarize = async () => {
@@ -1020,7 +1029,7 @@ function LessonPhase({
               content={section.content}
               sectionKey={`lesson-section-${i}`}
               focusModeEnabled={focusModeEnabled}
-              activeFocusTarget={activeFocusTarget}
+              activeFocusTargets={activeFocusTargets}
             />
 
             {/* Show input request checkpoint if this is the last revealed section and has one */}
@@ -1108,7 +1117,8 @@ function LessonPhase({
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       {/* Lesson complete */}
-      {hasLessonCompleteMarker && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
+      {/* Lesson complete — show when all sections revealed and not streaming */}
+      {(hasLessonCompleteMarker || (revealedCount >= totalSections && totalSections > 0)) && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
         currentLesson && ["summarized", "integrated"].includes(currentLesson.status) ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -1118,6 +1128,14 @@ function LessonPhase({
             <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400" />
             <h3 className="text-base font-medium text-primary">Summary Generated</h3>
             <p className="text-sm text-white/40">Your knowledge piece has been saved.</p>
+            <button
+              onClick={async () => {
+                try { await advanceCourseAction(courseId); } catch { /* phase transition handled by Convex reactivity */ }
+              }}
+              className="bg-white text-black font-medium px-6 py-3 rounded-xl spring-interact hover:opacity-90 text-sm"
+            >
+              Continue →
+            </button>
           </motion.div>
         ) : (
           <motion.div
@@ -1159,7 +1177,7 @@ function SummaryPhase({
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const summaryContentRef = useRef<HTMLDivElement>(null);
-  const activeFocusTarget = useActiveFocusTarget({
+  const activeFocusTargets = useActiveFocusTargets({
     containerRef: summaryContentRef,
     enabled: focusModeEnabled,
     contentVersion: currentLesson?.summaryMarkdown ?? "",
@@ -1189,7 +1207,7 @@ function SummaryPhase({
             content={currentLesson.summaryMarkdown}
             sectionKey={`summary-${currentLesson._id}`}
             focusModeEnabled={focusModeEnabled}
-            activeFocusTarget={activeFocusTarget}
+            activeFocusTargets={activeFocusTargets}
           />
         </div>
       ) : (

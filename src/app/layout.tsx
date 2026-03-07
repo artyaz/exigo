@@ -1,7 +1,7 @@
 import "~/styles/globals.css";
 
 import { type Metadata } from "next";
-import { Geist } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 
 import { TRPCReactProvider } from "~/trpc/react";
 
@@ -16,6 +16,11 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+});
+
 import ConvexClientProvider from "./ConvexClientProvider";
 
 import { ClerkProvider } from "@clerk/nextjs";
@@ -26,7 +31,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider appearance={{ baseTheme: dark }}>
-      <html lang="en" className={`${geist.variable} dark antialiased tracking-tight`}>
+      <html lang="en" className={`${geist.variable} ${geistMono.variable} dark antialiased tracking-tight`}>
         <body className="bg-black text-white min-h-screen">
           <ConvexClientProvider>
             <TRPCReactProvider>{children}</TRPCReactProvider>

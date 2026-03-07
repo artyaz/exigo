@@ -85,6 +85,24 @@ export async function POST(req: Request) {
     // Get conversation history
     const messages = await convex.query(api.courseLessonMessages.getForLesson, { lessonId: lessonIdTyped });
 
+    // Safety: cap teacher messages per lesson to prevent infinite generation loops
+    const MAX_TEACHER_MESSAGES = 15;
+    const teacherMessageCount = messages.filter((m: { role: string }) => m.role === "teacher").length;
+    if (teacherMessageCount >= MAX_TEACHER_MESSAGES) {
+      const encoder = new TextEncoder();
+      const forceComplete = new ReadableStream({
+        start(controller) {
+          const text = "[LESSON_COMPLETE]";
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text })}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", isComplete: true, inputRequest: null, fullText: text })}\n\n`));
+          controller.close();
+        },
+      });
+      return new Response(forceComplete, {
+        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+      });
+    }
+
     let masteryGoals: string[] = [];
     try {
       masteryGoals = lesson.masteryGoals ? JSON.parse(lesson.masteryGoals) : [];

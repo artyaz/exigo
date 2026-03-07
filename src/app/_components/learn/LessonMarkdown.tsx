@@ -11,7 +11,7 @@ interface LessonMarkdownProps {
   content: string;
   sectionKey: string;
   focusModeEnabled?: boolean;
-  activeFocusTarget?: string | null;
+  activeFocusTargets?: Set<string>;
 }
 
 const DECORATED_TEXT_PATTERN = new RegExp(
@@ -297,7 +297,7 @@ export function LessonMarkdown({
   content,
   sectionKey,
   focusModeEnabled = false,
-  activeFocusTarget = null,
+  activeFocusTargets = new Set(),
 }: LessonMarkdownProps) {
   const cleaned = stripProtocolTokens(content);
   let focusTargetIndex = 0;
@@ -307,7 +307,7 @@ export function LessonMarkdown({
       return "lesson-focus-target";
     }
 
-    return targetId === activeFocusTarget
+    return activeFocusTargets.has(targetId)
       ? "lesson-focus-target lesson-focus-target--active"
       : "lesson-focus-target lesson-focus-target--inactive";
   };
@@ -322,6 +322,7 @@ export function LessonMarkdown({
           data-focus-target={targetId}
           className={mergeClasses(
             "lesson-heading lesson-heading--hero",
+            getFocusTargetStateClass(targetId),
             className,
           )}
         >
@@ -346,6 +347,7 @@ export function LessonMarkdown({
           data-focus-target={targetId}
           className={mergeClasses(
             "lesson-heading lesson-heading--section",
+            getFocusTargetStateClass(targetId),
             className,
           )}
         >
@@ -370,6 +372,7 @@ export function LessonMarkdown({
           data-focus-target={targetId}
           className={mergeClasses(
             "lesson-heading lesson-heading--subsection",
+            getFocusTargetStateClass(targetId),
             className,
           )}
         >
@@ -394,6 +397,7 @@ export function LessonMarkdown({
           data-focus-target={targetId}
           className={mergeClasses(
             "lesson-heading lesson-heading--minor",
+            getFocusTargetStateClass(targetId),
             className,
           )}
         >
