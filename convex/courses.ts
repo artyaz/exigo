@@ -121,6 +121,35 @@ export const updateProgress = internalMutation({
   },
 });
 
+export const createCourseFromNormalized = mutation({
+  args: {
+    spaceId: v.id("spaces"),
+    rawTopic: v.string(),
+    refinedTitle: v.string(),
+    courseDescription: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthedContext(ctx);
+    requireEducatorAccess(auth);
+
+    const space = await ctx.db.get(args.spaceId);
+    if (!space || space.userId !== auth.userId) {
+      throw new Error("Unauthorized access to this space");
+    }
+
+    return await ctx.db.insert("courses", {
+      spaceId: args.spaceId,
+      userId: auth.userId,
+      rawTopic: args.rawTopic,
+      refinedTitle: args.refinedTitle,
+      courseDescription: args.courseDescription,
+      phase: "baseline",
+      currentModuleIndex: 0,
+      currentLessonIndex: 0,
+    });
+  },
+});
+
 export const createInternal = internalMutation({
   args: {
     spaceId: v.id("spaces"),

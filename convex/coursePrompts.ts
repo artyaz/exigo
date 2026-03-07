@@ -29,7 +29,7 @@ export function buildSequentialDiagnosticPrompt(
   currentStep: number,
   previousQuestions: string[],
 ): string {
-  return `You are an expert educational assessor generating a dynamic, 5-question baseline test. Your goal is to generate the NEXT multiple-choice question in the sequence to map the user's knowledge.
+  return `You are an expert educational assessor generating a dynamic, 5-question baseline test. Your goal is to generate the NEXT open-ended question in the sequence to map the user's knowledge.
 
 Inputs:
 [Course Topic]: ${courseTopic}
@@ -45,14 +45,14 @@ Rules:
    Step 4: Hidden trap/gotcha.
    Step 5: Advanced systemic interactions.
 2. Context Awareness: Do NOT repeat concepts or scenarios from the previous questions array.
-3. Diagnostic Distractors: Incorrect options must represent specific misunderstandings.
+3. Questions should require 1-3 sentence written answers. No multiple choice.
+4. Include a reference answer for grading purposes.
 
 Output Format (Strict JSON ONLY):
 {
   "question_id": ${currentStep},
   "question_text": "...",
-  "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
-  "correct_option": "A",
+  "reference_answer": "A concise 1-2 sentence correct answer",
   "concept_tag": "A 2-3 word tag describing the specific sub-skill"
 }`;
 }

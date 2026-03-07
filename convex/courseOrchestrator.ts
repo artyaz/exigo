@@ -65,6 +65,28 @@ export const advanceCourse = action({
       }
 
       case "lesson": {
+        const lessonModules: Doc<"courseModules">[] = await ctx.runQuery(
+          internal.courseModules.getForCourseInternal,
+          { courseId: args.courseId },
+        );
+        const lessonCurrentModule: Doc<"courseModules"> | undefined = lessonModules.find(
+          (m: Doc<"courseModules">) => m.moduleIndex === course.currentModuleIndex,
+        );
+        if (!lessonCurrentModule) throw new Error("Current module not found");
+
+        const lessonModuleLessons: Doc<"courseLessons">[] = await ctx.runQuery(
+          internal.courseLessons.getForModuleInternal,
+          { moduleId: lessonCurrentModule._id },
+        );
+        const lessonSorted: Doc<"courseLessons">[] = lessonModuleLessons.sort(
+          (a: Doc<"courseLessons">, b: Doc<"courseLessons">) => a.lessonIndex - b.lessonIndex,
+        );
+        const currentLesson: Doc<"courseLessons"> | undefined = lessonSorted[course.currentLessonIndex];
+
+        if (!currentLesson || currentLesson.status !== "completed") {
+          return { nextPhase: "lesson" as const };
+        }
+
         await ctx.runMutation(internal.courses.updateProgress, {
           courseId: args.courseId,
           phase: "lesson_summary",

@@ -5,9 +5,10 @@ import { api } from "../../../../convex/_generated/api";
 import type { Id, Doc } from "../../../../convex/_generated/dataModel";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Zap, ChevronRight, Plus } from "lucide-react";
+import { Loader2, Zap, ChevronRight, Plus, X } from "lucide-react";
 import Link from "next/link";
-import { startCourseAction } from "../../actions/learn";
+import { useRouter } from "next/navigation";
+import { normalizeTopicAction, createCourseAction } from "../../actions/learn";
 
 const PHASE_LABELS: Record<string, { label: string; color: string }> = {
   baseline: { label: "Baseline", color: "text-blue-400" },
@@ -20,34 +21,73 @@ const PHASE_LABELS: Record<string, { label: string; color: string }> = {
 
 export function LearnTab({ spaceId, userId }: { spaceId: string; userId: string }) {
   const courses = useQuery(api.courses.getForSpace, { spaceId: spaceId as Id<"spaces"> });
+  const router = useRouter();
   const [topic, setTopic] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
+  const [isNormalizing, setIsNormalizing] = useState(false);
+  const [isCreatingCourse, setIsCreatingCourse] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  // Modal state
+  const [showModal, setShowModal] = useState(false);
+  const [rawTopic, setRawTopic] = useState("");
+  const [refinedTitle, setRefinedTitle] = useState("");
+  const [courseDescription, setCourseDescription] = useState("");
+
+  const handleNormalize = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic.trim()) return;
-    setIsCreating(true);
+    setIsNormalizing(true);
     setError(null);
 
     try {
-      const result = await startCourseAction(spaceId, topic.trim());
+      const result = await normalizeTopicAction(topic.trim());
       if (!result.ok) {
         setError(result.error);
         return;
       }
+      setRawTopic(topic.trim());
+      setRefinedTitle(result.data.refinedTitle);
+      setCourseDescription(result.data.courseDescription);
+      setShowModal(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to normalize topic");
+    } finally {
+      setIsNormalizing(false);
+    }
+  };
+
+  const handleCreateCourse = async () => {
+    setIsCreatingCourse(true);
+    setError(null);
+
+    try {
+      const result = await createCourseAction(spaceId, rawTopic, refinedTitle, courseDescription);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setShowModal(false);
       setTopic("");
+      router.push(`/spaces/${spaceId}/learn/${result.data.courseId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create course");
     } finally {
-      setIsCreating(false);
+      setIsCreatingCourse(false);
     }
+  };
+
+  const handleCancelModal = () => {
+    setShowModal(false);
+    setRawTopic("");
+    setRefinedTitle("");
+    setCourseDescription("");
+    setError(null);
   };
 
   return (
     <div className="flex flex-col gap-6">
       {/* Create course form */}
-      <form onSubmit={handleCreate} className="flex gap-3">
+      <form onSubmit={handleNormalize} className="flex gap-3">
         <input
           type="text"
           placeholder="What do you want to learn? E.g., React Server Components, Docker Networking..."
@@ -56,18 +96,97 @@ export function LearnTab({ spaceId, userId }: { spaceId: string; userId: string 
           onChange={(e) => setTopic(e.target.value)}
         />
         <button
-          disabled={isCreating || !topic.trim()}
+          disabled={isNormalizing || !topic.trim()}
           type="submit"
           className="bg-white text-black font-medium px-5 py-3 rounded-xl spring-interact flex items-center gap-2 disabled:opacity-50 hover:opacity-90 text-sm"
         >
-          {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          {isNormalizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           <span className="hidden md:inline">Start Course</span>
         </button>
       </form>
 
-      {error && (
+      {error && !showModal && (
         <p className="text-sm text-red-500 font-medium">{error}</p>
       )}
+
+      {/* Course creation modal */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/60"
+            onClick={handleCancelModal}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+              className="bg-neutral-950 border border-white/10 rounded-2xl p-6 w-full max-w-lg mx-4 space-y-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-primary">Create Course</h2>
+                <button
+                  onClick={handleCancelModal}
+                  className="text-neutral-500 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-secondary uppercase tracking-widest">
+                    Course Title
+                  </label>
+                  <input
+                    type="text"
+                    value={refinedTitle}
+                    onChange={(e) => setRefinedTitle(e.target.value)}
+                    className="w-full bg-neutral-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-primary focus-ring"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-secondary uppercase tracking-widest">
+                    Course Description
+                  </label>
+                  <textarea
+                    value={courseDescription}
+                    onChange={(e) => setCourseDescription(e.target.value)}
+                    rows={4}
+                    className="w-full bg-neutral-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-primary focus-ring resize-none"
+                  />
+                </div>
+              </div>
+
+              {error && showModal && (
+                <p className="text-sm text-red-500 font-medium">{error}</p>
+              )}
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={handleCancelModal}
+                  className="px-4 py-2 rounded-xl text-sm text-secondary hover:text-primary border border-white/10 hover:border-white/20 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateCourse}
+                  disabled={isCreatingCourse || !refinedTitle.trim() || !courseDescription.trim()}
+                  className="bg-white text-black font-medium px-5 py-2 rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 hover:opacity-90 transition-opacity"
+                >
+                  {isCreatingCourse && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create Course
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Course list */}
       {!courses ? (

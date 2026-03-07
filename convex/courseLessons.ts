@@ -1,11 +1,12 @@
 import { v } from "convex/values";
-import { query, internalMutation, internalQuery } from "./_generated/server";
-import { getAuthenticatedUserId } from "./authDecorators";
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
+import { getAuthenticatedUserId, getAuthedContext, requireEducatorAccess } from "./authDecorators";
 
 const LESSON_STATUS = v.union(
   v.literal("pending"),
   v.literal("goals_set"),
   v.literal("teaching"),
+  v.literal("completed"),
   v.literal("summarized"),
   v.literal("integrated"),
 );
@@ -123,6 +124,19 @@ export const setKnowledgePieceIdInternal = internalMutation({
     await ctx.db.patch(args.lessonId, {
       knowledgePieceId: args.knowledgePieceId,
     });
+  },
+});
+
+export const markCompleted = mutation({
+  args: { lessonId: v.id("courseLessons") },
+  handler: async (ctx, args) => {
+    const auth = await getAuthedContext(ctx);
+    requireEducatorAccess(auth);
+
+    const lesson = await ctx.db.get(args.lessonId);
+    if (!lesson) throw new Error("Lesson not found");
+
+    await ctx.db.patch(args.lessonId, { status: "completed" });
   },
 });
 

@@ -153,6 +153,7 @@ export default defineSchema({
       v.literal("pending"),
       v.literal("goals_set"),
       v.literal("teaching"),
+      v.literal("completed"),
       v.literal("summarized"),
       v.literal("integrated"),
     ),

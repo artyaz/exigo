@@ -14,6 +14,46 @@ function getErrorMessage(error: unknown): string {
   return "Unexpected error";
 }
 
+export async function normalizeTopicAction(
+  rawTopic: string,
+): Promise<ActionResult<{ refinedTitle: string; courseDescription: string }>> {
+  const { userId, getToken } = await auth();
+  if (!userId) return { ok: false, error: "Unauthorized" };
+
+  try {
+    const convex = await createAuthedConvexClient(getToken, "actions.learn.normalizeTopicAction");
+    const result = await convex.action(api.courseAi.normalizeTopicOnly, {
+      rawTopic,
+    });
+    return { ok: true, data: result };
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function createCourseAction(
+  spaceId: string,
+  rawTopic: string,
+  refinedTitle: string,
+  courseDescription: string,
+): Promise<ActionResult<{ courseId: string }>> {
+  const { userId, getToken } = await auth();
+  if (!userId) return { ok: false, error: "Unauthorized" };
+
+  try {
+    const convex = await createAuthedConvexClient(getToken, "actions.learn.createCourseAction");
+    const courseId = await convex.mutation(api.courses.createCourseFromNormalized, {
+      spaceId: spaceId as Id<"spaces">,
+      rawTopic,
+      refinedTitle,
+      courseDescription,
+    });
+    return { ok: true, data: { courseId } };
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
 export async function startCourseAction(
   spaceId: string,
   rawTopic: string,
@@ -41,8 +81,7 @@ export async function generateBaselineQuestionAction(
 ): Promise<ActionResult<{
   question_id: number;
   question_text: string;
-  options: string[];
-  correct_option: string;
+  reference_answer: string;
   concept_tag: string;
 }>> {
   const { userId, getToken } = await auth();
@@ -76,6 +115,29 @@ export async function submitBaselineAction(
       baselineResults,
     });
     return { ok: true, data: undefined };
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function evaluateBaselineAnswerAction(
+  courseId: string,
+  questionText: string,
+  referenceAnswer: string,
+  userAnswer: string,
+): Promise<ActionResult<{ is_correct: boolean; feedback: string }>> {
+  const { userId, getToken } = await auth();
+  if (!userId) return { ok: false, error: "Unauthorized" };
+
+  try {
+    const convex = await createAuthedConvexClient(getToken, "actions.learn.evaluateBaselineAnswerAction");
+    const result = await convex.action(api.courseAi.evaluateBaselineAnswer, {
+      courseId: courseId as Id<"courses">,
+      questionText,
+      referenceAnswer,
+      userAnswer,
+    });
+    return { ok: true, data: result };
   } catch (error) {
     return { ok: false, error: getErrorMessage(error) };
   }
@@ -143,6 +205,23 @@ export async function verifyInputAction(
       userAnswer,
     });
     return { ok: true, data: result };
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}
+
+export async function completeLessonAction(
+  lessonId: string,
+): Promise<ActionResult<void>> {
+  const { userId, getToken } = await auth();
+  if (!userId) return { ok: false, error: "Unauthorized" };
+
+  try {
+    const convex = await createAuthedConvexClient(getToken, "actions.learn.completeLessonAction");
+    await convex.mutation(api.courseLessons.markCompleted, {
+      lessonId: lessonId as Id<"courseLessons">,
+    });
+    return { ok: true, data: undefined };
   } catch (error) {
     return { ok: false, error: getErrorMessage(error) };
   }

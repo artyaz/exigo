@@ -101,6 +101,47 @@ export const normalizeTopic = action({
   },
 });
 
+// ─── ACTION 1b: Normalize Topic Only (no course creation) ───
+export const normalizeTopicOnly = action({
+  args: {
+    rawTopic: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthedContextForAction(ctx);
+    requireEducatorAccess(auth);
+
+    const ai = getAiClient();
+    const model = getModel();
+    const prompt = buildCourseArchitectPrompt(args.rawTopic);
+
+    const startedAt = Date.now();
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
+    captureAiGenerationEvent({
+      distinctId: auth.userId,
+      traceId: createAiTraceId(),
+      provider: "google",
+      model,
+      input: [{ role: "user", content: prompt }],
+      response,
+      latencySeconds: (Date.now() - startedAt) / 1000,
+    });
+
+    const text = response.text?.trim() ?? "";
+    const parsed = safeParseJson<{
+      refined_title: string;
+      course_description: string;
+    }>(text);
+
+    return {
+      refinedTitle: parsed.refined_title,
+      courseDescription: parsed.course_description,
+    };
+  },
+});
+
 // ─── ACTION 2: Generate Baseline Question (Sequential Diagnostic AI) ───
 export const generateBaselineQuestion = action({
   args: {
@@ -141,12 +182,56 @@ export const generateBaselineQuestion = action({
     const parsed = safeParseJson<{
       question_id: number;
       question_text: string;
-      options: string[];
-      correct_option: string;
+      reference_answer: string;
       concept_tag: string;
     }>(text);
 
     return parsed;
+  },
+});
+
+// ─── ACTION 2b: Evaluate Baseline Answer ───
+export const evaluateBaselineAnswer = action({
+  args: {
+    courseId: v.id("courses"),
+    questionText: v.string(),
+    referenceAnswer: v.string(),
+    userAnswer: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthedContextForAction(ctx);
+    requireEducatorAccess(auth);
+
+    const ai = getAiClient();
+    const model = getModel();
+    const prompt = `You are an educational assessor evaluating a student's written answer to a baseline diagnostic question.
+
+Question: ${args.questionText}
+Reference Answer: ${args.referenceAnswer}
+Student's Answer: ${args.userAnswer}
+
+Evaluate if the student demonstrates understanding of the concept. Be semantically forgiving (typos/phrasing don't matter, conceptual understanding does).
+
+Output Format (Strict JSON ONLY):
+{
+  "is_correct": true/false,
+  "feedback": "Brief 1-sentence explanation"
+}`;
+
+    const startedAt = Date.now();
+    const response = await ai.models.generateContent({ model, contents: prompt });
+    captureAiGenerationEvent({
+      distinctId: auth.userId,
+      traceId: createAiTraceId(),
+      provider: "google",
+      model,
+      input: [{ role: "user", content: prompt }],
+      response,
+      latencySeconds: (Date.now() - startedAt) / 1000,
+    });
+
+    const text = response.text?.trim() ?? "";
+    return safeParseJson<{ is_correct: boolean; feedback: string }>(text);
   },
 });
 
@@ -401,7 +486,7 @@ export const teachLesson = action({
 
     // Detect input request
     const inputRequestMatch = teacherResponse.match(
-      /\[INPUT_REQUEST:\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^\]]+)\]/,
+      /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/,
     );
 
     const messageType = inputRequestMatch

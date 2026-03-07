@@ -3,22 +3,99 @@
 import { useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
-import { useState, useEffect, use, useCallback } from "react";
+import { useState, useEffect, useRef, use, useCallback, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft, Loader2, Zap, CheckCircle2, ChevronRight,
-  CornerDownLeft,
+  ArrowLeft, Loader2, Zap, CheckCircle2, ChevronRight, ChevronLeft,
+  CornerDownLeft, XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
   generateBaselineQuestionAction,
+  evaluateBaselineAnswerAction,
   submitBaselineAction,
   advanceCourseAction,
-  teachLessonAction,
   verifyInputAction,
+  completeLessonAction,
   summarizeLessonAction,
 } from "../../../../actions/learn";
+
+/* ─── Basic markdown renderer ─── */
+function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
+  const result: ReactNode[] = [];
+  const tokenRegex = /(\*\*(.+?)\*\*|`(.+?)`|\*([^*]+?)\*)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let partIdx = 0;
+
+  while ((match = tokenRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      result.push(text.slice(lastIndex, match.index));
+    }
+    const key = `${keyPrefix}-${partIdx++}`;
+    if (match[2] !== undefined) {
+      result.push(<strong key={key} className="font-semibold text-white">{match[2]}</strong>);
+    } else if (match[3] !== undefined) {
+      result.push(<code key={key} className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-white/90 border border-white/[0.06]">{match[3]}</code>);
+    } else if (match[4] !== undefined) {
+      result.push(<em key={key} className="italic text-white/80">{match[4]}</em>);
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    result.push(text.slice(lastIndex));
+  }
+  return result;
+}
+
+function renderMarkdown(text: string): ReactNode[] {
+  const lines = text.split("\n");
+  const result: ReactNode[] = [];
+
+  lines.forEach((line, lineIdx) => {
+    if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
+
+    // Headers
+    const h3Match = /^###\s+(.*)/.exec(line);
+    if (h3Match) {
+      result.push(<span key={`h3-${lineIdx}`} className="block text-sm font-semibold text-white mt-4 mb-1">{renderInlineMarkdown(h3Match[1] ?? "", `${lineIdx}`)}</span>);
+      return;
+    }
+    const h2Match = /^##\s+(.*)/.exec(line);
+    if (h2Match) {
+      result.push(<span key={`h2-${lineIdx}`} className="block text-base font-semibold text-white mt-5 mb-2">{renderInlineMarkdown(h2Match[1] ?? "", `${lineIdx}`)}</span>);
+      return;
+    }
+
+    // Bullet list
+    const bulletMatch = /^(\s*)[*-]\s+(.*)/.exec(line);
+    if (bulletMatch) {
+      const indent = bulletMatch[1] ?? "";
+      const content = bulletMatch[2] ?? "";
+      result.push(
+        <span key={`li-${lineIdx}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
+          <span className="text-white/40 select-none shrink-0">•</span>
+          <span>{renderInlineMarkdown(content, `${lineIdx}`)}</span>
+        </span>
+      );
+      return;
+    }
+
+    // Regular line
+    result.push(...renderInlineMarkdown(line, `${lineIdx}`));
+  });
+
+  return result;
+}
+
+/** Strip [INPUT_REQUEST: ...] and [LESSON_COMPLETE] tokens from display text */
+function stripProtocolTokens(text: string): string {
+  return text
+    .replace(/\[INPUT_REQUEST:\s*[^\]]+\]/g, "")
+    .replace(/\[LESSON_COMPLETE\]/g, "")
+    .trim();
+}
 
 export default function CoursePage({ params }: { params: Promise<{ spaceId: string; courseId: string }> }) {
   const { userId } = useAuth();
@@ -107,31 +184,66 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
 
 // ─── Baseline Phase ───
 function BaselinePhase({ courseId, courseTopic }: { courseId: string; courseTopic: string }) {
-  const [step, setStep] = useState(1);
-  const [currentQuestion, setCurrentQuestion] = useState<{
+  const SPRING_SNAPPY = { type: "spring" as const, stiffness: 500, damping: 30 };
+  const STACK_VISIBLE = 3;
+
+  function cardHash(id: string, seed: number) {
+    let h = seed;
+    for (let i = 0; i < id.length; i++) h = Math.trunc(((h << 5) - h + (id.codePointAt(i) ?? 0)));
+    return h;
+  }
+
+  const [questions, setQuestions] = useState<Array<{
+    id: string;
     question_text: string;
-    options: string[];
-    correct_option: string;
+    reference_answer: string;
     concept_tag: string;
-  } | null>(null);
-  const [previousQuestions, setPreviousQuestions] = useState<string[]>([]);
-  const [answers, setAnswers] = useState<Array<{ step: number; answer: string; correct: string; isCorrect: boolean }>>([]);
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+    userAnswer?: string;
+    isCorrect?: boolean;
+    feedback?: string;
+  }>>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionFailed, setSubmissionFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateQuestion = useCallback(async (stepNum: number, prevQs: string[]) => {
+  const arenaRef = useRef<HTMLDivElement>(null);
+  const [arenaW, setArenaW] = useState(800);
+  const [arenaH, setArenaH] = useState(600);
+
+  useEffect(() => {
+    if (!arenaRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      if (!entries?.[0]) return;
+      const { width, height } = entries[0].contentRect;
+      setArenaW(width);
+      setArenaH(height);
+    });
+    ro.observe(arenaRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const generateNextQuestion = useCallback(async (prevQuestions: typeof questions) => {
+    const step = prevQuestions.length + 1;
+    if (step > 5) return;
+
     setIsLoading(true);
     setError(null);
     try {
-      const result = await generateBaselineQuestionAction(courseId, courseTopic, stepNum, prevQs);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setCurrentQuestion(result.data);
+      const result = await generateBaselineQuestionAction(
+        courseId, courseTopic, step,
+        prevQuestions.map(q => q.question_text)
+      );
+      if (!result.ok) { setError(result.error); return; }
+
+      const newQ = {
+        id: `baseline-${step}`,
+        question_text: result.data.question_text,
+        reference_answer: result.data.reference_answer,
+        concept_tag: result.data.concept_tag,
+      };
+      setQuestions(prev => [...prev, newQ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate question");
     } finally {
@@ -139,137 +251,301 @@ function BaselinePhase({ courseId, courseTopic }: { courseId: string; courseTopi
     }
   }, [courseId, courseTopic]);
 
-  // Generate first question on mount
   useEffect(() => {
-    void generateQuestion(1, []);
+    void generateNextQuestion([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleAnswer = async () => {
-    if (!selectedOption || !currentQuestion) return;
+  const handleAnswer = async (questionId: string, answer: string) => {
+    if (!answer.trim()) return;
+    const q = questions.find(qu => qu.id === questionId);
+    if (!q) return;
 
-    const isCorrect = selectedOption === currentQuestion.correct_option;
-    const newAnswers = [...answers, { step, answer: selectedOption, correct: currentQuestion.correct_option, isCorrect }];
-    setAnswers(newAnswers);
-    const newPrevQs = [...previousQuestions, currentQuestion.question_text];
-    setPreviousQuestions(newPrevQs);
-
-    if (step < 5) {
-      setStep(step + 1);
-      setSelectedOption(null);
-      setCurrentQuestion(null);
-      await generateQuestion(step + 1, newPrevQs);
-    } else {
-      // Baseline complete
-      setIsSubmitting(true);
-      setSubmissionFailed(false);
-      try {
-        const baselineData = JSON.stringify(newAnswers);
-        await submitBaselineAction(courseId, baselineData);
-        await advanceCourseAction(courseId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to submit baseline");
-        setSubmissionFailed(true);
-      } finally {
-        setIsSubmitting(false);
-      }
-    }
-  };
-
-  const handleRetrySubmission = async () => {
-    setIsSubmitting(true);
-    setSubmissionFailed(false);
-    setError(null);
+    setIsEvaluating(true);
     try {
-      const baselineData = JSON.stringify(answers);
-      await submitBaselineAction(courseId, baselineData);
-      await advanceCourseAction(courseId);
+      const evalResult = await evaluateBaselineAnswerAction(
+        courseId, q.question_text, q.reference_answer, answer
+      );
+
+      const updatedQuestions = questions.map(qu =>
+        qu.id === questionId
+          ? { ...qu, userAnswer: answer, isCorrect: evalResult.ok ? evalResult.data.is_correct : undefined, feedback: evalResult.ok ? evalResult.data.feedback : undefined }
+          : qu
+      );
+      setQuestions(updatedQuestions);
+
+      setTimeout(() => {
+        if (currentIndex < 4) {
+          setCurrentIndex(prev => prev + 1);
+        }
+      }, 800);
+
+      if (updatedQuestions.length < 5) {
+        void generateNextQuestion(updatedQuestions);
+      }
+
+      const answeredCount = updatedQuestions.filter(qu => qu.userAnswer).length;
+      if (answeredCount === 5) {
+        setIsSubmitting(true);
+        try {
+          const baselineData = JSON.stringify(updatedQuestions.map(qu => ({
+            step: parseInt(qu.id.split('-')[1]!),
+            question: qu.question_text,
+            answer: qu.userAnswer,
+            isCorrect: qu.isCorrect ?? false,
+          })));
+          await submitBaselineAction(courseId, baselineData);
+          await advanceCourseAction(courseId);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to submit baseline");
+        } finally {
+          setIsSubmitting(false);
+        }
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit baseline");
-      setSubmissionFailed(true);
+      setError(err instanceof Error ? err.message : "Evaluation failed");
     } finally {
-      setIsSubmitting(false);
+      setIsEvaluating(false);
     }
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
-    >
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium text-primary">Baseline Assessment</h2>
-        <span className="text-xs font-mono text-secondary">{step} / 5</span>
-      </div>
-
-      {/* Progress bar */}
-      <div className="w-full bg-white/5 rounded-full h-1.5">
-        <div
-          className="bg-white h-1.5 rounded-full transition-all duration-300"
-          style={{ width: `${(step / 5) * 100}%` }}
-        />
-      </div>
-
-      {error && <p className="text-sm text-red-500">{error}</p>}
-
-      {isLoading || !currentQuestion ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-white/30" />
+    <div className="h-[calc(100vh-12rem)] flex flex-col">
+      {/* Header */}
+      <header className="shrink-0 flex items-center justify-between pb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-white/90">
+            Question {currentIndex + 1}
+          </span>
+          <span className="text-white/20">/</span>
+          <span className="text-sm text-white/40">5</span>
+          {isLoading && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-1.5 ml-2">
+              <Loader2 className="w-3 h-3 animate-spin text-white/30" />
+              <span className="text-[10px] text-white/30 uppercase tracking-widest">Generating</span>
+            </motion.div>
+          )}
         </div>
-      ) : isSubmitting ? (
-        <div className="flex flex-col items-center justify-center py-12 gap-3">
+
+        {/* Progress dots */}
+        <div className="flex items-center gap-1">
+          {Array.from({ length: 5 }).map((_, i) => {
+            const q = questions[i];
+            const isCurrentlyGenerating = isLoading && i === questions.length;
+
+            if (isCurrentlyGenerating) {
+              return (
+                <motion.div key={`${i}-gen`} initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} className="w-3 h-3 flex items-center justify-center">
+                  <motion.div className="w-2 h-2 rounded-full border border-white/30 border-t-white/70" animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }} />
+                </motion.div>
+              );
+            }
+
+            return (
+              <motion.div
+                key={`${i}-dot`}
+                className="h-1 rounded-full"
+                animate={{
+                  width: i === currentIndex ? 20 : 8,
+                  backgroundColor: q?.userAnswer
+                    ? q.isCorrect === true ? "rgba(74, 222, 128, 0.7)" : q.isCorrect === false ? "rgba(248, 113, 113, 0.7)" : "rgba(255, 255, 255, 0.4)"
+                    : i === currentIndex ? "rgba(255, 255, 255, 0.6)" : i < questions.length ? "rgba(255, 255, 255, 0.15)" : "rgba(255, 255, 255, 0.06)",
+                }}
+                transition={SPRING_SNAPPY}
+              />
+            );
+          })}
+        </div>
+      </header>
+
+      {isSubmitting ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-white/30" />
           <p className="text-sm text-secondary">Analyzing results & generating your syllabus...</p>
         </div>
-      ) : submissionFailed ? (
-        <div className="flex flex-col items-center justify-center py-12 gap-4">
-          <p className="text-sm text-red-500">{error}</p>
-          <button
-            onClick={handleRetrySubmission}
-            className="bg-white text-black font-medium px-6 py-3 rounded-xl spring-interact hover:opacity-90 text-sm"
-          >
-            Retry Submission
-          </button>
-        </div>
       ) : (
-        <div className="glass-card rounded-2xl p-6 space-y-6">
-          <div className="space-y-2">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-secondary">{currentQuestion.concept_tag}</span>
-            <p className="text-base text-primary">{currentQuestion.question_text}</p>
-          </div>
+        /* Card arena */
+        <div className="flex-1 relative min-w-0 overflow-hidden" ref={arenaRef}>
+          {questions.map((q, idx) => {
+            const isActive = idx === currentIndex;
+            const offset = idx - currentIndex;
+            const isLeft = offset < 0;
+            const absOffset = Math.abs(offset);
 
-          <div className="space-y-2">
-            {currentQuestion.options.map((option, i) => {
-              const optionLetter = option.charAt(0);
-              const isSelected = selectedOption === optionLetter;
-              return (
-                <button
-                  key={i}
-                  onClick={() => setSelectedOption(optionLetter)}
-                  className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-all spring-interact ${
-                    isSelected
-                      ? "border-white bg-white/10 text-primary"
-                      : "border-white/10 bg-white/[0.02] text-secondary hover:bg-white/5 hover:text-primary"
-                  }`}
+            if (!isActive && absOffset > STACK_VISIBLE) return null;
+
+            const depth = Math.max(0, absOffset - 1);
+            const rot = isActive ? 0 : ((cardHash(q.id, isLeft ? 1 : 3) % 9) - 4) * 1.0;
+            const yOff = isActive ? 0 : ((cardHash(q.id, isLeft ? 2 : 4) % 7) - 3) * 4;
+
+            const stackX = isLeft
+              ? -(arenaW / 2 - 90) + depth * -16
+              : (arenaW / 2 - 90) + depth * 16;
+
+            const activeW = Math.min(arenaW - 48, 672);
+            const activeH = arenaH - 48;
+
+            return (
+              <motion.div
+                key={q.id}
+                animate={{
+                  width: isActive ? activeW : 130,
+                  height: isActive ? activeH : 170,
+                  x: isActive ? -activeW / 2 : stackX - 65,
+                  y: isActive ? -activeH / 2 : yOff - 85,
+                  rotate: rot,
+                  scale: isActive ? 1 : (1 - depth * 0.06),
+                  opacity: isActive ? 1 : ((isLeft ? 0.7 : 0.6) - depth * 0.15),
+                  zIndex: isActive ? 50 : (STACK_VISIBLE - depth + 1),
+                }}
+                transition={{
+                  x: SPRING_SNAPPY, y: SPRING_SNAPPY, scale: SPRING_SNAPPY,
+                  rotate: SPRING_SNAPPY, opacity: SPRING_SNAPPY,
+                  width: { duration: 0 }, height: { duration: 0 }, zIndex: { duration: 0 },
+                }}
+                className={`absolute rounded-2xl border overflow-hidden ${
+                  isActive
+                    ? 'border-white/[0.08] bg-[#0A0A0A] shadow-[0_4px_24px_rgba(0,0,0,0.5)]'
+                    : 'border-white/[0.08] bg-[#0D0D0D] shadow-[0_2px_12px_rgba(0,0,0,0.4)] cursor-pointer hover:bg-white/[0.04]'
+                }`}
+                style={{ top: '50%', left: '50%' }}
+                onClick={!isActive ? () => setCurrentIndex(idx) : undefined}
+              >
+                {/* Stack preview */}
+                <motion.div
+                  animate={{ opacity: isActive ? 0 : 1 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute inset-0 p-3 flex flex-col gap-2 overflow-hidden"
+                  style={{ zIndex: isActive ? 0 : 1, pointerEvents: 'none' }}
                 >
-                  {option}
-                </button>
-              );
-            })}
-          </div>
+                  <p className="text-[9px] text-white/40 uppercase tracking-widest font-semibold">Q{idx + 1}</p>
+                  <p className="text-[10px] text-white/30 line-clamp-5 leading-relaxed flex-1">{q.question_text}</p>
+                  {isLeft && q.userAnswer && (
+                    <div className="flex items-center gap-1">
+                      {q.isCorrect === true && <CheckCircle2 className="w-3 h-3 text-green-400/60" />}
+                      {q.isCorrect === false && <XCircle className="w-3 h-3 text-red-400/60" />}
+                    </div>
+                  )}
+                </motion.div>
 
-          <button
-            disabled={!selectedOption || isLoading}
-            onClick={handleAnswer}
-            className="w-full bg-white text-black font-medium py-3 rounded-xl spring-interact disabled:opacity-50 hover:opacity-90 text-sm flex items-center justify-center gap-2"
-          >
-            {step < 5 ? "Next Question" : "Complete Assessment"}
-            <ChevronRight className="w-4 h-4" />
-          </button>
+                {/* Full card content */}
+                <motion.div
+                  animate={{ opacity: isActive ? 1 : 0 }}
+                  transition={{ duration: 0.2, delay: isActive ? 0.12 : 0 }}
+                  className="absolute inset-0 flex flex-col"
+                  style={{ zIndex: isActive ? 1 : 0, pointerEvents: isActive ? 'auto' : 'none', minWidth: activeW, minHeight: activeH }}
+                >
+                  <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
+                    <div className="shrink-0 px-8 pt-7 pb-5 border-b border-white/[0.04]">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-semibold">
+                          Question {idx + 1}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {q.isCorrect === true && (
+                            <div className="flex items-center gap-1.5 text-green-400 bg-green-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-green-400/20">
+                              <CheckCircle2 className="w-3 h-3" /> Correct
+                            </div>
+                          )}
+                          {q.isCorrect === false && (
+                            <div className="flex items-center gap-1.5 text-red-400 bg-red-400/10 px-2.5 py-1 rounded-md text-[10px] font-semibold border border-red-400/20">
+                              <XCircle className="w-3 h-3" /> Incorrect
+                            </div>
+                          )}
+                          {isEvaluating && idx === currentIndex && <Loader2 className="w-3.5 h-3.5 animate-spin text-white/30" />}
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-secondary block mb-2">{q.concept_tag}</span>
+                      <h2 className="text-lg md:text-xl font-semibold leading-relaxed text-white tracking-tight">{q.question_text}</h2>
+                    </div>
+
+                    <div className="flex-1 px-8 py-6">
+                      {q.userAnswer ? (
+                        <div className="space-y-4">
+                          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                            <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">Your Answer</p>
+                            <p className="text-sm text-white/80 leading-relaxed">{q.userAnswer}</p>
+                          </div>
+                          {q.feedback && (
+                            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                              <p className="text-[10px] text-white/30 uppercase tracking-widest font-semibold mb-2">AI Feedback</p>
+                              <p className="text-sm text-white/70 leading-relaxed">{q.feedback}</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex-1 flex flex-col gap-3">
+                          <textarea
+                            id={`baseline-answer-${q.id}`}
+                            placeholder="Type your answer..."
+                            className="flex-1 w-full bg-white/[0.02] border border-white/[0.08] rounded-xl p-4 resize-none focus:outline-none focus:border-white/20 text-sm text-white placeholder:text-white/20 transition-colors min-h-[120px]"
+                            onKeyDown={(e) => {
+                              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                                e.preventDefault();
+                                const el = e.currentTarget;
+                                if (el.value.trim()) void handleAnswer(q.id, el.value);
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              const el = document.getElementById(`baseline-answer-${q.id}`) as HTMLTextAreaElement;
+                              if (el?.value.trim()) void handleAnswer(q.id, el.value);
+                            }}
+                            disabled={isEvaluating}
+                            className="self-end px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact flex items-center gap-2 disabled:opacity-50"
+                          >
+                            Submit <kbd className="hidden md:inline-flex px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono text-white/40 border border-white/[0.06]">⌘↵</kbd>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card navigation footer */}
+                  <div className="shrink-0 px-8 py-3 border-t border-white/[0.04] flex items-center justify-between">
+                    <button onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))} disabled={currentIndex === 0}
+                      className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
+                      <ChevronLeft className="w-3.5 h-3.5" /><span className="hidden md:inline">Prev</span>
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {questions.map((_, i) => (
+                        <button key={i} onClick={() => setCurrentIndex(i)}
+                          className={`w-1.5 h-1.5 rounded-full transition-all spring-interact ${i === currentIndex ? 'bg-white/80 w-3' : i < currentIndex ? 'bg-white/25' : 'bg-white/10'}`} />
+                      ))}
+                    </div>
+                    <button onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))} disabled={currentIndex >= questions.length - 1}
+                      className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
+                      <span className="hidden md:inline">Next</span><ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            );
+          })}
+
+          {/* Generating placeholder card */}
+          {isLoading && questions.length < 5 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{
+                opacity: 0.2,
+                x: (arenaW / 2 - 90) + Math.min(questions.length - currentIndex - 1, STACK_VISIBLE) * 16 - 65,
+                y: -85,
+                rotate: 2,
+                scale: 1 - Math.min(questions.length - currentIndex, STACK_VISIBLE) * 0.06,
+              }}
+              transition={SPRING_SNAPPY}
+              className="absolute top-1/2 left-1/2 w-[130px] h-[170px] rounded-2xl border border-dashed border-white/10 bg-[#0D0D0D] flex items-center justify-center"
+            >
+              <Loader2 className="w-4 h-4 animate-spin text-white/20" />
+            </motion.div>
+          )}
         </div>
       )}
-    </motion.div>
+
+      {error && <p className="text-sm text-red-500 pt-2">{error}</p>}
+    </div>
   );
 }
 
@@ -337,7 +613,50 @@ function LessonPhase({
     feedback_block: string;
   } | null>(null);
   const [isLessonComplete, setIsLessonComplete] = useState(false);
+  const [pendingContinueInput, setPendingContinueInput] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
+
+  const lessonMessages = useQuery(
+    api.courseLessonMessages.getForLesson,
+    currentLesson ? { lessonId: currentLesson._id as Id<"courseLessons"> } : "skip"
+  );
+
+  useEffect(() => {
+    if (initialized || !lessonMessages) return;
+
+    if (lessonMessages.length > 0) {
+      // Restore messages from DB
+      const restored = lessonMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        messageType: m.messageType ?? undefined,
+      }));
+      setMessages(restored);
+
+      // Restore input request state from last message
+      const lastTeacherMsg = [...lessonMessages].reverse().find((m) => m.role === "teacher");
+      if (lastTeacherMsg?.messageType === "input_request") {
+        const match = lastTeacherMsg.content.match(
+          /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/
+        );
+        if (match) {
+          setCurrentInputRequest({
+            type: match[1]!.trim(),
+            question: match[2]!.trim(),
+            expectedAnswer: match[3]?.trim() ?? "",
+          });
+        }
+      }
+
+      // Check if lesson was already completed
+      if (lastTeacherMsg?.messageType === "lesson_complete") {
+        setIsLessonComplete(true);
+      }
+    }
+
+    setInitialized(true);
+  }, [lessonMessages, initialized]);
 
   const teach = useCallback(async (userMessage?: string) => {
     if (!currentLesson) return;
@@ -345,21 +664,84 @@ function LessonPhase({
     setError(null);
     setLastVerification(null);
 
+    // Add user message to local state immediately
+    if (userMessage) {
+      setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    }
+
+    // Add empty teacher message that we'll stream into
+    setMessages((prev) => [...prev, { role: "teacher", content: "", messageType: "narrative" }]);
+
     try {
-      const result = await teachLessonAction(currentLesson._id, userMessage);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      const res = await fetch("/api/learn/teach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lessonId: currentLesson._id, userMessage }),
+      });
+
+      if (!res.ok) {
+        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errBody.error ?? `Server error (${res.status})`);
       }
 
-      setMessages((prev) => [
-        ...prev,
-        ...(userMessage ? [{ role: "user", content: userMessage }] : []),
-        { role: "teacher", content: result.data.teacherResponse, messageType: result.data.inputRequest ? "input_request" : "narrative" },
-      ]);
+      if (!res.body) throw new Error("No stream body");
 
-      setCurrentInputRequest(result.data.inputRequest);
-      setIsLessonComplete(result.data.isComplete);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const payload = JSON.parse(line.slice(6)) as {
+              type: string;
+              text?: string;
+              error?: string;
+              isComplete?: boolean;
+              inputRequest?: { type: string; question: string; expectedAnswer: string } | null;
+              fullText?: string;
+            };
+
+            if (payload.type === "delta" && payload.text) {
+              setMessages((prev) => {
+                const updated = [...prev];
+                const lastTeacher = updated[updated.length - 1];
+                if (lastTeacher && lastTeacher.role === "teacher") {
+                  updated[updated.length - 1] = {
+                    ...lastTeacher,
+                    content: lastTeacher.content + payload.text,
+                  };
+                }
+                return updated;
+              });
+            } else if (payload.type === "done") {
+              setMessages((prev) => {
+                const updated = [...prev];
+                const lastTeacher = updated[updated.length - 1];
+                if (lastTeacher && lastTeacher.role === "teacher") {
+                  updated[updated.length - 1] = {
+                    ...lastTeacher,
+                    content: payload.fullText ?? lastTeacher.content,
+                    messageType: payload.inputRequest ? "input_request" : payload.isComplete ? "lesson_complete" : "narrative",
+                  };
+                }
+                return updated;
+              });
+              setCurrentInputRequest(payload.inputRequest ?? null);
+              setIsLessonComplete(payload.isComplete ?? false);
+            } else if (payload.type === "error") {
+              setError(payload.error ?? "Teaching failed");
+            }
+          } catch { /* skip malformed SSE */ }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Teaching failed");
     } finally {
@@ -367,13 +749,13 @@ function LessonPhase({
     }
   }, [currentLesson]);
 
-  // Start teaching on mount
+  // Start teaching on mount only if no DB messages
   useEffect(() => {
-    if (currentLesson && messages.length === 0) {
+    if (currentLesson && initialized && messages.length === 0) {
       void teach();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [initialized]);
 
   const handleSubmitInput = async () => {
     if (!userInput.trim() || !currentInputRequest || !currentLesson) return;
@@ -404,15 +786,14 @@ function LessonPhase({
     }
 
     setCurrentInputRequest(null);
-
-    // Continue teaching
-    await teach(input);
+    setPendingContinueInput(input);
   };
 
   const handleSummarize = async () => {
     if (!currentLesson) return;
     setIsTeaching(true);
     try {
+      await completeLessonAction(currentLesson._id);
       await summarizeLessonAction(currentLesson._id);
       await advanceCourseAction(courseId);
     } catch (err) {
@@ -428,47 +809,29 @@ function LessonPhase({
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      {/* Module / Lesson header */}
-      <div className="space-y-1">
-        <p className="text-[10px] font-mono uppercase tracking-widest text-secondary">
-          Module {currentModuleIndex + 1}: {currentModule.moduleTitle}
-        </p>
-        <h2 className="text-lg font-medium text-primary">
-          Lesson {currentLessonIndex + 1}: {currentLesson.title}
-        </h2>
-        <p className="text-xs text-tertiary">{currentLesson.focusArea}</p>
-      </div>
+      {/* Lesson title */}
+      <h2 className="text-xl font-semibold text-primary tracking-tight">{currentLesson.title}</h2>
 
-      {/* Lesson progress */}
-      <div className="flex gap-1">
-        {moduleLessons.map((l, i) => (
-          <div
-            key={l._id}
-            className={`h-1 flex-1 rounded-full ${
-              i < currentLessonIndex ? "bg-emerald-500" : i === currentLessonIndex ? "bg-white" : "bg-white/10"
-            }`}
-          />
-        ))}
-      </div>
-
-      {/* Chat messages */}
-      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+      {/* Lesson content */}
+      <div className="space-y-5 overflow-y-auto pr-2">
         {messages.map((msg, i) => (
           <motion.div
             key={i}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`rounded-xl px-4 py-3 text-sm ${
+            className={
               msg.role === "teacher"
-                ? "bg-white/[0.03] border border-white/10 text-primary"
+                ? "text-sm text-white/85 leading-relaxed"
                 : msg.role === "user"
-                ? "bg-white/10 text-primary ml-8"
+                ? "text-sm bg-white/[0.06] border border-white/[0.08] rounded-xl px-4 py-3 text-white/80 ml-6"
                 : msg.messageType === "verification"
-                ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs"
-                : "bg-white/[0.02] text-secondary text-xs"
-            }`}
+                ? "text-xs bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 text-emerald-300"
+                : "text-xs text-white/50"
+            }
           >
-            <div className="whitespace-pre-wrap">{msg.content}</div>
+            <div className="whitespace-pre-wrap leading-relaxed">
+              {msg.role === "teacher" ? renderMarkdown(stripProtocolTokens(msg.content)) : msg.content}
+            </div>
           </motion.div>
         ))}
 
@@ -484,9 +847,9 @@ function LessonPhase({
 
       {/* Input area */}
       {currentInputRequest && !isTeaching && (
-        <div className="glass-card rounded-xl p-4 space-y-3">
-          <p className="text-xs font-mono uppercase tracking-widest text-secondary">
-            {currentInputRequest.type}
+        <div className="border-l-2 border-white/20 pl-4 space-y-3">
+          <p className="text-xs text-white/50">
+            {currentInputRequest.question}
           </p>
           <div className="flex gap-2">
             <input
@@ -512,7 +875,11 @@ function LessonPhase({
       {/* Continue teaching button */}
       {!currentInputRequest && !isTeaching && !isLessonComplete && messages.length > 0 && (
         <button
-          onClick={() => teach()}
+          onClick={() => {
+            const input = pendingContinueInput;
+            setPendingContinueInput(null);
+            void teach(input ?? undefined);
+          }}
           className="w-full bg-white/5 border border-white/10 text-primary font-medium py-3 rounded-xl spring-interact hover:bg-white/10 text-sm"
         >
           Continue Lesson →
@@ -568,7 +935,7 @@ function SummaryPhase({
       {currentLesson?.summaryMarkdown ? (
         <div className="glass-card rounded-2xl p-6">
           <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-sm text-primary/90">
-            {currentLesson.summaryMarkdown}
+            {renderMarkdown(currentLesson.summaryMarkdown)}
           </div>
         </div>
       ) : (
