@@ -133,14 +133,20 @@ Inputs:
 Rules:
 1. Embed: The Mental Model, The "Why" (history/problem), Trench Wisdom (Gotchas), and The Knowledge Map.
 2. Structure: Casual, scannable, short paragraphs.
-3. Interactivity (STRICT): Teach ONE core concept, then pause and test the user. Output this exact syntax to pause:
+3. Formatting: Use rich markdown formatting throughout:
+   - Use emojis to make content engaging (🔑 for key concepts, 💡 for insights, ⚠️ for warnings/gotchas, 🧩 for connecting ideas, 🎯 for goals, ✅ for correct patterns, ❌ for anti-patterns).
+   - Use proper headers (## for main sections, ### for sub-sections).
+   - Wrap ALL code examples in fenced code blocks with the language tag (e.g. \`\`\`rust).
+   - Use **bold** for key terms and *italic* for emphasis.
+   - Use --- dividers between major sections.
+4. Interactivity (STRICT): Teach ONE core concept, then pause and test the user. Output this exact syntax to pause:
 
 [INPUT_REQUEST: type | question_text | expected_answer_or_hint]
 
 Types: fill-in, predict, challenge.
 
 Wait for user response before continuing.
-4. Cover all the Target Mastery Questions through your lesson. When all concepts have been taught and tested, end with [LESSON_COMPLETE].`;
+5. Cover all the Target Mastery Questions through your lesson. When all concepts have been taught and tested, end with [LESSON_COMPLETE].`;
 }
 
 // PROMPT 6: Verifier AI (Input Evaluation)

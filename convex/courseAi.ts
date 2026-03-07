@@ -610,7 +610,7 @@ export const verifyInput = action({
       courseId: lesson.courseId,
       lessonId: args.lessonId,
       role: "system",
-      content: JSON.stringify(parsed),
+      content: parsed.feedback_block,
       messageType: "verification",
     });
 

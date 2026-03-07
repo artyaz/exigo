@@ -24,7 +24,7 @@ import {
 /* ─── Basic markdown renderer ─── */
 function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
   const result: ReactNode[] = [];
-  const tokenRegex = /(\*\*(.+?)\*\*|`(.+?)`|\*([^*]+?)\*)/g;
+  const tokenRegex = /(\*\*(.+?)\*\*|`(.+?)`|\*([^*]+?)\*|\[([^\]]+)\]\(([^)]+)\))/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let partIdx = 0;
@@ -40,6 +40,8 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
       result.push(<code key={key} className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-white/90 border border-white/[0.06]">{match[3]}</code>);
     } else if (match[4] !== undefined) {
       result.push(<em key={key} className="italic text-white/80">{match[4]}</em>);
+    } else if (match[5] !== undefined && match[6] !== undefined) {
+      result.push(<a key={key} href={match[6]} target="_blank" rel="noopener noreferrer" className="text-blue-400/80 hover:text-blue-300 underline underline-offset-2">{match[5]}</a>);
     }
     lastIndex = match.index + match[0].length;
   }
@@ -50,41 +52,100 @@ function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
 }
 
 function renderMarkdown(text: string): ReactNode[] {
-  const lines = text.split("\n");
   const result: ReactNode[] = [];
 
-  lines.forEach((line, lineIdx) => {
-    if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
+  // First pass: split by fenced code blocks
+  const blocks = text.split(/(```[\s\S]*?```)/g);
+  let blockIdx = 0;
 
-    // Headers
-    const h3Match = /^###\s+(.*)/.exec(line);
-    if (h3Match) {
-      result.push(<span key={`h3-${lineIdx}`} className="block text-sm font-semibold text-white mt-4 mb-1">{renderInlineMarkdown(h3Match[1] ?? "", `${lineIdx}`)}</span>);
-      return;
-    }
-    const h2Match = /^##\s+(.*)/.exec(line);
-    if (h2Match) {
-      result.push(<span key={`h2-${lineIdx}`} className="block text-base font-semibold text-white mt-5 mb-2">{renderInlineMarkdown(h2Match[1] ?? "", `${lineIdx}`)}</span>);
-      return;
-    }
-
-    // Bullet list
-    const bulletMatch = /^(\s*)[*-]\s+(.*)/.exec(line);
-    if (bulletMatch) {
-      const indent = bulletMatch[1] ?? "";
-      const content = bulletMatch[2] ?? "";
+  for (const block of blocks) {
+    const codeMatch = /^```(\w+)?\n([\s\S]*?)```$/.exec(block);
+    if (codeMatch) {
+      const lang = codeMatch[1];
+      const code = codeMatch[2] ?? "";
       result.push(
-        <span key={`li-${lineIdx}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
-          <span className="text-white/40 select-none shrink-0">•</span>
-          <span>{renderInlineMarkdown(content, `${lineIdx}`)}</span>
-        </span>
+        <div key={`codeblock-${blockIdx}`} className="relative my-3">
+          {lang && (
+            <span className="absolute top-2 right-3 text-[10px] font-mono text-white/30 select-none">{lang}</span>
+          )}
+          <pre className="bg-[#0D0D0D] border border-white/[0.06] rounded-xl p-4 overflow-x-auto text-[13px] font-mono text-white/80">
+            <code>{code}</code>
+          </pre>
+        </div>
       );
-      return;
+      blockIdx++;
+      continue;
     }
 
-    // Regular line
-    result.push(...renderInlineMarkdown(line, `${lineIdx}`));
-  });
+    // Non-code block: process line by line
+    const lines = block.split("\n");
+    lines.forEach((line, lineIdx) => {
+      const key = `${blockIdx}-${lineIdx}`;
+      if (lineIdx > 0) result.push(<br key={`br-${key}`} />);
+
+      // Horizontal divider
+      if (/^---+\s*$/.test(line)) {
+        result.push(<hr key={`hr-${key}`} className="border-white/[0.06] my-4" />);
+        return;
+      }
+
+      // Headers (check longest first)
+      const h4Match = /^####\s+(.*)/.exec(line);
+      if (h4Match) {
+        result.push(<span key={`h4-${key}`} className="block text-sm font-medium text-white/90 mt-3 mb-1">{renderInlineMarkdown(h4Match[1] ?? "", key)}</span>);
+        return;
+      }
+      const h3Match = /^###\s+(.*)/.exec(line);
+      if (h3Match) {
+        result.push(<span key={`h3-${key}`} className="block text-sm font-semibold text-white mt-4 mb-1">{renderInlineMarkdown(h3Match[1] ?? "", key)}</span>);
+        return;
+      }
+      const h2Match = /^##\s+(.*)/.exec(line);
+      if (h2Match) {
+        result.push(<span key={`h2-${key}`} className="block text-base font-semibold text-white mt-5 mb-2">{renderInlineMarkdown(h2Match[1] ?? "", key)}</span>);
+        return;
+      }
+      const h1Match = /^#\s+(.*)/.exec(line);
+      if (h1Match) {
+        result.push(<span key={`h1-${key}`} className="block text-lg font-bold text-white mt-6 mb-2">{renderInlineMarkdown(h1Match[1] ?? "", key)}</span>);
+        return;
+      }
+
+      // Ordered list
+      const orderedMatch = /^(\s*)\d+\.\s+(.*)/.exec(line);
+      if (orderedMatch) {
+        const indent = orderedMatch[1] ?? "";
+        const content = orderedMatch[2] ?? "";
+        const num = line.trimStart().match(/^(\d+)\./)?.[1] ?? "1";
+        result.push(
+          <span key={`ol-${key}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
+            <span className="text-white/40 select-none shrink-0">{num}.</span>
+            <span>{renderInlineMarkdown(content, key)}</span>
+          </span>
+        );
+        return;
+      }
+
+      // Bullet list
+      const bulletMatch = /^(\s*)[*-]\s+(.*)/.exec(line);
+      if (bulletMatch) {
+        const indent = bulletMatch[1] ?? "";
+        const content = bulletMatch[2] ?? "";
+        result.push(
+          <span key={`li-${key}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
+            <span className="text-white/40 select-none shrink-0">•</span>
+            <span>{renderInlineMarkdown(content, key)}</span>
+          </span>
+        );
+        return;
+      }
+
+      // Regular line
+      result.push(...renderInlineMarkdown(line, key));
+    });
+
+    blockIdx++;
+  }
 
   return result;
 }
@@ -130,22 +191,24 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
     <div className="min-h-screen bg-black text-white p-6 md:p-12">
       <div className="max-w-3xl mx-auto space-y-8">
         {/* Header */}
-        <header className="flex items-center gap-4">
-          <Link
-            href={`/spaces/${spaceId}`}
-            className="p-2 -ml-2 rounded-xl text-secondary hover:text-primary hover:bg-white/5 spring-interact"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-primary">{course.refinedTitle}</h1>
-            <p className="text-sm text-secondary">{course.courseDescription}</p>
-          </div>
-        </header>
+        {course.phase !== "baseline" && (
+          <header className="flex items-center gap-4">
+            <Link
+              href={`/spaces/${spaceId}`}
+              className="p-2 -ml-2 rounded-xl text-secondary hover:text-primary hover:bg-white/5 spring-interact"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-primary">{course.refinedTitle}</h1>
+              <p className="text-sm text-secondary">{course.courseDescription}</p>
+            </div>
+          </header>
+        )}
 
         {/* Phase-specific content */}
         {course.phase === "baseline" && (
-          <BaselinePhase courseId={courseId} courseTopic={course.refinedTitle} />
+          <BaselinePhase courseId={courseId} courseTopic={course.refinedTitle} baselineResults={course.baselineResults} />
         )}
 
         {(course.phase === "module_generation" || course.phase === "module_complete") && (
@@ -183,7 +246,7 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
 }
 
 // ─── Baseline Phase ───
-function BaselinePhase({ courseId, courseTopic }: { courseId: string; courseTopic: string }) {
+function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: string; courseTopic: string; baselineResults?: string }) {
   const SPRING_SNAPPY = { type: "spring" as const, stiffness: 500, damping: 30 };
   const STACK_VISIBLE = 3;
 
@@ -213,6 +276,12 @@ function BaselinePhase({ courseId, courseTopic }: { courseId: string; courseTopi
   const [arenaH, setArenaH] = useState(600);
 
   useEffect(() => {
+    if (baselineResults) {
+      void advanceCourseAction(courseId).catch(() => {});
+    }
+  }, [baselineResults, courseId]);
+
+  useEffect(() => {
     if (!arenaRef.current) return;
     const ro = new ResizeObserver(entries => {
       if (!entries?.[0]) return;
@@ -238,7 +307,7 @@ function BaselinePhase({ courseId, courseTopic }: { courseId: string; courseTopi
       if (!result.ok) { setError(result.error); return; }
 
       const newQ = {
-        id: `baseline-${step}`,
+        id: `baseline-${step}-${Math.random().toString(36).slice(2, 8)}`,
         question_text: result.data.question_text,
         reference_answer: result.data.reference_answer,
         concept_tag: result.data.concept_tag,
@@ -255,6 +324,15 @@ function BaselinePhase({ courseId, courseTopic }: { courseId: string; courseTopi
     void generateNextQuestion([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  if (baselineResults) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-white/30" />
+        <p className="text-sm text-secondary">Loading your course...</p>
+      </div>
+    );
+  }
 
   const handleAnswer = async (questionId: string, answer: string) => {
     if (!answer.trim()) return;
@@ -658,14 +736,14 @@ function LessonPhase({
     setInitialized(true);
   }, [lessonMessages, initialized]);
 
-  const teach = useCallback(async (userMessage?: string) => {
+  const teach = useCallback(async (userMessage?: string, skipLocalMessage?: boolean) => {
     if (!currentLesson) return;
     setIsTeaching(true);
     setError(null);
     setLastVerification(null);
 
     // Add user message to local state immediately
-    if (userMessage) {
+    if (userMessage && !skipLocalMessage) {
       setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     }
 
@@ -878,7 +956,7 @@ function LessonPhase({
           onClick={() => {
             const input = pendingContinueInput;
             setPendingContinueInput(null);
-            void teach(input ?? undefined);
+            void teach(input ?? undefined, !!input);
           }}
           className="w-full bg-white/5 border border-white/10 text-primary font-medium py-3 rounded-xl spring-interact hover:bg-white/10 text-sm"
         >

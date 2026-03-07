@@ -1031,7 +1031,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                             transition={{ duration: 0.15 }}
                             className="flex flex-col gap-6"
                         >
-                            <LearnTab spaceId={spaceId} userId={userId ?? ""} />
+                            <LearnTab spaceId={spaceId} userId={userId ?? ""} spaceName={space?.name ?? ""} />
                         </motion.div>
                     )}
                 </AnimatePresence>
