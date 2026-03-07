@@ -28,14 +28,19 @@ export function buildSequentialDiagnosticPrompt(
   targetAudienceLevel: string,
   currentStep: number,
   previousQuestions: string[],
+  previousResults?: Array<{ question: string; isCorrect: boolean; feedback?: string }>,
 ): string {
+  const resultsContext = previousResults && previousResults.length > 0
+    ? `\n[Previous Answer Results]: ${JSON.stringify(previousResults)}\n\nIMPORTANT: Adapt difficulty based on the student's performance. If they struggled with previous questions, make this question slightly easier to match their level. If they answered correctly, maintain or increase difficulty.`
+    : "";
+
   return `You are an expert educational assessor generating a dynamic, 5-question baseline test. Your goal is to generate the NEXT open-ended question in the sequence to map the user's knowledge.
 
 Inputs:
 [Course Topic]: ${courseTopic}
 [Target Audience Level]: ${targetAudienceLevel}
 [Current Step]: ${currentStep}
-[Previously Generated Questions]: ${JSON.stringify(previousQuestions)}
+[Previously Generated Questions]: ${JSON.stringify(previousQuestions)}${resultsContext}
 
 Rules:
 1. Progressive Difficulty Map:
@@ -47,6 +52,7 @@ Rules:
 2. Context Awareness: Do NOT repeat concepts or scenarios from the previous questions array.
 3. Questions should require 1-3 sentence written answers. No multiple choice.
 4. Include a reference answer for grading purposes.
+5. If previous results show the student is struggling, balance the difficulty to their demonstrated level rather than strictly following the step difficulty map.
 
 Output Format (Strict JSON ONLY):
 {

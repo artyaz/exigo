@@ -149,6 +149,11 @@ export const generateBaselineQuestion = action({
     courseTopic: v.string(),
     currentStep: v.number(),
     previousQuestions: v.array(v.string()),
+    previousResults: v.optional(v.array(v.object({
+      question: v.string(),
+      isCorrect: v.boolean(),
+      feedback: v.optional(v.string()),
+    }))),
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContextForAction(ctx);
@@ -161,6 +166,7 @@ export const generateBaselineQuestion = action({
       "intermediate",
       args.currentStep,
       args.previousQuestions,
+      args.previousResults,
     );
 
     const startedAt = Date.now();
@@ -676,7 +682,13 @@ export const summarizeLesson = action({
       latencySeconds: (Date.now() - startedAt) / 1000,
     });
 
-    const summaryMarkdown = response.text?.trim() ?? "";
+    const rawSummary = response.text?.trim() ?? "";
+
+    // Post-process: strip any strengths/weaknesses sections the AI may include despite prompt
+    const summaryMarkdown = rawSummary
+      .replace(/(?:^|\n)#+\s*(?:Strengths?|Weaknesses?|Areas?\s+(?:of\s+)?(?:Strength|Weakness|Improvement)|What\s+(?:Went\s+)?Well|(?:Areas?\s+)?(?:to\s+)?Improve).*?(?=\n#|\n\*\*[A-Z]|\n---|\Z)/gis, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
 
     // Save summary to lesson
     await ctx.runMutation(internal.courseLessons.updateSummaryInternal, {

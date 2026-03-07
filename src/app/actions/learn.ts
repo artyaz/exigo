@@ -78,6 +78,7 @@ export async function generateBaselineQuestionAction(
   courseTopic: string,
   currentStep: number,
   previousQuestions: string[],
+  previousResults?: Array<{ question: string; isCorrect: boolean; feedback?: string }>,
 ): Promise<ActionResult<{
   question_id: number;
   question_text: string;
@@ -94,6 +95,7 @@ export async function generateBaselineQuestionAction(
       courseTopic,
       currentStep,
       previousQuestions,
+      previousResults,
     });
     return { ok: true, data: result };
   } catch (error) {
