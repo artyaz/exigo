@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Loader2, CheckCircle2, ChevronRight, ChevronLeft,
-  CornerDownLeft, XCircle, SkipForward,
+  CornerDownLeft, XCircle, SkipForward, Zap, BookOpen
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -215,7 +215,16 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
   const spaceQuestions = useQuery(api.questions.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
   const pieces = useQuery(api.knowledgePieces.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
 
-  const [activeTab, setActiveTab] = useState<"lesson" | "tests">("lesson");
+  const [activeTab, setActiveTab] = useState<"lesson" | "summary" | "tests">("lesson");
+
+  // Auto-switch to summary when lesson is summarized
+  useEffect(() => {
+    if (course?.phase === "lesson_summary" || course?.phase === "completed") {
+        setActiveTab("summary");
+    } else if (course?.phase === "lesson") {
+        setActiveTab("lesson");
+    }
+  }, [course?.phase]);
 
   const toggleFocusMode = useCallback(() => {
     setFocusModeEnabled((previousValue) => !previousValue);
@@ -300,18 +309,26 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
         {(course.phase === "lesson" || course.phase === "lesson_summary") && lessons && modules && resolvedIndices && (
           <>
             {/* Tab navigation */}
-            <div className="flex gap-4 border-b border-white/10 pb-3 mb-6">
+            <div className="flex gap-4 border-b border-white/10 pb-3 mb-6 overflow-x-auto hide-scrollbar">
                 <button
                     onClick={() => setActiveTab("lesson")}
-                    className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 ${activeTab === "lesson" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                    className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 whitespace-nowrap ${activeTab === "lesson" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
                 >
-                    <FileText className="w-3.5 h-3.5" /> Lesson
+                    <Zap className="w-3.5 h-3.5" /> Lesson Content
                 </button>
+                {course.phase === "lesson_summary" && (
+                    <button
+                        onClick={() => setActiveTab("summary")}
+                        className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 whitespace-nowrap ${activeTab === "summary" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                    >
+                        <BookOpen className="w-3.5 h-3.5" /> Summary
+                    </button>
+                )}
                 <button
                     onClick={() => setActiveTab("tests")}
-                    className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 ${activeTab === "tests" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                    className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 whitespace-nowrap ${activeTab === "tests" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
                 >
-                    <Target className="w-3.5 h-3.5" /> Tests
+                    <FileText className="w-3.5 h-3.5" /> Tests
                 </button>
             </div>
 
@@ -324,7 +341,6 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
                 >
-                  {course.phase === "lesson" ? (
                     <LessonPhase
                       courseId={courseId}
                       currentModuleIndex={resolvedIndices.moduleIndex}
@@ -334,7 +350,15 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
                       modules={modules}
                       lessons={lessons}
                     />
-                  ) : (
+                </motion.div>
+              ) : activeTab === "summary" ? (
+                <motion.div
+                  key="summary-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
                     <SummaryPhase
                       courseId={courseId}
                       currentLessonIndex={resolvedIndices.lessonIndex}
@@ -342,7 +366,6 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
                       onToggleFocusMode={toggleFocusMode}
                       lessons={lessons}
                     />
-                  )}
                 </motion.div>
               ) : (
                 <motion.div
