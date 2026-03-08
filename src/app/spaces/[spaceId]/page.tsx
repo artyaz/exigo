@@ -82,8 +82,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     // Main tabs — honour ?tab= param from learn page back link
     const [mainTab, setMainTab] = useState<"tests" | "knowledge" | "learn">(() => {
       const tab = searchParams.get("tab");
-      if (tab === "learn" || tab === "knowledge") return tab;
-      return "tests";
+      if (tab === "tests" || tab === "knowledge") return tab;
+      return "learn";
     });
 
     // Knowledge sub-mode
@@ -351,6 +351,16 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 {/* Tab bar */}
                 <div className="flex items-center gap-1 border-b border-white/10">
                     <button
+                        onClick={() => setMainTab("learn")}
+                        className={`px-4 py-2.5 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${mainTab === "learn"
+                            ? "border-white text-primary"
+                            : "border-transparent text-secondary hover:text-primary"
+                            }`}
+                    >
+                        <Zap className="w-3.5 h-3.5" />
+                        Learn
+                    </button>
+                    <button
                         onClick={() => setMainTab("tests")}
                         className={`px-4 py-2.5 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${mainTab === "tests"
                             ? "border-white text-primary"
@@ -375,16 +385,6 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                         {pieces && pieces.length > 0 && (
                             <span className="text-[10px] font-mono text-tertiary bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-md">{pieces.length}</span>
                         )}
-                    </button>
-                    <button
-                        onClick={() => setMainTab("learn")}
-                        className={`px-4 py-2.5 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${mainTab === "learn"
-                            ? "border-white text-primary"
-                            : "border-transparent text-secondary hover:text-primary"
-                            }`}
-                    >
-                        <Zap className="w-3.5 h-3.5" />
-                        Learn
                     </button>
                 </div>
 
