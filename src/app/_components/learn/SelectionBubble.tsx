@@ -58,14 +58,15 @@ export function SelectionBubble({
             exit={{ scale: 0.5, opacity: 0, y: -8 }}
             transition={BOUNCE_SPRING}
         >
-            {/* Pointer arrow */}
-            <div className="flex justify-center -mb-[1px]">
-                <div className="w-3 h-3 rotate-45 bg-neutral-900 border-t border-l border-white/[0.08]" />
-            </div>
+            <div 
+                className="absolute z-10 -top-[5px] left-1/2 -translate-x-1/2 w-[11px] h-[11px] rotate-45 border-t border-l border-[rgba(255,255,255,0.08)]"
+                style={{ backgroundColor: "#171717", borderBottom: "none", borderRight: "none" }}
+            />
 
             <form
                 onSubmit={handleSubmit}
-                className="bg-neutral-900 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-xl p-2 flex flex-col gap-2 min-w-[320px] max-w-[420px]"
+                className="relative z-0 bg-neutral-900 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-xl p-2 flex flex-col gap-2 min-w-[320px] max-w-[420px]"
+                style={{ backgroundColor: "#171717" }}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
             >

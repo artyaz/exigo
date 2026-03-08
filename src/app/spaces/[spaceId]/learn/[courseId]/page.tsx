@@ -5,12 +5,13 @@ import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import { useState, useEffect, useLayoutEffect, useRef, use, useCallback, useMemo, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Loader2, CheckCircle2, ChevronRight, ChevronLeft,
   CornerDownLeft, XCircle, SkipForward,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import {
   generateBaselineQuestionAction,
@@ -24,6 +25,9 @@ import {
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
 import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
 import { ClarificationThread, type ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
+import { TestGrid } from "~/app/_components/tests/TestGrid";
+import { TestGenerateButton } from "~/app/_components/tests/TestGenerateButton";
+import { FileText, Target } from "lucide-react";
 
 /* ─── Lesson section parser ─── */
 interface LessonSection {
@@ -168,11 +172,50 @@ function FocusModeToggle({ enabled, onToggle }: { enabled: boolean; onToggle: ()
 export default function CoursePage({ params }: { params: Promise<{ spaceId: string; courseId: string }> }) {
   const { userId } = useAuth();
   const { spaceId, courseId } = use(params);
+  const searchParams = useSearchParams();
+  const requestedLessonId = searchParams.get("lessonId");
   const [focusModeEnabled, setFocusModeEnabled] = useState(false);
 
   const course = useQuery(api.courses.get, userId ? { courseId: courseId as Id<"courses"> } : "skip");
   const modules = useQuery(api.courseModules.getForCourse, userId ? { courseId: courseId as Id<"courses"> } : "skip");
   const lessons = useQuery(api.courseLessons.getForCourse, userId ? { courseId: courseId as Id<"courses"> } : "skip");
+
+  // Determine which lesson/module to actually show.
+  // By default, it's the user's active progress (`course.current...`).
+  // But if there's a specific `?lessonId=...` requested in the URL, override it.
+  const resolvedIndices = useMemo(() => {
+    if (!course || !lessons || !modules) return null;
+    
+    if (requestedLessonId) {
+      const requestedLesson = lessons.find(l => l._id === requestedLessonId);
+      if (requestedLesson) {
+        // Find which module this lesson belongs to
+        const parentModule = modules.find(m => m._id === requestedLesson.moduleId);
+        if (parentModule) {
+          return {
+            moduleIndex: parentModule.moduleIndex,
+            lessonIndex: requestedLesson.lessonIndex,
+          };
+        }
+      }
+    }
+    
+    return {
+      moduleIndex: course.currentModuleIndex,
+      lessonIndex: course.currentLessonIndex,
+    };
+  }, [course, lessons, modules, requestedLessonId]);
+
+  const activeLesson = useMemo(() => {
+    if (!lessons || !resolvedIndices) return null;
+    return lessons[resolvedIndices.lessonIndex] ?? null;
+  }, [lessons, resolvedIndices]);
+
+  const spaceTests = useQuery(api.tests.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
+  const spaceQuestions = useQuery(api.questions.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
+  const pieces = useQuery(api.knowledgePieces.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
+
+  const [activeTab, setActiveTab] = useState<"lesson" | "tests">("lesson");
 
   const toggleFocusMode = useCallback(() => {
     setFocusModeEnabled((previousValue) => !previousValue);
@@ -254,26 +297,86 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
           <GeneratingPhase courseId={courseId} phase={course.phase} />
         )}
 
-        {course.phase === "lesson" && lessons && modules && (
-          <LessonPhase
-            courseId={courseId}
-            currentModuleIndex={course.currentModuleIndex}
-            currentLessonIndex={course.currentLessonIndex}
-            focusModeEnabled={focusModeEnabled}
-            onToggleFocusMode={toggleFocusMode}
-            modules={modules}
-            lessons={lessons}
-          />
-        )}
+        {(course.phase === "lesson" || course.phase === "lesson_summary") && lessons && modules && resolvedIndices && (
+          <>
+            {/* Tab navigation */}
+            <div className="flex gap-4 border-b border-white/10 pb-3 mb-6">
+                <button
+                    onClick={() => setActiveTab("lesson")}
+                    className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 ${activeTab === "lesson" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                >
+                    <FileText className="w-3.5 h-3.5" /> Lesson
+                </button>
+                <button
+                    onClick={() => setActiveTab("tests")}
+                    className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 ${activeTab === "tests" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                >
+                    <Target className="w-3.5 h-3.5" /> Tests
+                </button>
+            </div>
 
-        {course.phase === "lesson_summary" && lessons && (
-          <SummaryPhase
-            courseId={courseId}
-            currentLessonIndex={course.currentLessonIndex}
-            focusModeEnabled={focusModeEnabled}
-            onToggleFocusMode={toggleFocusMode}
-            lessons={lessons}
-          />
+            <AnimatePresence mode="wait">
+              {activeTab === "lesson" ? (
+                <motion.div
+                  key="lesson-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {course.phase === "lesson" ? (
+                    <LessonPhase
+                      courseId={courseId}
+                      currentModuleIndex={resolvedIndices.moduleIndex}
+                      currentLessonIndex={resolvedIndices.lessonIndex}
+                      focusModeEnabled={focusModeEnabled}
+                      onToggleFocusMode={toggleFocusMode}
+                      modules={modules}
+                      lessons={lessons}
+                    />
+                  ) : (
+                    <SummaryPhase
+                      courseId={courseId}
+                      currentLessonIndex={resolvedIndices.lessonIndex}
+                      focusModeEnabled={focusModeEnabled}
+                      onToggleFocusMode={toggleFocusMode}
+                      lessons={lessons}
+                    />
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="tests-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex flex-col gap-6"
+                >
+                  {activeLesson?.knowledgePieceId && pieces && spaceTests && spaceQuestions ? (
+                    <>
+                      <TestGenerateButton 
+                        spaceId={spaceId} 
+                        pieces={pieces} 
+                        fixedTopicId={activeLesson.knowledgePieceId} 
+                      />
+                      <div className="border-t border-white/5 my-2" />
+                      <p className="text-secondary text-sm">Tests specifically focused on this lesson's knowledge.</p>
+                      <TestGrid 
+                        spaceTests={spaceTests.filter(t => t.knowledgePieceId === activeLesson.knowledgePieceId)} 
+                        spaceQuestions={spaceQuestions} 
+                      />
+                    </>
+                  ) : (
+                    <div className="glass-card border-dashed rounded-2xl p-12 text-center flex flex-col items-center gap-3">
+                        <Loader2 className="w-8 h-8 text-white/10 animate-spin" />
+                        <p className="text-secondary text-sm">Waiting for lesson knowledge piece...</p>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
         )}
 
         {course.phase === "completed" && (
@@ -786,6 +889,8 @@ function LessonPhase({
     position: { top: number; left: number };
     sectionIndex: number;
     blockIndex: number;
+    /** If set, submission should reply to this thread instead of creating a new one */
+    replyThreadId?: string;
   } | null>(null);
   const [clarificationThreads, setClarificationThreads] = useState<Map<string, {
     quote: string;
@@ -795,6 +900,7 @@ function LessonPhase({
     messages: ClarificationMessage[];
     streamingText?: string;
     isLoading: boolean;
+    isExpanded: boolean;
   }>>(new Map());
 
   const lessonContentRef = useRef<HTMLDivElement>(null);
@@ -857,7 +963,8 @@ function LessonPhase({
       const range = selection.getRangeAt(0);
       if (!container.contains(range.commonAncestorContainer)) return;
 
-      // Check if selection is inside a clarification thread — send as follow-up
+      // Check if selection is inside a clarification thread — show the bubble
+      // but route submission as a reply to that thread instead of a new one.
       let node: Node | null = range.commonAncestorContainer;
       while (node && node !== container) {
         if (node instanceof HTMLElement && node.hasAttribute("data-clarify-thread-id")) {
@@ -865,8 +972,19 @@ function LessonPhase({
           const thread = clarificationThreads.get(existingThreadId);
           if (thread && !thread.isLoading) {
             e.preventDefault();
-            pendingInThreadReply.current = { threadId: existingThreadId, question: selectedText };
-            setClarificationThreads(prev => new Map(prev));
+            const rect = range.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            setBubbleInitialChars(e.key);
+            setSelectionState({
+              quote: selectedText,
+              position: {
+                top: rect.bottom - containerRect.top,
+                left: rect.left - containerRect.left + rect.width / 2,
+              },
+              sectionIndex: thread.sectionIndex,
+              blockIndex: thread.blockIndex,
+              replyThreadId: existingThreadId,
+            });
           }
           return;
         }
@@ -938,6 +1056,7 @@ function LessonPhase({
       blockIndex: number;
       messages: ClarificationMessage[];
       isLoading: boolean;
+      isExpanded: boolean;
     }>();
 
     for (const msg of clarificationMsgs) {
@@ -950,6 +1069,7 @@ function LessonPhase({
           blockIndex: msg.clarificationBlockIndex ?? 0,
           messages: [],
           isLoading: false,
+          isExpanded: false, // Default restored threads to collapsed
         });
       }
       threadMap.get(tid)!.messages.push({
@@ -972,9 +1092,12 @@ function LessonPhase({
             blockIndex: existing.isLoading ? existing.blockIndex : dbThread.blockIndex,
             // Keep optimistic messages while loading (Convex sync might be slightly behind)
             messages: existing.isLoading ? existing.messages : dbThread.messages,
+            // Preserve the user's expand/collapse preference across DB syncs,
+            // but only if this thread actually has history in the UI (not a fresh shell)
+            isExpanded: existing.messages.length > 0 ? existing.isExpanded : false,
           });
         } else {
-          next.set(tid, dbThread);
+          next.set(tid, { ...dbThread, isExpanded: false });
         }
       }
       return next;
@@ -1012,6 +1135,7 @@ function LessonPhase({
           messages: [{ role: "user", content: question }],
           streamingText: "",
           isLoading: true,
+          isExpanded: true,
         });
       }
       return next;
@@ -1406,7 +1530,17 @@ function LessonPhase({
             initialChars={bubbleInitialChars}
             isSubmitting={isClarifySubmitting}
             onSubmit={(question) => {
-              handleClarify(selectionState.quote, question, selectionState.sectionIndex, selectionState.blockIndex);
+              if (selectionState.replyThreadId) {
+                // Reply inside an existing thread — include the selected text as context
+                const questionWithContext = selectionState.quote
+                  ? `About: "${selectionState.quote}"\n\n${question}`
+                  : question;
+                setSelectionState(null);
+                handleClarificationReply(selectionState.replyThreadId, questionWithContext);
+              } else {
+                // New thread from lesson text
+                handleClarify(selectionState.quote, question, selectionState.sectionIndex, selectionState.blockIndex);
+              }
             }}
             onClose={() => {
               setSelectionState(null);
@@ -1446,6 +1580,15 @@ function LessonPhase({
                               streamingText={t.streamingText}
                               onReply={(q) => handleClarificationReply(t.threadId, q)}
                               isLoading={t.isLoading}
+                              isExpanded={t.isExpanded}
+                              onToggleExpanded={() => {
+                                setClarificationThreads(prev => {
+                                  const next = new Map(prev);
+                                  const thread = next.get(t.threadId);
+                                  if (thread) next.set(t.threadId, { ...thread, isExpanded: !thread.isExpanded });
+                                  return next;
+                                });
+                              }}
                             />
                           </div>
                         </div>

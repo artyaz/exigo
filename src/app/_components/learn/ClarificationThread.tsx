@@ -18,6 +18,8 @@ export interface ClarificationThreadProps {
     streamingText?: string;
     onReply: (question: string) => void;
     isLoading?: boolean;
+    isExpanded?: boolean;
+    onToggleExpanded?: () => void;
 }
 
 const THREAD_SPRING = {
@@ -33,17 +35,11 @@ export function ClarificationThread({
     streamingText,
     onReply,
     isLoading,
+    isExpanded = true,
+    onToggleExpanded,
 }: ClarificationThreadProps) {
-    const [isExpanded, setIsExpanded] = useState(true);
     const [replyText, setReplyText] = useState("");
     const bottomRef = useRef<HTMLDivElement>(null);
-
-    // Auto-scroll to bottom when streaming text updates
-    useEffect(() => {
-        if (streamingText || isLoading) {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
-    }, [streamingText, isLoading]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,7 +61,7 @@ export function ClarificationThread({
         >
             {/* Accordion header */}
             <button
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => onToggleExpanded?.()}
                 className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
             >
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -101,41 +97,35 @@ export function ClarificationThread({
                             {/* Existing messages */}
                             {messages.map((msg, i) => {
                                 const isUser = msg.role === "user";
-                                return (
+                                // Teacher messages must NOT animate in (no opacity:0→1)
+                                // because they replace the live streaming bubble.
+                                // Animating them in causes a visible flash/blink.
+                                return isUser ? (
                                     <motion.div
                                         key={i}
                                         initial={{ opacity: 0, y: 6 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: i * 0.05, ...THREAD_SPRING }}
-                                        className={`flex gap-2.5 ${isUser ? "justify-end" : ""}`}
+                                        className="flex gap-2.5 justify-end"
                                     >
-                                        {!isUser && (
-                                            <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
-                                                <span className="text-[10px] text-white/50">AI</span>
-                                            </div>
-                                        )}
-                                        <div
-                                            className={`rounded-xl text-sm leading-relaxed max-w-[85%] ${isUser
-                                                ? "bg-white/[0.06] border border-white/[0.08] text-white/80 px-3.5 py-2.5"
-                                                : "text-white/70"
-                                                }`}
-                                        >
-                                            {isUser ? (
-                                                msg.content
-                                            ) : (
-                                                <div className="clarification-markdown">
-                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                        {msg.content}
-                                                    </ReactMarkdown>
-                                                </div>
-                                            )}
+                                        <div className="rounded-xl text-sm leading-relaxed max-w-[85%] bg-white/[0.06] border border-white/[0.08] text-white/80 px-3.5 py-2.5">
+                                            {msg.content}
                                         </div>
-                                        {isUser && (
-                                            <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
-                                                <span className="text-[10px] text-white/50">You</span>
-                                            </div>
-                                        )}
+                                        <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                                            <span className="text-[10px] text-white/50">You</span>
+                                        </div>
                                     </motion.div>
+                                ) : (
+                                    <div key={i} className="flex gap-2.5">
+                                        <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                                            <span className="text-[10px] text-white/50">AI</span>
+                                        </div>
+                                        <div className="text-white/70 text-sm leading-relaxed max-w-[85%]">
+                                            <div className="clarification-markdown">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    </div>
                                 );
                             })}
 
