@@ -9,8 +9,9 @@
   :root {
     color-scheme: dark;
   }
-  
-  html, body {
+
+  html,
+  body {
     @apply bg-black text-white antialiased selection:bg-neutral-800 selection:text-white tracking-tight;
   }
 
@@ -19,12 +20,15 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-neutral-950/40 backdrop-blur-2xl border border-white/10 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.8)];
+    @apply bg-neutral-950/40 backdrop-blur-2xl border border-white/10 shadow-[0_2px_12px_-4px_#000000cc];
   }
 
   /* Snappy spring animation utility with active scale */
   .spring-interact {
-    @apply transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] active:scale-[0.98];
+    transition-property: all;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    @apply active:scale-[0.98];
   }
 
   /* Deep focus ring */
@@ -36,7 +40,7 @@
   .text-primary {
     @apply text-white font-medium;
   }
-  
+
   .text-secondary {
     @apply text-white/60 font-medium;
   }
@@ -50,7 +54,7 @@
     @apply max-w-[680px] text-base leading-relaxed;
   }
 
-  .lesson-content > :last-child {
+  .lesson-content> :last-child {
     @apply mb-0;
   }
 
@@ -75,8 +79,8 @@
   }
 
   .lesson-content .lesson-heading-mark,
-  .lesson-content .lesson-list-item > strong:first-child,
-  .lesson-content .lesson-list-item > p:first-child > strong:first-child {
+  .lesson-content .lesson-list-item>strong:first-child,
+  .lesson-content .lesson-list-item>p:first-child>strong:first-child {
     --lesson-marker-rgb: 254 240 138;
     --lesson-marker-band-start: 14%;
     --lesson-marker-band-end: 86%;
@@ -89,21 +93,17 @@
     padding-block: 0.08em 0.14em;
     border-radius: 0;
     background-image:
-      linear-gradient(
-        180deg,
+      linear-gradient(180deg,
         rgb(var(--lesson-marker-rgb) / 0) 0%,
         rgb(var(--lesson-marker-rgb) / 0.12) var(--lesson-marker-band-start),
         rgb(var(--lesson-marker-rgb) / var(--lesson-marker-opacity)) 35%,
         rgb(var(--lesson-marker-rgb) / var(--lesson-marker-opacity)) 65%,
         rgb(var(--lesson-marker-rgb) / 0.12) var(--lesson-marker-band-end),
-        rgb(var(--lesson-marker-rgb) / 0) 100%
-      ),
-      repeating-linear-gradient(
-        var(--lesson-marker-streak-angle),
+        rgb(var(--lesson-marker-rgb) / 0) 100%),
+      repeating-linear-gradient(var(--lesson-marker-streak-angle),
         transparent 0 8px,
         rgb(var(--lesson-marker-rgb) / 0.05) 8px 10px,
-        transparent 10px 18px
-      );
+        transparent 10px 18px);
     background-size: 100% 100%, var(--lesson-marker-streak-width) 100%;
     background-repeat: no-repeat, repeat-x;
   }
@@ -162,29 +162,29 @@
   /* SVG displacement filter per variant — creates natural rough edges */
   .lesson-content .lesson-marker-variant-a.lesson-heading-mark,
   .lesson-content .lesson-marker-variant-a.lesson-data-pill,
-  .lesson-content .lesson-marker-variant-a > strong:first-child,
-  .lesson-content .lesson-marker-variant-a > p:first-child > strong:first-child {
+  .lesson-content .lesson-marker-variant-a>strong:first-child,
+  .lesson-content .lesson-marker-variant-a>p:first-child>strong:first-child {
     filter: url(#marker-rough-a);
   }
 
   .lesson-content .lesson-marker-variant-b.lesson-heading-mark,
   .lesson-content .lesson-marker-variant-b.lesson-data-pill,
-  .lesson-content .lesson-marker-variant-b > strong:first-child,
-  .lesson-content .lesson-marker-variant-b > p:first-child > strong:first-child {
+  .lesson-content .lesson-marker-variant-b>strong:first-child,
+  .lesson-content .lesson-marker-variant-b>p:first-child>strong:first-child {
     filter: url(#marker-rough-b);
   }
 
   .lesson-content .lesson-marker-variant-c.lesson-heading-mark,
   .lesson-content .lesson-marker-variant-c.lesson-data-pill,
-  .lesson-content .lesson-marker-variant-c > strong:first-child,
-  .lesson-content .lesson-marker-variant-c > p:first-child > strong:first-child {
+  .lesson-content .lesson-marker-variant-c>strong:first-child,
+  .lesson-content .lesson-marker-variant-c>p:first-child>strong:first-child {
     filter: url(#marker-rough-c);
   }
 
   .lesson-content .lesson-marker-variant-d.lesson-heading-mark,
   .lesson-content .lesson-marker-variant-d.lesson-data-pill,
-  .lesson-content .lesson-marker-variant-d > strong:first-child,
-  .lesson-content .lesson-marker-variant-d > p:first-child > strong:first-child {
+  .lesson-content .lesson-marker-variant-d>strong:first-child,
+  .lesson-content .lesson-marker-variant-d>p:first-child>strong:first-child {
     filter: url(#marker-rough-d);
   }
 
@@ -236,7 +236,7 @@
     @apply pl-1 text-white/80 leading-[1.75];
   }
 
-  .lesson-content .lesson-list-item > p:first-child {
+  .lesson-content .lesson-list-item>p:first-child {
     @apply mb-0;
   }
 
@@ -259,12 +259,15 @@
   .lesson-content table {
     @apply my-4 w-full border-collapse text-sm;
   }
+
   .lesson-content thead th {
     @apply border-b border-white/10 pb-2 text-left text-xs font-[family-name:var(--font-geist-mono)] font-medium uppercase tracking-wider text-white/50;
   }
+
   .lesson-content tbody td {
     @apply border-b border-white/[0.05] py-2.5 pr-4 text-white/75;
   }
+
   .lesson-content tbody tr:last-child td {
     @apply border-b-0;
   }
@@ -283,21 +286,17 @@
     -webkit-box-decoration-break: clone;
     border-radius: 0;
     background-image:
-      linear-gradient(
-        180deg,
+      linear-gradient(180deg,
         rgb(var(--lesson-marker-rgb) / 0) 0%,
         rgb(var(--lesson-marker-rgb) / 0.06) var(--lesson-marker-band-start, 16%),
         rgb(var(--lesson-marker-rgb) / var(--lesson-marker-opacity)) 35%,
         rgb(var(--lesson-marker-rgb) / var(--lesson-marker-opacity)) 65%,
         rgb(var(--lesson-marker-rgb) / 0.06) var(--lesson-marker-band-end, 84%),
-        rgb(var(--lesson-marker-rgb) / 0) 100%
-      ),
-      repeating-linear-gradient(
-        var(--lesson-marker-streak-angle, 176deg),
+        rgb(var(--lesson-marker-rgb) / 0) 100%),
+      repeating-linear-gradient(var(--lesson-marker-streak-angle, 176deg),
         transparent 0 7px,
         rgb(var(--lesson-marker-rgb) / 0.03) 7px 9px,
-        transparent 9px 16px
-      );
+        transparent 9px 16px);
     background-size: 100% 100%, var(--lesson-marker-streak-width, 180px) 100%;
     background-repeat: no-repeat, repeat-x;
   }
@@ -342,12 +341,69 @@
   .lesson-callout {
     @apply border border-white/[0.08] bg-white/[0.02] rounded-xl px-5 py-4 my-5;
   }
-  .lesson-callout > p:last-child {
+
+  .lesson-callout>p:last-child {
     @apply mb-0;
   }
 
   /* Kbd tag */
   .lesson-content kbd {
-    @apply inline-block px-1.5 py-0.5 text-[11px] font-[family-name:var(--font-geist-mono)] bg-white/[0.08] border border-white/[0.12] rounded text-white/70 shadow-[0_1px_0_0_rgba(255,255,255,0.06)];
+    @apply inline-block px-1.5 py-0.5 text-[11px] font-[family-name:var(--font-geist-mono)] bg-white/[0.08] border border-white/[0.12] rounded text-white/70 shadow-[0_1px_0_0_#ffffff0f];
+  }
+
+  /* ─── Clarification thread markdown ─── */
+  .clarification-markdown {
+    @apply text-sm leading-relaxed;
+  }
+
+  .clarification-markdown p {
+    @apply mb-2 last:mb-0 text-white/70;
+  }
+
+  .clarification-markdown strong {
+    @apply font-semibold text-white/90;
+  }
+
+  .clarification-markdown em {
+    @apply italic text-white/60;
+  }
+
+  .clarification-markdown ul {
+    @apply list-disc pl-5 my-2 space-y-1;
+  }
+
+  .clarification-markdown ol {
+    @apply list-decimal pl-5 my-2 space-y-1;
+  }
+
+  .clarification-markdown li {
+    @apply text-white/70;
+  }
+
+  .clarification-markdown li::marker {
+    color: rgb(52 211 153 / 0.5);
+  }
+
+  .clarification-markdown code:not(pre code) {
+    @apply px-1 py-0.5 rounded bg-white/[0.06] text-[12px] font-[family-name:var(--font-geist-mono)] text-white/80;
+  }
+
+  .clarification-markdown pre {
+    @apply bg-black/40 border border-white/[0.04] rounded-lg p-3 overflow-x-auto text-[12px] font-[family-name:var(--font-geist-mono)] text-white/75 my-2;
+  }
+
+  .clarification-markdown blockquote {
+    @apply border-l-2 border-white/10 pl-3 my-2 text-white/50 italic;
+  }
+
+  .clarification-markdown a {
+    @apply text-emerald-400/80 hover:text-emerald-300 underline underline-offset-2 transition-colors;
+  }
+
+  .clarification-markdown h1,
+  .clarification-markdown h2,
+  .clarification-markdown h3,
+  .clarification-markdown h4 {
+    @apply font-semibold text-white/90 mt-3 mb-1;
   }
 }

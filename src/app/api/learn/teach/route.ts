@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import { buildTeacherPrompt } from "../../../../../convex/coursePrompts";
+import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 import {
   captureAiGenerationEvent,
@@ -115,12 +115,24 @@ export async function POST(req: Request) {
       )
       .join("\n");
 
-    const prompt = buildTeacherPrompt(
-      course.refinedTitle,
-      lesson.title,
-      historyStr || "This is the beginning of the lesson.",
-      masteryGoals,
-    );
+    const hasHistory = historyStr && historyStr !== "This is the beginning of the lesson.";
+    const promptName = hasHistory ? "teacher_continue" : "teacher_start";
+    const promptDoc = await convex.query(api.coursePrompts.getPrompt, { name: promptName });
+
+    let prompt: string;
+    if (hasHistory) {
+      prompt = renderPrompt(promptDoc.content, {
+        topic: course.refinedTitle,
+        subTopic: lesson.title,
+        context: historyStr,
+      });
+    } else {
+      prompt = renderPrompt(promptDoc.content, {
+        topic: course.refinedTitle,
+        subTopic: lesson.title,
+        masteryArray: JSON.stringify(masteryGoals),
+      });
+    }
 
     const ai = getAiClient();
     const model = getModel();
@@ -207,10 +219,10 @@ export async function POST(req: Request) {
             isComplete,
             inputRequest: inputRequestMatch
               ? {
-                  type: inputRequestMatch[1]!.trim(),
-                  question: inputRequestMatch[2]!.trim(),
-                  expectedAnswer: inputRequestMatch[3]?.trim() ?? "",
-                }
+                type: inputRequestMatch[1]!.trim(),
+                question: inputRequestMatch[2]!.trim(),
+                expectedAnswer: inputRequestMatch[3]?.trim() ?? "",
+              }
               : null,
             fullText,
           };

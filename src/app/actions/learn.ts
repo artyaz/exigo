@@ -245,3 +245,25 @@ export async function summarizeLessonAction(
     return { ok: false, error: getErrorMessage(error) };
   }
 }
+export async function clarifyConceptAction(
+  lessonId: string,
+  quote: string,
+  question: string,
+  threadId: string,
+): Promise<ActionResult<{ answer: string }>> {
+  const { userId, getToken } = await auth();
+  if (!userId) return { ok: false, error: "Unauthorized" };
+
+  try {
+    const convex = await createAuthedConvexClient(getToken, "actions.learn.clarifyConceptAction");
+    const result = await convex.action(api.courseAi.clarifyConcept, {
+      lessonId: lessonId as Id<"courseLessons">,
+      quote,
+      question,
+      threadId,
+    });
+    return { ok: true, data: result };
+  } catch (error) {
+    return { ok: false, error: getErrorMessage(error) };
+  }
+}

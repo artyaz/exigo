@@ -3,7 +3,8 @@
 import { useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
-import { useState, useEffect, useRef, use, useCallback, useMemo, type RefObject } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, use, useCallback, useMemo, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, Loader2, CheckCircle2, ChevronRight, ChevronLeft,
@@ -21,6 +22,8 @@ import {
   summarizeLessonAction,
 } from "../../../../actions/learn";
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
+import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
+import { ClarificationThread, type ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
 
 /* ─── Lesson section parser ─── */
 interface LessonSection {
@@ -59,6 +62,8 @@ function parseLessonSections(fullText: string): LessonSection[] {
 
   return sections;
 }
+
+
 
 function useActiveFocusTargets({
   containerRef,
@@ -146,11 +151,10 @@ function FocusModeToggle({ enabled, onToggle }: { enabled: boolean; onToggle: ()
       type="button"
       onClick={onToggle}
       aria-pressed={enabled}
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-[family-name:var(--font-geist-mono)] uppercase tracking-[0.12em] transition-all ${
-        enabled
-          ? "border-cyan-400/40 bg-cyan-400/12 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.08)]"
-          : "border-white/10 bg-white/[0.03] text-white/45 hover:border-white/20 hover:text-white/70"
-      }`}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-[family-name:var(--font-geist-mono)] uppercase tracking-[0.12em] transition-all ${enabled
+        ? "border-cyan-400/40 bg-cyan-400/12 text-cyan-100 shadow-[0_0_0_1px_rgba(34,211,238,0.08)]"
+        : "border-white/10 bg-white/[0.03] text-white/45 hover:border-white/20 hover:text-white/70"
+        }`}
       title="Toggle focus mode (F)"
     >
       <span>{enabled ? "Focus On" : "Focus Off"}</span>
@@ -373,7 +377,7 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
 
   useEffect(() => {
     void generateNextQuestion([]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Pre-generate next question as soon as current one finishes
@@ -381,7 +385,7 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
     if (questions.length > 0 && questions.length < 5 && !isLoading) {
       void generateNextQuestion(questions);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questions.length, isLoading]);
 
   if (baselineResults) {
@@ -447,7 +451,7 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
       }
     };
     void submit();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questions]);
 
   return (
@@ -544,11 +548,10 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
                   rotate: SPRING_SNAPPY, opacity: SPRING_SNAPPY,
                   width: { duration: 0 }, height: { duration: 0 }, zIndex: { duration: 0 },
                 }}
-                className={`absolute rounded-2xl border overflow-hidden ${
-                  isActive
-                    ? 'border-white/[0.08] bg-[#0A0A0A] shadow-[0_4px_24px_rgba(0,0,0,0.5)]'
-                    : 'border-white/[0.08] bg-[#0D0D0D] shadow-[0_2px_12px_rgba(0,0,0,0.4)] cursor-pointer hover:bg-white/[0.04]'
-                }`}
+                className={`absolute rounded-2xl border overflow-hidden ${isActive
+                  ? 'border-white/[0.08] bg-[#0A0A0A] shadow-[0_4px_24px_rgba(0,0,0,0.5)]'
+                  : 'border-white/[0.08] bg-[#0D0D0D] shadow-[0_2px_12px_rgba(0,0,0,0.4)] cursor-pointer hover:bg-white/[0.04]'
+                  }`}
                 style={{ top: '50%', left: '50%' }}
                 onClick={!isActive ? () => setCurrentIndex(idx) : undefined}
               >
@@ -777,6 +780,23 @@ function LessonPhase({
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
 
+  // ─── Clarification state ───
+  const [selectionState, setSelectionState] = useState<{
+    quote: string;
+    position: { top: number; left: number };
+    sectionIndex: number;
+    blockIndex: number;
+  } | null>(null);
+  const [clarificationThreads, setClarificationThreads] = useState<Map<string, {
+    quote: string;
+    threadId: string;
+    sectionIndex: number;
+    blockIndex: number;
+    messages: ClarificationMessage[];
+    streamingText?: string;
+    isLoading: boolean;
+  }>>(new Map());
+
   const lessonContentRef = useRef<HTMLDivElement>(null);
   const contentEndRef = useRef<HTMLDivElement>(null);
 
@@ -802,6 +822,325 @@ function LessonPhase({
       contentEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [lastVerification]);
+
+  // ─── Text selection + keydown trigger ───
+  const [bubbleInitialChars, setBubbleInitialChars] = useState("");
+  const [isClarifySubmitting, setIsClarifySubmitting] = useState(false);
+
+  // Ref-based pending in-thread reply to avoid forward dependency on handlers
+  const pendingInThreadReply = useRef<{ threadId: string; question: string } | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (selectionState) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.length !== 1) return;
+
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        (active instanceof HTMLElement && active.isContentEditable)
+      ) {
+        return;
+      }
+
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+
+      const selectedText = selection.toString().trim();
+      if (selectedText.length < 3 || selectedText.length > 500) return;
+
+      const container = lessonContentRef.current;
+      if (!container) return;
+      const range = selection.getRangeAt(0);
+      if (!container.contains(range.commonAncestorContainer)) return;
+
+      // Check if selection is inside a clarification thread — send as follow-up
+      let node: Node | null = range.commonAncestorContainer;
+      while (node && node !== container) {
+        if (node instanceof HTMLElement && node.hasAttribute("data-clarify-thread-id")) {
+          const existingThreadId = node.getAttribute("data-clarify-thread-id")!;
+          const thread = clarificationThreads.get(existingThreadId);
+          if (thread && !thread.isLoading) {
+            e.preventDefault();
+            pendingInThreadReply.current = { threadId: existingThreadId, question: selectedText };
+            setClarificationThreads(prev => new Map(prev));
+          }
+          return;
+        }
+        node = node.parentNode;
+      }
+
+      e.preventDefault();
+
+      // Find section index by walking DOM to parent [data-section-index]
+      let sectionIndex = Math.max(0, revealedCount - 1);
+      let sectionEl: HTMLElement | null = null;
+      let el: Node | null = range.commonAncestorContainer;
+      while (el && el !== container) {
+        if (el instanceof HTMLElement && el.hasAttribute("data-section-index")) {
+          sectionIndex = parseInt(el.getAttribute("data-section-index")!, 10);
+          sectionEl = el;
+          break;
+        }
+        el = el.parentNode;
+      }
+
+      let blockIndex = 0;
+      if (sectionEl) {
+        let blockNode: Node | null = range.commonAncestorContainer;
+        if (blockNode.nodeType !== Node.ELEMENT_NODE) blockNode = blockNode.parentNode;
+        
+        while (blockNode && (blockNode as Element).hasAttribute && !(blockNode as Element).hasAttribute("data-block-index")) {
+          if ((blockNode as Element).classList?.contains("lesson-content")) break;
+          blockNode = blockNode.parentNode;
+        }
+        
+        if (blockNode && (blockNode as Element).hasAttribute?.("data-block-index")) {
+          blockIndex = parseInt((blockNode as Element).getAttribute("data-block-index")!, 10);
+        }
+      }
+
+      const rect = range.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+
+      setBubbleInitialChars(e.key);
+      setSelectionState({
+        quote: selectedText,
+        position: {
+          top: rect.bottom - containerRect.top,
+          left: rect.left - containerRect.left + rect.width / 2,
+        },
+        sectionIndex,
+        blockIndex,
+      });
+
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [selectionState, clarificationThreads, revealedCount]);
+
+  // Restore clarification threads from DB on mount
+  useEffect(() => {
+    if (!lessonMessages) return;
+    const clarificationMsgs = lessonMessages.filter(
+      (m) => m.messageType === "clarification" && m.threadId
+    );
+    if (clarificationMsgs.length === 0) return;
+
+    const threadMap = new Map<string, {
+      quote: string;
+      threadId: string;
+      sectionIndex: number;
+      blockIndex: number;
+      messages: ClarificationMessage[];
+      isLoading: boolean;
+    }>();
+
+    for (const msg of clarificationMsgs) {
+      const tid = msg.threadId!;
+      if (!threadMap.has(tid)) {
+        threadMap.set(tid, {
+          quote: msg.clarificationQuote ?? "",
+          threadId: tid,
+          sectionIndex: msg.clarificationSectionIndex ?? 0,
+          blockIndex: msg.clarificationBlockIndex ?? 0,
+          messages: [],
+          isLoading: false,
+        });
+      }
+      threadMap.get(tid)!.messages.push({
+        role: msg.role as ClarificationMessage["role"],
+        content: msg.content,
+      });
+    }
+
+    setClarificationThreads((prev) => {
+      const next = new Map(prev);
+      for (const [tid, dbThread] of threadMap.entries()) {
+        const existing = next.get(tid);
+        if (existing) {
+          next.set(tid, {
+            ...dbThread,
+            // Preserve strictly active UI streaming states
+            isLoading: existing.isLoading,
+            streamingText: existing.streamingText,
+            // Don't let DB's potential `undefined` fallback override the live UI position
+            blockIndex: existing.isLoading ? existing.blockIndex : dbThread.blockIndex,
+            // Keep optimistic messages while loading (Convex sync might be slightly behind)
+            messages: existing.isLoading ? existing.messages : dbThread.messages,
+          });
+        } else {
+          next.set(tid, dbThread);
+        }
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonMessages?.length]);
+
+  /** Stream a clarification request via SSE */
+  const streamClarification = useCallback(async (
+    quote: string,
+    question: string,
+    threadId: string,
+    sectionIndex: number,
+    blockIndex: number,
+  ) => {
+    if (!currentLesson) return;
+
+    // Optimistically add user message
+    setClarificationThreads(prev => {
+      const next = new Map(prev);
+      const existing = next.get(threadId);
+      if (existing) {
+        next.set(threadId, {
+          ...existing,
+          messages: [...existing.messages, { role: "user", content: question }],
+          isLoading: true,
+          streamingText: "",
+        });
+      } else {
+        next.set(threadId, {
+          quote,
+          threadId,
+          sectionIndex,
+          blockIndex,
+          messages: [{ role: "user", content: question }],
+          streamingText: "",
+          isLoading: true,
+        });
+      }
+      return next;
+    });
+
+    try {
+      const res = await fetch("/api/learn/clarify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lessonId: currentLesson._id,
+          quote,
+          question,
+          threadId,
+          blockIndex,
+          sectionIndex,
+          lessonContext: fullText,
+        }),
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error("Stream failed");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const payload = JSON.parse(line.slice(6)) as {
+              type: string;
+              text?: string;
+              fullText?: string;
+              error?: string;
+            };
+
+            if (payload.type === "delta" && payload.text) {
+              accumulated += payload.text;
+              const snap = accumulated; // capture for closure
+              setClarificationThreads(prev => {
+                const next = new Map(prev);
+                const t = next.get(threadId);
+                if (t) {
+                  next.set(threadId, { ...t, streamingText: snap });
+                }
+                return next;
+              });
+            } else if (payload.type === "done") {
+              const finalText = payload.fullText ?? accumulated;
+              setClarificationThreads(prev => {
+                const next = new Map(prev);
+                const t = next.get(threadId);
+                if (t) {
+                  next.set(threadId, {
+                    ...t,
+                    messages: [...t.messages, { role: "teacher", content: finalText }],
+                    streamingText: undefined,
+                    isLoading: false,
+                  });
+                }
+                return next;
+              });
+            } else if (payload.type === "error") {
+              setClarificationThreads(prev => {
+                const next = new Map(prev);
+                const t = next.get(threadId);
+                if (t) {
+                  next.set(threadId, {
+                    ...t,
+                    messages: [...t.messages, { role: "teacher", content: "Something went wrong. Please try again." }],
+                    streamingText: undefined,
+                    isLoading: false,
+                  });
+                }
+                return next;
+              });
+            }
+          } catch { /* skip malformed SSE */ }
+        }
+      }
+    } catch {
+      setClarificationThreads(prev => {
+        const next = new Map(prev);
+        const t = next.get(threadId);
+        if (t) {
+          next.set(threadId, {
+            ...t,
+            messages: [...t.messages, { role: "teacher", content: "Something went wrong. Please try again." }],
+            streamingText: undefined,
+            isLoading: false,
+          });
+        }
+        return next;
+      });
+    }
+  }, [currentLesson, fullText]);
+
+  const handleClarify = useCallback((quote: string, question: string, sectionIndex: number, blockIndex: number) => {
+    const threadId = `clarify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setSelectionState(null);
+    void streamClarification(quote, question, threadId, sectionIndex, blockIndex);
+  }, [streamClarification]);
+
+  // Process pending in-thread reply (set by keydown handler via ref)
+  useEffect(() => {
+    const pending = pendingInThreadReply.current;
+    if (!pending) return;
+    pendingInThreadReply.current = null;
+    const thread = clarificationThreads.get(pending.threadId);
+    if (thread && !thread.isLoading) {
+      void streamClarification(thread.quote, pending.question, pending.threadId, thread.sectionIndex, thread.blockIndex);
+    }
+  }, [clarificationThreads, streamClarification]);
+
+  const handleClarificationReply = useCallback((threadId: string, question: string) => {
+    const thread = clarificationThreads.get(threadId);
+    if (!thread) return;
+    void streamClarification(thread.quote, question, threadId, thread.sectionIndex, thread.blockIndex);
+  }, [clarificationThreads, streamClarification]);
 
   // Restore from DB on mount
   useEffect(() => {
@@ -929,7 +1268,7 @@ function LessonPhase({
     if (currentLesson && initialized && fullText.length === 0 && !lessonMessages?.length) {
       void teach();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialized]);
 
   // Advance past the current checkpoint, revealing content until the next checkpoint or end
@@ -1058,7 +1397,23 @@ function LessonPhase({
       </div>
 
       {/* Lesson content — progressive reveal */}
-      <div ref={lessonContentRef} className="space-y-0">
+      <div ref={lessonContentRef} className="space-y-0 relative">
+        {/* Selection bubble — appears when user starts typing with text selected */}
+        {selectionState && (
+          <SelectionBubble
+            position={selectionState.position}
+            quote={selectionState.quote}
+            initialChars={bubbleInitialChars}
+            isSubmitting={isClarifySubmitting}
+            onSubmit={(question) => {
+              handleClarify(selectionState.quote, question, selectionState.sectionIndex, selectionState.blockIndex);
+            }}
+            onClose={() => {
+              setSelectionState(null);
+            }}
+          />
+        )}
+
         {sections.slice(0, revealedCount).map((section, i) => {
           const pastCheckpoint = answeredCheckpoints.get(i);
           const isCurrentCheckpoint = i === revealedCount - 1 && currentInputRequest && section.inputRequest;
@@ -1066,6 +1421,7 @@ function LessonPhase({
           return (
             <motion.div
               key={i}
+              data-section-index={i}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i === revealedCount - 1 ? 0.1 : 0 }}
@@ -1075,6 +1431,28 @@ function LessonPhase({
                 sectionKey={`lesson-section-${i}`}
                 focusModeEnabled={focusModeEnabled}
                 activeFocusTargets={activeFocusTargets}
+                blockAppendages={
+                  Array.from(clarificationThreads.values())
+                    .filter(t => t.sectionIndex === i)
+                    .reduce((acc, t) => {
+                      const existing = acc[t.blockIndex] || null;
+                      acc[t.blockIndex] = (
+                        <div key={t.threadId}>
+                          {existing}
+                          <div className="mb-6" data-clarify-thread-id={t.threadId}>
+                            <ClarificationThread
+                              quote={t.quote}
+                              messages={t.messages}
+                              streamingText={t.streamingText}
+                              onReply={(q) => handleClarificationReply(t.threadId, q)}
+                              isLoading={t.isLoading}
+                            />
+                          </div>
+                        </div>
+                      );
+                      return acc;
+                    }, {} as Record<number, React.ReactNode>)
+                }
               />
 
               {/* Past checkpoint — greyed out */}
@@ -1091,19 +1469,18 @@ function LessonPhase({
                       <SkipForward className="w-3 h-3" /> Skipped
                     </p>
                   ) : pastCheckpoint.verification ? (
-                    <div className={`rounded-lg px-4 py-3 text-sm ${
-                      pastCheckpoint.verification.is_correct
-                        ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
-                        : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
-                    }`}>
+                    <div className={`rounded-lg px-4 py-3 text-sm ${pastCheckpoint.verification.is_correct
+                      ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
+                      : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+                      }`}>
                       {pastCheckpoint.answer && <p className="text-xs text-white/40 mb-1">Your answer: {pastCheckpoint.answer}</p>}
                       {pastCheckpoint.verification.feedback_block}
                     </div>
                   ) : null}
                 </div>
               )}
+              {/* Threads for this section are rendered via portal — see below */}
 
-              {/* Active checkpoint — current input request */}
               {isCurrentCheckpoint && (
                 <motion.div
                   initial={{ opacity: 0, y: 6 }}
@@ -1122,11 +1499,10 @@ function LessonPhase({
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
-                      className={`rounded-lg px-4 py-3 mb-3 text-sm ${
-                        lastVerification.is_correct
-                          ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
-                          : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
-                      }`}
+                      className={`rounded-lg px-4 py-3 mb-3 text-sm ${lastVerification.is_correct
+                        ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
+                        : "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+                        }`}
                     >
                       {lastVerification.feedback_block}
                       {lastVerification.is_correct && (

@@ -15,6 +15,7 @@ import {
     logError,
     logInfo,
 } from "../../../../lib/otlpLogger";
+import { renderPrompt } from "../../../../../convex/coursePrompts";
 
 interface FeelsHardBody {
     testId?: string;
@@ -30,41 +31,6 @@ function parseBody(raw: Record<string, unknown>): FeelsHardBody {
         messageContent: raw.messageContent as string | undefined,
         knowledgePieceId: raw.knowledgePieceId as string | undefined,
     };
-}
-
-function buildPrompt(
-    question: string,
-    answer: string,
-    userAnswer: string,
-    messageContent: string,
-    conversationContext: string
-): string {
-    return `You are an educational note-taker. A student interacted with an AI tutor while studying a test question and has flagged an AI explanation as "Feels hard" — meaning they struggled with the concept.
-
-Based on the context below, generate a concise note (2-4 sentences) describing what the user struggled with and what specific concept needs reinforcement.
-
-Format the note EXACTLY like this:
-"User had an issue with understanding [topic]. Specifically, [describe the gap in understanding]. To improve, the user should focus on [specific recommendation]."
-
-[Question]
-${question}
-
-[Correct Answer]
-${answer}
-
-[Student's Answer]
-${userAnswer}
-
-[AI Explanation that felt hard]
-${messageContent}
-
-[Full Conversation]
-${conversationContext}
-
-Important:
-- Output ONLY the note text. No markdown, no quotes, no extra formatting.
-- Be specific about the concept, not generic.
-- Keep it under 4 sentences.`;
 }
 
 function resolveTargetPiece(
@@ -146,13 +112,14 @@ export async function POST(req: NextRequest) {
             .join("\n") || "No prior conversation.";
 
         const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
-        const prompt = buildPrompt(
-            question.question,
-            question.answer ?? "N/A",
-            question.userAnswer ?? "N/A",
+        const promptDoc = await convex.query(api.coursePrompts.getPrompt, { name: "feels_hard_note" });
+        const prompt = renderPrompt(promptDoc.content, {
+            questionText: question.question,
+            questionAnswer: question.answer ?? "N/A",
+            userAnswer: question.userAnswer ?? "N/A",
             messageContent,
-            conversationContext
-        );
+            conversationContext,
+        });
 
         const aiTraceId = createAiTraceId();
         const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";

@@ -18,6 +18,7 @@ import {
     logInfo,
     logWarn,
 } from "../../../../lib/otlpLogger";
+import { renderPrompt } from "../../../../../convex/coursePrompts";
 
 const selectQuestionSchema = z.object({
     question: z.string().describe("The question text"),
@@ -324,17 +325,12 @@ export async function POST(req: NextRequest) {
     const knowledgeText = selectedPieces.map(p => p.content).join("\n\n---\n\n");
     const contextPrompt = buildContextPrompt(existingQuestions, incorrectQuestions, activeNodes);
 
-    const prompt = `You are an expert educator. Generate EXACTLY ONE tricky, conceptual question (no simple definitions; focus on "why" and edge cases) based ONLY on the following knowledge pieces.
-
-IMPORTANT: If the knowledge pieces contain examples of existing questions, tests, or chat histories with grades, DO NOT copy them. You must create a NEW, original question that tests the underlying concepts.${contextPrompt}
-
-The question type requested is: ${testType} ('select' means multiple choice, 'write' means open-ended).
-
-If 'select', provide exactly 4 options per question, and indicate the exactly complete answer string.
-If 'write', do not provide options, just provide a sample correct answer.
-
-Knowledge:
-${knowledgeText}`;
+    const promptDoc = await convex.query(api.coursePrompts.getPrompt, { name: "test_question_generator" });
+    const prompt = renderPrompt(promptDoc.content, {
+        contextPrompt,
+        testType,
+        knowledgeText,
+    });
 
     const schema = testType === "select" ? selectQuestionSchema : writeQuestionSchema;
     const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";

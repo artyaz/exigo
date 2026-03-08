@@ -11,15 +11,7 @@ import {
   captureAiGenerationEvent,
   createAiTraceId,
 } from "../shared/posthogAiObservability";
-import {
-  buildCourseArchitectPrompt,
-  buildSequentialDiagnosticPrompt,
-  buildAdaptiveSyllabusPrompt,
-  buildCuratorPrompt,
-  buildTeacherPrompt,
-  buildVerifierPrompt,
-  buildSummarizerPrompt,
-} from "./coursePrompts";
+import { getPromptInternal, renderPrompt } from "./coursePrompts";
 
 function getAiClient() {
   if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -62,7 +54,10 @@ export const normalizeTopic = action({
 
     const ai = getAiClient();
     const model = getModel();
-    const prompt = buildCourseArchitectPrompt(args.rawTopic);
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "course_architect",
+    });
+    const prompt = renderPrompt(promptDoc.content, { rawInput: args.rawTopic });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -112,7 +107,10 @@ export const normalizeTopicOnly = action({
 
     const ai = getAiClient();
     const model = getModel();
-    const prompt = buildCourseArchitectPrompt(args.rawTopic);
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "course_architect",
+    });
+    const prompt = renderPrompt(promptDoc.content, { rawInput: args.rawTopic });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -161,13 +159,21 @@ export const generateBaselineQuestion = action({
 
     const ai = getAiClient();
     const model = getModel();
-    const prompt = buildSequentialDiagnosticPrompt(
-      args.courseTopic,
-      "intermediate",
-      args.currentStep,
-      args.previousQuestions,
-      args.previousResults,
-    );
+    const resultsContext =
+      args.previousResults && args.previousResults.length > 0
+        ? `\n[Previous Answer Results]: ${JSON.stringify(args.previousResults)}\n\nIMPORTANT: Adapt difficulty based on the student's performance. If they struggled with previous questions, make this question slightly easier to match their level. If they answered correctly, maintain or increase difficulty.`
+        : "";
+
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "sequential_diagnostic",
+    });
+    const prompt = renderPrompt(promptDoc.content, {
+      courseTopic: args.courseTopic,
+      targetAudienceLevel: "intermediate",
+      currentStep: args.currentStep,
+      previousQuestions: JSON.stringify(args.previousQuestions),
+      resultsContext,
+    });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -210,19 +216,14 @@ export const evaluateBaselineAnswer = action({
 
     const ai = getAiClient();
     const model = getModel();
-    const prompt = `You are an educational assessor evaluating a student's written answer to a baseline diagnostic question.
-
-Question: ${args.questionText}
-Reference Answer: ${args.referenceAnswer}
-Student's Answer: ${args.userAnswer}
-
-Evaluate if the student demonstrates understanding of the concept. Be semantically forgiving (typos/phrasing don't matter, conceptual understanding does).
-
-Output Format (Strict JSON ONLY):
-{
-  "is_correct": true/false,
-  "feedback": "Brief 1-sentence explanation"
-}`;
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "baseline_evaluation",
+    });
+    const prompt = renderPrompt(promptDoc.content, {
+      questionText: args.questionText,
+      referenceAnswer: args.referenceAnswer,
+      userAnswer: args.userAnswer,
+    });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({ model, contents: prompt });
@@ -276,15 +277,30 @@ export const generateModule = action({
       }
     }
 
+    // Collect active knowledge nodes for the course's space
+    const activeNodes = await ctx.runQuery(
+      internal.knowledgeNodes.getActiveNodesForSpaceInternal,
+      { spaceId: course.spaceId },
+    );
+    const knowledgeNodesStr = activeNodes.length > 0
+      ? activeNodes
+        .map((n) => `- [${n.type.toUpperCase()}] ${n.content}`)
+        .join("\n")
+      : "No knowledge nodes yet";
+
     const ai = getAiClient();
     const model = getModel();
-    const prompt = buildAdaptiveSyllabusPrompt(
-      course.refinedTitle,
-      course.courseDescription,
-      course.baselineResults ?? "No baseline data",
-      completedTopics,
-      performanceSummaries,
-    );
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "adaptive_syllabus",
+    });
+    const prompt = renderPrompt(promptDoc.content, {
+      courseTitle: course.refinedTitle,
+      courseDescription: course.courseDescription,
+      baselineResults: course.baselineResults ?? "No baseline data",
+      completedTopics: JSON.stringify(completedTopics),
+      performanceSummaries: JSON.stringify(performanceSummaries),
+      knowledgeNodes: knowledgeNodesStr,
+    });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -375,11 +391,14 @@ export const setMasteryGoals = action({
 
     const ai = getAiClient();
     const model = getModel();
-    const prompt = buildCuratorPrompt(
-      course.refinedTitle,
-      lesson.title,
-      "intermediate",
-    );
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "curator",
+    });
+    const prompt = renderPrompt(promptDoc.content, {
+      topic: course.refinedTitle,
+      subTopic: lesson.title,
+      targetAudienceLevel: "intermediate",
+    });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -455,6 +474,8 @@ export const teachLesson = action({
     } catch { /* corrupted data, proceed with empty goals */ }
 
     // Build context from conversation history
+    const ai = getAiClient();
+    const model = getModel();
     const historyStr = messages
       .slice(-20)
       .map(
@@ -462,15 +483,19 @@ export const teachLesson = action({
           `${m.role === "teacher" ? "Teacher" : m.role === "user" ? "Student" : "System"}: ${m.content}`,
       )
       .join("\n");
+    const context = historyStr || "This is the beginning of the lesson.";
+    const isFirstMessage = context === "This is the beginning of the lesson." || !context.includes("Teacher:");
 
-    const ai = getAiClient();
-    const model = getModel();
-    const prompt = buildTeacherPrompt(
-      course.refinedTitle,
-      lesson.title,
-      historyStr || "This is the beginning of the lesson.",
-      masteryGoals,
-    );
+    const promptName = isFirstMessage ? "teacher_start" : "teacher_continue";
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: promptName,
+    });
+    const prompt = renderPrompt(promptDoc.content, {
+      topic: course.refinedTitle,
+      subTopic: lesson.title,
+      context,
+      masteryArray: JSON.stringify(masteryGoals),
+    });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -522,10 +547,10 @@ export const teachLesson = action({
       isComplete,
       inputRequest: inputRequestMatch
         ? {
-            type: inputRequestMatch[1]!.trim(),
-            question: inputRequestMatch[2]!.trim(),
-            expectedAnswer: inputRequestMatch[3]!.trim(),
-          }
+          type: inputRequestMatch[1]!.trim(),
+          question: inputRequestMatch[2]!.trim(),
+          expectedAnswer: inputRequestMatch[3]!.trim(),
+        }
         : null,
     };
   },
@@ -557,12 +582,15 @@ export const verifyInput = action({
 
     const ai = getAiClient();
     const model = getModel();
-    const prompt = buildVerifierPrompt(
-      `${course.refinedTitle} - ${lesson.title}`,
-      args.question,
-      args.expectedAnswer,
-      args.userAnswer,
-    );
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "verifier",
+    });
+    const prompt = renderPrompt(promptDoc.content, {
+      lessonContext: `${course.refinedTitle} - ${lesson.title}`,
+      question: args.question,
+      expectedAnswer: args.expectedAnswer,
+      userAnswer: args.userAnswer,
+    });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -624,6 +652,99 @@ export const verifyInput = action({
   },
 });
 
+// ─── ACTION 6.5: Clarify Concept (Clarifier AI) ───
+export const clarifyConcept = action({
+  args: {
+    lessonId: v.id("courseLessons"),
+    quote: v.string(),
+    question: v.string(),
+    threadId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthedContextForAction(ctx);
+    requireEducatorAccess(auth);
+
+    const lesson: Doc<"courseLessons"> | null = await ctx.runQuery(
+      internal.courseLessons.getInternal,
+      { lessonId: args.lessonId },
+    );
+    if (!lesson) throw new Error("Lesson not found");
+
+    const course: Doc<"courses"> | null = await ctx.runQuery(internal.courses.getInternal, {
+      courseId: lesson.courseId,
+    });
+    if (!course || course.userId !== auth.userId)
+      throw new Error("Unauthorized");
+
+    // Save user question
+    await ctx.runMutation(internal.courseLessonMessages.sendInternal, {
+      courseId: lesson.courseId,
+      lessonId: args.lessonId,
+      role: "user",
+      content: args.question,
+      messageType: "clarification",
+      clarificationQuote: args.quote,
+      threadId: args.threadId,
+    });
+
+    // Get previous messages in this thread
+    const allMessages: Doc<"courseLessonMessages">[] = await ctx.runQuery(
+      internal.courseLessonMessages.getForLessonInternal,
+      { lessonId: args.lessonId },
+    );
+    const threadMessages = allMessages.filter((m) => m.threadId === args.threadId);
+
+    // Build context
+    const ai = getAiClient();
+    const model = getModel();
+    const historyStr = threadMessages
+      .slice(-10)
+      .map((m) => `${m.role === "teacher" || m.role === "system" ? "Teacher" : "Student"}: ${m.content}`)
+      .join("\n");
+
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "clarifier",
+    });
+
+    const prompt = renderPrompt(promptDoc.content, {
+      lessonContext: `${course.refinedTitle} - ${lesson.title}`,
+      quote: args.quote,
+      question: args.question,
+      history: historyStr || "No previous conversation in this thread.",
+    });
+
+    const startedAt = Date.now();
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
+    captureAiGenerationEvent({
+      distinctId: auth.userId,
+      traceId: createAiTraceId(),
+      provider: "google",
+      model,
+      input: [{ role: "user", content: prompt }],
+      response,
+      latencySeconds: (Date.now() - startedAt) / 1000,
+    });
+
+    const answer = response.text?.trim() ?? "";
+
+    // Save AI clarification
+    await ctx.runMutation(internal.courseLessonMessages.sendInternal, {
+      courseId: lesson.courseId,
+      lessonId: args.lessonId,
+      role: "teacher",
+      content: answer,
+      messageType: "clarification",
+      clarificationQuote: args.quote,
+      threadId: args.threadId,
+    });
+
+    return { answer };
+  },
+});
+
 // ─── ACTION 7: Summarize Lesson (Summarizer AI + Exigo Integration) ───
 export const summarizeLesson = action({
   args: {
@@ -659,13 +780,33 @@ export const summarizeLesson = action({
       verifierLogs = lesson.verifierLogs ? JSON.parse(lesson.verifierLogs) : [];
     } catch { /* corrupted data, proceed with empty logs */ }
 
+    // Inject clarifications as virtual verifier logs so summarizer accounts for them
+    const allMessages: Doc<"courseLessonMessages">[] = await ctx.runQuery(
+      internal.courseLessonMessages.getForLessonInternal,
+      { lessonId: args.lessonId },
+    );
+    const clarifications = allMessages.filter(
+      (m) => m.messageType === "clarification" && m.role === "user"
+    );
+    for (const c of clarifications) {
+      verifierLogs.push({
+        question: `User asked for clarification on quote: "${c.clarificationQuote}"`,
+        userAnswer: c.content,
+        isCorrect: false, // Flagging as false ensures it becomes a struggle node automatically
+        feedback: "User needed additional human-like explanation for this concept.",
+      });
+    }
+
     const ai = getAiClient();
     const model = getModel();
-    const prompt = buildSummarizerPrompt(
-      `${course.refinedTitle} - ${lesson.title}`,
-      masteryGoals,
-      verifierLogs,
-    );
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "summarizer",
+    });
+    const prompt = renderPrompt(promptDoc.content, {
+      topicCovered: `${course.refinedTitle} - ${lesson.title}`,
+      masteryQuestions: JSON.stringify(masteryGoals),
+      verifierLogs: JSON.stringify(verifierLogs),
+    });
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -719,27 +860,46 @@ export const summarizeLesson = action({
       },
     );
 
-    // 2. Parse strengths and weaknesses from verifier logs
-    const strengths = verifierLogs.filter((l) => l.isCorrect);
-    const weaknesses = verifierLogs.filter((l) => !l.isCorrect);
+    // 2. Generate knowledge nodes via AI
+    const nodesPromptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "lesson_knowledge_nodes",
+    });
+    const nodesPrompt = renderPrompt(nodesPromptDoc.content, {
+      topicCovered: `${course.refinedTitle} - ${lesson.title}`,
+      masteryQuestions: JSON.stringify(masteryGoals),
+      verifierLogs: JSON.stringify(verifierLogs),
+    });
 
-    // Create improvement nodes for strengths
-    for (const s of strengths) {
-      await ctx.runMutation(internal.knowledgeNodes.createInternal, {
-        spaceId: course.spaceId,
-        knowledgePieceId: pieceId,
-        type: "improvement",
-        content: s.question,
-      });
+    const nodesStartedAt = Date.now();
+    const nodesResponse = await ai.models.generateContent({
+      model,
+      contents: nodesPrompt,
+    });
+    captureAiGenerationEvent({
+      distinctId: auth.userId,
+      traceId: createAiTraceId(),
+      provider: "google",
+      model,
+      input: [{ role: "user", content: nodesPrompt }],
+      response: nodesResponse,
+      latencySeconds: (Date.now() - nodesStartedAt) / 1000,
+    });
+
+    const nodesText = nodesResponse.text?.trim() ?? "[]";
+    let knowledgeNodeEntries: Array<{ type: "improvement" | "struggle"; content: string }> = [];
+    try {
+      knowledgeNodeEntries = safeParseJson<Array<{ type: "improvement" | "struggle"; content: string }>>(nodesText);
+    } catch {
+      console.error("Failed to parse knowledge nodes from AI response, falling back to empty nodes.");
     }
 
-    // Create struggle nodes for weaknesses
-    for (const w of weaknesses) {
+    for (const entry of knowledgeNodeEntries) {
+      const nodeType = entry.type === "improvement" ? "improvement" : "struggle";
       await ctx.runMutation(internal.knowledgeNodes.createInternal, {
         spaceId: course.spaceId,
         knowledgePieceId: pieceId,
-        type: "struggle",
-        content: `${w.question} — ${w.feedback}`,
+        type: nodeType,
+        content: entry.content,
       });
     }
 

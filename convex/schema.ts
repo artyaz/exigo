@@ -2,6 +2,11 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  prompts: defineTable({
+    name: v.string(), // e.g. "course_architect"
+    content: v.string(), // The prompt text with {{variables}}
+    description: v.string(), // Technical details of usage
+  }).index("by_name", ["name"]),
   spaces: defineTable({
     name: v.string(),
     userId: v.string(),
@@ -170,6 +175,10 @@ export default defineSchema({
     ),
     content: v.string(),
     messageType: v.optional(v.string()),
+    clarificationQuote: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    clarificationBlockIndex: v.optional(v.number()),
+    clarificationSectionIndex: v.optional(v.number()),
   })
     .index("by_lesson", ["lessonId"]),
 });

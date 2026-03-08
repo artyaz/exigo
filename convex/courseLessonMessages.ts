@@ -9,6 +9,10 @@ export const send = mutation({
     role: v.union(v.literal("teacher"), v.literal("user"), v.literal("system")),
     content: v.string(),
     messageType: v.optional(v.string()),
+    clarificationQuote: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    clarificationBlockIndex: v.optional(v.number()),
+    clarificationSectionIndex: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx);
@@ -23,6 +27,10 @@ export const send = mutation({
       role: args.role,
       content: args.content,
       messageType: args.messageType,
+      clarificationQuote: args.clarificationQuote,
+      threadId: args.threadId,
+      clarificationBlockIndex: args.clarificationBlockIndex,
+      clarificationSectionIndex: args.clarificationSectionIndex,
     });
   },
 });
@@ -50,6 +58,10 @@ export const sendInternal = internalMutation({
     role: v.union(v.literal("teacher"), v.literal("user"), v.literal("system")),
     content: v.string(),
     messageType: v.optional(v.string()),
+    clarificationQuote: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    clarificationBlockIndex: v.optional(v.number()),
+    clarificationSectionIndex: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("courseLessonMessages", {
@@ -58,6 +70,10 @@ export const sendInternal = internalMutation({
       role: args.role,
       content: args.content,
       messageType: args.messageType,
+      clarificationQuote: args.clarificationQuote,
+      threadId: args.threadId,
+      clarificationBlockIndex: args.clarificationBlockIndex,
+      clarificationSectionIndex: args.clarificationSectionIndex,
     });
   },
 });

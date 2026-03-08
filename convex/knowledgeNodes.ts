@@ -20,6 +20,7 @@ import {
   createAiTraceId,
   getPosthogClient,
 } from "../shared/posthogAiObservability";
+import { getPromptInternal, renderPrompt } from "./coursePrompts";
 
 const FALLBACK_IMPROVEMENT =
   "Explore advanced edge cases and nuanced trade-offs in this topic.";
@@ -184,13 +185,12 @@ export const generateImprovements = action({
       throw new Error("Knowledge piece not found or unauthorized");
     }
 
-    const prompt = `You are an expert educator. The student just performed very well on a test about the following topic.
-Your goal is to identify ONE specific, advanced, or "harder" concept within this text that the student should focus on next to deepen their understanding.
-
-Text:
-${pieceData.content}
-
-Generate a concise 1-sentence description of the advanced concept they should focus on. Keep it under 25 words. Do not use markdown like bolding.`;
+    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
+      name: "knowledge_node_improvement",
+    });
+    const prompt = renderPrompt(promptDoc.content, {
+      pieceContent: pieceData.content,
+    });
 
     let improvementIdea = FALLBACK_IMPROVEMENT;
     if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -247,6 +247,19 @@ Generate a concise 1-sentence description of the advanced concept they should fo
       type: "improvement",
       content: improvementIdea,
     });
+  },
+});
+
+export const getActiveNodesForSpaceInternal = internalQuery({
+  args: {
+    spaceId: v.id("spaces"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("knowledgeNodes")
+      .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
   },
 });
 

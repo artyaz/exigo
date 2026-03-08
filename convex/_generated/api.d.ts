@@ -28,6 +28,7 @@ import type * as planLimits from "../planLimits.js";
 import type * as plans from "../plans.js";
 import type * as questions from "../questions.js";
 import type * as seedPlans from "../seedPlans.js";
+import type * as seedPrompts from "../seedPrompts.js";
 import type * as spaces from "../spaces.js";
 import type * as subscriptionService from "../subscriptionService.js";
 import type * as subscriptionServiceInternal from "../subscriptionServiceInternal.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   plans: typeof plans;
   questions: typeof questions;
   seedPlans: typeof seedPlans;
+  seedPrompts: typeof seedPrompts;
   spaces: typeof spaces;
   subscriptionService: typeof subscriptionService;
   subscriptionServiceInternal: typeof subscriptionServiceInternal;

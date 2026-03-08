@@ -2,6 +2,8 @@ import {
   Children,
   cloneElement,
   isValidElement,
+  createContext,
+  useContext,
   type ReactNode,
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -12,7 +14,21 @@ interface LessonMarkdownProps {
   sectionKey: string;
   focusModeEnabled?: boolean;
   activeFocusTargets?: Set<string>;
+  blockAppendages?: Record<number, ReactNode>;
 }
+
+const rehypeBlockIndex = () => {
+  return (tree: any) => {
+    let index = 0;
+    for (const child of tree.children || []) {
+      if (child.type === 'element') {
+        child.properties = child.properties || {};
+        child.properties['data-block-index'] = String(index);
+        index++;
+      }
+    }
+  };
+};
 
 const DECORATED_TEXT_PATTERN = new RegExp(
   [
@@ -293,227 +309,205 @@ function MarkerSvgFilters() {
   );
 }
 
+const BlockAppendagesContext = createContext<Record<number, ReactNode>>({});
+const FocusContext = createContext<{ focusModeEnabled: boolean; activeFocusTargets: Set<string>; sectionKey: string }>({
+  focusModeEnabled: false,
+  activeFocusTargets: new Set(),
+  sectionKey: "",
+});
+
+function AppendageSlot({ node }: { node: any }) {
+  const blockIndexStr = node?.properties?.['data-block-index'];
+  const appendages = useContext(BlockAppendagesContext);
+  if (blockIndexStr === undefined) return null;
+  const blockIndex = parseInt(blockIndexStr as string, 10);
+  const appendage = appendages[blockIndex];
+  if (!appendage) return null;
+  return <div className="my-2 flex flex-col">{appendage}</div>;
+}
+
+function useFocusState(node: any, children: ReactNode) {
+  const { focusModeEnabled, activeFocusTargets, sectionKey } = useContext(FocusContext);
+  const blockIndexStr = node?.properties?.['data-block-index'];
+  const textHash = hashString(extractTextContent(children));
+  const targetId = `${sectionKey}-focus-${blockIndexStr ?? textHash}`;
+
+  let stateClass = "lesson-focus-target";
+  if (focusModeEnabled) {
+    stateClass = activeFocusTargets.has(targetId)
+      ? "lesson-focus-target lesson-focus-target--active"
+      : "lesson-focus-target lesson-focus-target--inactive";
+  }
+  return { targetId, stateClass, sectionKey };
+}
+
+const markdownComponents: Components = {
+  h1: ({ node, children, className, ...props }) => {
+    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+    return (
+      <>
+        <h1
+          {...props}
+          data-focus-target={targetId}
+          className={mergeClasses("lesson-heading lesson-heading--hero", stateClass, className)}
+        >
+          <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
+            {decorateChildren(children, `${sectionKey}-h1`)}
+          </span>
+        </h1>
+        <AppendageSlot node={node} />
+      </>
+    );
+  },
+  h2: ({ node, children, className, ...props }) => {
+    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+    return (
+      <>
+        <h2
+          {...props}
+          data-focus-target={targetId}
+          className={mergeClasses("lesson-heading lesson-heading--section", stateClass, className)}
+        >
+          <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
+            {decorateChildren(children, `${sectionKey}-h2`)}
+          </span>
+        </h2>
+        <AppendageSlot node={node} />
+      </>
+    );
+  },
+  h3: ({ node, children, className, ...props }) => {
+    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+    return (
+      <>
+        <h3
+          {...props}
+          data-focus-target={targetId}
+          className={mergeClasses("lesson-heading lesson-heading--subsection", stateClass, className)}
+        >
+          <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
+            {decorateChildren(children, `${sectionKey}-h3`)}
+          </span>
+        </h3>
+        <AppendageSlot node={node} />
+      </>
+    );
+  },
+  h4: ({ node, children, className, ...props }) => {
+    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+    return (
+      <>
+        <h4
+          {...props}
+          data-focus-target={targetId}
+          className={mergeClasses("lesson-heading lesson-heading--minor", stateClass, className)}
+        >
+          <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
+            {decorateChildren(children, `${sectionKey}-h4`)}
+          </span>
+        </h4>
+        <AppendageSlot node={node} />
+      </>
+    );
+  },
+  p: ({ node, children, className, ...props }) => {
+    const { targetId, stateClass } = useFocusState(node, children);
+    return (
+      <>
+        <p
+          {...props}
+          data-focus-target={targetId}
+          className={mergeClasses(stateClass, className)}
+        >
+          {decorateChildren(children, `${targetId}-p`)}
+        </p>
+        <AppendageSlot node={node} />
+      </>
+    );
+  },
+  li: ({ node, children, className, ...props }) => {
+    const { targetId, stateClass } = useFocusState(node, children);
+    return (
+      <li
+        {...props}
+        data-focus-target={targetId}
+        className={mergeClasses("lesson-list-item", getMarkerVariantClass(targetId), stateClass, className)}
+      >
+        {decorateChildren(children, `${targetId}-li`)}
+      </li>
+    );
+  },
+  blockquote: ({ node, children, className, ...props }) => {
+    const { targetId, stateClass } = useFocusState(node, children);
+    return (
+      <>
+        <blockquote
+          {...props}
+          data-focus-target={targetId}
+          className={mergeClasses(stateClass, className)}
+        >
+          {decorateChildren(children, `${targetId}-blockquote`)}
+        </blockquote>
+        <AppendageSlot node={node} />
+      </>
+    );
+  },
+  ul: ({ node, className, ...props }) => (
+    <>
+      <ul {...props} className={mergeClasses("lesson-list lesson-list--unordered", className)} />
+      <AppendageSlot node={node} />
+    </>
+  ),
+  ol: ({ node, className, ...props }) => (
+    <>
+      <ol {...props} className={mergeClasses("lesson-list lesson-list--ordered", className)} />
+      <AppendageSlot node={node} />
+    </>
+  ),
+  strong: ({ node: _node, children, className, ...props }) => (
+    <strong {...props} className={mergeClasses(className)}>{children}</strong>
+  ),
+  em: ({ node: _node, children, className, ...props }) => (
+    <em {...props} className={mergeClasses("lesson-inline-emphasis", className)}>{children}</em>
+  ),
+  a: ({ node: _node, children, className, href, ...props }) => {
+    const isExternalLink = href?.startsWith("http") ?? false;
+    return (
+      <a
+        {...props}
+        href={href}
+        className={mergeClasses(className)}
+        target={isExternalLink ? "_blank" : undefined}
+        rel={isExternalLink ? "noreferrer noopener" : undefined}
+      >
+        {children}
+      </a>
+    );
+  },
+};
+
+const remarkPlugins = [remarkGfm];
+const rehypePluginsList = [rehypeBlockIndex];
+
 export function LessonMarkdown({
   content,
   sectionKey,
   focusModeEnabled = false,
   activeFocusTargets = new Set(),
+  blockAppendages,
 }: LessonMarkdownProps) {
   const cleaned = stripProtocolTokens(content);
-  let focusTargetIndex = 0;
-
-  const getFocusTargetStateClass = (targetId: string): string => {
-    if (!focusModeEnabled) {
-      return "lesson-focus-target";
-    }
-
-    return activeFocusTargets.has(targetId)
-      ? "lesson-focus-target lesson-focus-target--active"
-      : "lesson-focus-target lesson-focus-target--inactive";
-  };
-
-  const components: Components = {
-    h1: ({ node: _node, children, className, ...props }) => {
-      const targetId = `${sectionKey}-focus-${focusTargetIndex}`;
-      focusTargetIndex += 1;
-      return (
-        <h1
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(
-            "lesson-heading lesson-heading--hero",
-            getFocusTargetStateClass(targetId),
-            className,
-          )}
-        >
-          <span
-            className={mergeClasses(
-              "lesson-heading-mark",
-              getHeadingAccentClass(children),
-              getMarkerVariantClass(extractTextContent(children)),
-            )}
-          >
-            {decorateChildren(children, `${sectionKey}-h1`)}
-          </span>
-        </h1>
-      );
-    },
-    h2: ({ node: _node, children, className, ...props }) => {
-      const targetId = `${sectionKey}-focus-${focusTargetIndex}`;
-      focusTargetIndex += 1;
-      return (
-        <h2
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(
-            "lesson-heading lesson-heading--section",
-            getFocusTargetStateClass(targetId),
-            className,
-          )}
-        >
-          <span
-            className={mergeClasses(
-              "lesson-heading-mark",
-              getHeadingAccentClass(children),
-              getMarkerVariantClass(extractTextContent(children)),
-            )}
-          >
-            {decorateChildren(children, `${sectionKey}-h2`)}
-          </span>
-        </h2>
-      );
-    },
-    h3: ({ node: _node, children, className, ...props }) => {
-      const targetId = `${sectionKey}-focus-${focusTargetIndex}`;
-      focusTargetIndex += 1;
-      return (
-        <h3
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(
-            "lesson-heading lesson-heading--subsection",
-            getFocusTargetStateClass(targetId),
-            className,
-          )}
-        >
-          <span
-            className={mergeClasses(
-              "lesson-heading-mark",
-              getHeadingAccentClass(children),
-              getMarkerVariantClass(extractTextContent(children)),
-            )}
-          >
-            {decorateChildren(children, `${sectionKey}-h3`)}
-          </span>
-        </h3>
-      );
-    },
-    h4: ({ node: _node, children, className, ...props }) => {
-      const targetId = `${sectionKey}-focus-${focusTargetIndex}`;
-      focusTargetIndex += 1;
-      return (
-        <h4
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(
-            "lesson-heading lesson-heading--minor",
-            getFocusTargetStateClass(targetId),
-            className,
-          )}
-        >
-          <span
-            className={mergeClasses(
-              "lesson-heading-mark",
-              getHeadingAccentClass(children),
-              getMarkerVariantClass(extractTextContent(children)),
-            )}
-          >
-            {decorateChildren(children, `${sectionKey}-h4`)}
-          </span>
-        </h4>
-      );
-    },
-    p: ({ node: _node, children, className, ...props }) => {
-      const targetId = `${sectionKey}-focus-${focusTargetIndex}`;
-      focusTargetIndex += 1;
-
-      return (
-        <p
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(
-            getFocusTargetStateClass(targetId),
-            className,
-          )}
-        >
-          {decorateChildren(children, `${targetId}-p`)}
-        </p>
-      );
-    },
-    li: ({ node: _node, children, className, ...props }) => {
-      const targetId = `${sectionKey}-focus-${focusTargetIndex}`;
-      focusTargetIndex += 1;
-
-      return (
-        <li
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(
-            "lesson-list-item",
-            getMarkerVariantClass(targetId),
-            getFocusTargetStateClass(targetId),
-            className,
-          )}
-        >
-          {decorateChildren(children, `${targetId}-li`)}
-        </li>
-      );
-    },
-    blockquote: ({ node: _node, children, className, ...props }) => {
-      const targetId = `${sectionKey}-focus-${focusTargetIndex}`;
-      focusTargetIndex += 1;
-
-      return (
-        <blockquote
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(
-            getFocusTargetStateClass(targetId),
-            className,
-          )}
-        >
-          {decorateChildren(children, `${targetId}-blockquote`)}
-        </blockquote>
-      );
-    },
-    ul: ({ node: _node, className, ...props }) => (
-      <ul
-        {...props}
-        className={mergeClasses("lesson-list lesson-list--unordered", className)}
-      />
-    ),
-    ol: ({ node: _node, className, ...props }) => (
-      <ol
-        {...props}
-        className={mergeClasses("lesson-list lesson-list--ordered", className)}
-      />
-    ),
-    strong: ({ node: _node, children, className, ...props }) => (
-      <strong {...props} className={mergeClasses(className)}>
-        {children}
-      </strong>
-    ),
-    em: ({ node: _node, children, className, ...props }) => (
-      <em
-        {...props}
-        className={mergeClasses("lesson-inline-emphasis", className)}
-      >
-        {children}
-      </em>
-    ),
-    a: ({ node: _node, children, className, href, ...props }) => {
-      const isExternalLink = href?.startsWith("http") ?? false;
-
-      return (
-        <a
-          {...props}
-          href={href}
-          className={mergeClasses(className)}
-          target={isExternalLink ? "_blank" : undefined}
-          rel={isExternalLink ? "noreferrer noopener" : undefined}
-        >
-          {children}
-        </a>
-      );
-    },
-  };
 
   return (
-    <div className="lesson-content">
-      <MarkerSvgFilters />
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {cleaned}
-      </ReactMarkdown>
-    </div>
+    <FocusContext.Provider value={{ focusModeEnabled, activeFocusTargets, sectionKey }}>
+      <BlockAppendagesContext.Provider value={blockAppendages || {}}>
+        <div className="lesson-content">
+          <MarkerSvgFilters />
+          <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePluginsList} components={markdownComponents}>
+            {cleaned}
+          </ReactMarkdown>
+        </div>
+      </BlockAppendagesContext.Provider>
+    </FocusContext.Provider>
   );
 }
