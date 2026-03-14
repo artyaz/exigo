@@ -20,6 +20,7 @@ import {
   createAiTraceId,
   getPosthogClient,
 } from "../shared/posthogAiObservability";
+import { getPromptInternal, renderPrompt } from "./coursePrompts";
 
 const FALLBACK_IMPROVEMENT =
   "Explore advanced edge cases and nuanced trade-offs in this topic.";
@@ -184,13 +185,15 @@ export const generateImprovements = action({
       throw new Error("Knowledge piece not found or unauthorized");
     }
 
-    const prompt = `You are an expert educator. The student just performed very well on a test about the following topic.
-Your goal is to identify ONE specific, advanced, or "harder" concept within this text that the student should focus on next to deepen their understanding.
-
-Text:
-${pieceData.content}
-
-Generate a concise 1-sentence description of the advanced concept they should focus on. Keep it under 25 words. Do not use markdown like bolding.`;
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "knowledge_node_improvement",
+      },
+    );
+    const prompt = renderPrompt(promptDoc.content, {
+      pieceContent: pieceData.content,
+    });
 
     let improvementIdea = FALLBACK_IMPROVEMENT;
     if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -202,7 +205,7 @@ Generate a concise 1-sentence description of the advanced concept they should fo
         const ai = new GoogleGenAI({
           apiKey: process.env.GOOGLE_GEMINI_API_KEY,
         });
-        const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+        const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
         const startedAt = Date.now();
         const response = await ai.models.generateContent({
           model,
@@ -230,9 +233,10 @@ Generate a concise 1-sentence description of the advanced concept they should fo
             event: "ai_generation_failed",
             properties: {
               source: "knowledgeNodes.generateImprovements",
-              error_message: error instanceof Error ? error.message : String(error),
+              error_message:
+                error instanceof Error ? error.message : String(error),
               error_name: error instanceof Error ? error.name : "UnknownError",
-              model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+              model: process.env.GEMINI_MODEL ?? "gemini-3-flash-preview",
               knowledgePieceId: args.knowledgePieceId,
               usedFallback: true,
             },
@@ -247,6 +251,38 @@ Generate a concise 1-sentence description of the advanced concept they should fo
       type: "improvement",
       content: improvementIdea,
     });
+  },
+});
+
+export const getActiveForSpace = query({
+  args: { spaceId: v.id("spaces") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    const space = await ctx.db.get(args.spaceId);
+    if (
+      !space ||
+      (space.userId !== userId && space.userId !== "default_user")
+    ) {
+      return [];
+    }
+    return await ctx.db
+      .query("knowledgeNodes")
+      .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+  },
+});
+
+export const getActiveNodesForSpaceInternal = internalQuery({
+  args: {
+    spaceId: v.id("spaces"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("knowledgeNodes")
+      .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
   },
 });
 

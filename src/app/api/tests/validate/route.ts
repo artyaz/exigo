@@ -20,6 +20,7 @@ import {
   logInfo,
   logWarn,
 } from "../../../../lib/otlpLogger";
+import { renderPrompt } from "../../../../../convex/coursePrompts";
 
 /**
  * Helper to securely validate incoming AI evaluation shape
@@ -183,21 +184,18 @@ export async function POST(req: NextRequest) {
       }
       const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
 
-      const prompt = `
-        You are a strict but encouraging educator evaluating a student's answer.
-        
-        Question: ${question.question}
-        Perfect Answer Outline: ${question.answer}
-        
-        Student's Answer: ${answer}
-        
-        Evaluate the student's answer. Is it fundamentally correct and captures the core meaning?
-        Respond STRICTLY with a JSON object: {"isCorrect": true/false, "feedback": "Brief 1 sentence explanation of why, or praise if correct"}
-      `;
+      const promptDoc = await convex.query(api.coursePrompts.getPrompt, {
+        name: "answer_evaluator",
+      });
+      const prompt = renderPrompt(promptDoc.content, {
+        questionText: question.question,
+        questionAnswer: question.answer ?? "N/A",
+        userAnswer: answer,
+      });
 
       // Enhanced model selection with fallback strategy
-      const primaryModel = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
-      const fallbackModel = "gemini-1.5-flash";
+      const primaryModel = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+      const fallbackModel = "gemini-3-flash-preview";
       let modelUsed = primaryModel;
       let response;
 

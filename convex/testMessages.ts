@@ -14,11 +14,12 @@ import {
   getAuthedContextForAction,
   requireEducatorAccess,
 } from "./authDecorators";
-import { internal } from "./_generated/api";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
 } from "../shared/posthogAiObservability";
+import { getPromptInternal, renderPrompt } from "./coursePrompts";
+import { internal } from "./_generated/api";
 
 async function getAuthenticatedUserId(
   ctx: QueryCtx | MutationCtx,
@@ -154,30 +155,6 @@ function buildHistoryPrompt(
   return `\nPrevious conversation about this question:\n${history}\nStudent: ${latestMessage}`;
 }
 
-function buildTutorPrompt(
-  question: Doc<"questions">,
-  historyPrompt: string,
-): string {
-  return `
-        You are a helpful, brilliant, and patient AI tutor. A student is reviewing a test question and has a follow-up question for you.
-
-        [Context Information]
-        Question: ${question.question}
-        Perfect Answer Outline: ${question.answer ?? "N/A"}
-        Student's Given Answer: ${question.userAnswer ?? "N/A"}
-        Correct?: ${question.isCorrect ? "Yes" : "No"}
-        Your Initial Feedback: ${question.aiFeedback ?? "N/A"}
-        
-        [Conversation]${historyPrompt}
-
-        Respond directly and concisely to the student's latest message. Be encouraging but highly accurate. Format your response in plain text.
-        ### OUTPUT FORMAT REQUIREMENTS (STRICT)
-1. Tone: Casual, slightly witty, professional. Use emojis 🧠.
-2. Structure: NO WALLS OF TEXT. Bullet points & bold text.
-3. Keep in mind that the chat window is horizontally small, so keep your responses not hard to read in this format.
-        `;
-}
-
 export const chat = action({
   args: {
     testId: v.id("tests"),
@@ -221,8 +198,23 @@ export const chat = action({
           apiKey: process.env.GOOGLE_GEMINI_API_KEY,
         });
         const historyPrompt = buildHistoryPrompt(pastMessages, args.message);
-        const prompt = buildTutorPrompt(question, historyPrompt);
-        const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+
+        const promptDoc = await ctx.runQuery(
+          internal.coursePrompts.getPromptInternal,
+          {
+            name: "tutor",
+          },
+        );
+        const prompt = renderPrompt(promptDoc.content, {
+          question_text: question.question,
+          question_answer: question.answer ?? "N/A",
+          question_userAnswer: question.userAnswer ?? "N/A",
+          question_isCorrect: question.isCorrect ? "Yes" : "No",
+          question_aiFeedback: question.aiFeedback ?? "N/A",
+          historyPrompt,
+        });
+
+        const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
         const startedAt = Date.now();
         const response = await ai.models.generateContent({
           model,

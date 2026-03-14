@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthedContext } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
+import { isUint16Array } from "node:util/types";
 
 export const list = query({
   args: { userId: v.string() },
