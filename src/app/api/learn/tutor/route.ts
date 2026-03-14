@@ -726,21 +726,10 @@ export async function POST(req: Request) {
 
           send("done", { chatId });
         } else {
-          // No tool calls — stream text response directly
-          // Re-generate with streaming for better UX
-          const streamResponse = await ai.models.generateContentStream({
-            model,
-            contents: prompt,
-            config: toolConfig,
-          });
-
-          let fullResponse = "";
-          for await (const chunk of streamResponse) {
-            const text = chunk.text ?? "";
-            if (text) {
-              fullResponse += text;
-              send("delta", { text });
-            }
+          // No tool calls — reuse the already-generated response
+          const fullResponse = initialResponse.text ?? "";
+          if (fullResponse) {
+            send("delta", { text: fullResponse });
           }
 
           captureAiGenerationEvent({

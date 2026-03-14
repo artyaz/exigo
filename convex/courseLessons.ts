@@ -344,6 +344,9 @@ export const markCompleted = mutation({
     const lesson = await ctx.db.get(args.lessonId);
     if (!lesson) throw new Error("Lesson not found");
 
+    const course = await ctx.db.get(lesson.courseId);
+    if (course?.userId !== auth.userId) throw new Error("Unauthorized");
+
     await ctx.db.patch(args.lessonId, { status: "completed" });
   },
 });

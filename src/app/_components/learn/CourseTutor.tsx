@@ -61,12 +61,14 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
   );
   const deleteChat = useMutation(api.courseTutor.deleteChat);
 
-  // Auto-select most recent chat
+  // Auto-select most recent chat on initial load only
+  const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
-    if (chats && chats.length > 0 && !activeChatId) {
+    if (chats && chats.length > 0 && !hasAutoSelectedRef.current) {
+      hasAutoSelectedRef.current = true;
       setActiveChatId(chats[0]!._id);
     }
-  }, [chats, activeChatId]);
+  }, [chats]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
