@@ -5,6 +5,7 @@ import {
 } from "../shared/planConfig";
 import {
   getLimitsForAccessLevel,
+  getActiveSubscription,
   ACCESS_LEVELS,
   type PlanLimits,
 } from "./subscriptionService";
@@ -14,6 +15,23 @@ export type ServerPlanLimits = PlanLimits;
 
 export { DEEP_DIVE_LIMITS_BY_TIER, getDeepDiveLimitForTier };
 export type { PlanLimits };
+
+export const getSubscriptionInfo = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const subscription = await getActiveSubscription(ctx, identity.subject);
+    if (!subscription) return null;
+
+    return {
+      planSlug: subscription.planSlug ?? null,
+      status: subscription.status,
+      currentPeriodEnd: subscription.currentPeriodEnd ?? null,
+    };
+  },
+});
 
 export const getPlan = query({
   args: {},

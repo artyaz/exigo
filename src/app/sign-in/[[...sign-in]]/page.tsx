@@ -1,8 +1,8 @@
 "use client";
 
-import { useSignIn } from "@clerk/nextjs";
+import { useSignIn, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { AuthLayout, AuthDivider, GoogleAuthButton, AuthInput, AuthSubmitButton, AuthErrorAlert, formatErrorMessage } from "~/app/_components/auth-ui";
@@ -17,12 +17,19 @@ import { LegalCornerLink } from "~/app/_components/legal-ui";
  */
 export default function SignInPage() {
     const { isLoaded, signIn, setActive } = useSignIn();
+    const { isSignedIn } = useUser();
     const router = useRouter();
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        if (isSignedIn) {
+            router.replace("/spaces");
+        }
+    }, [isSignedIn, router]);
 
     const handleGoogleSignIn = async () => {
         if (!isLoaded) return;

@@ -21,28 +21,6 @@ type PlanCard = {
     isFree: boolean;
 };
 
-type PrivateMetadata = {
-    plan?: string;
-    expiresAt?: number;
-    paddleSubscriptionId?: string;
-};
-
-function usePrivateMetadata(): PrivateMetadata {
-    const { user } = useUser();
-    if (!user) return {};
-    const metadata = (user as unknown as { privateMetadata?: unknown }).privateMetadata;
-    if (!metadata || typeof metadata !== "object") return {};
-
-    const meta = metadata as Record<string, unknown>;
-    return {
-        plan: typeof meta.plan === "string" ? meta.plan : undefined,
-        expiresAt: typeof meta.expiresAt === "number" ? meta.expiresAt : undefined,
-        paddleSubscriptionId: typeof meta.paddleSubscriptionId === "string"
-            ? meta.paddleSubscriptionId
-            : undefined,
-    };
-}
-
 function groupPlans(
     rawPlans: Array<{
         name: string;
@@ -185,15 +163,21 @@ function resolvePlanAction(
     return { type: "not-configured" };
 }
 
-function SubscriptionBanner({ meta }: { meta: PrivateMetadata }) {
-    if (!meta.plan) return null;
+type SubscriptionInfo = {
+    planSlug: string | null;
+    status: string;
+    currentPeriodEnd: number | null;
+} | null | undefined;
 
-    const tier = slugToTier(meta.plan);
+function SubscriptionBanner({ subscription }: { subscription: SubscriptionInfo }) {
+    if (!subscription?.planSlug) return null;
+
+    const tier = slugToTier(subscription.planSlug);
     const planLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
-    const isAnnual = meta.plan.includes("annual");
+    const isAnnual = subscription.planSlug.includes("annual");
 
-    const nextChargeDate = meta.expiresAt
-        ? new Date(meta.expiresAt).toLocaleDateString("en-US", {
+    const nextChargeDate = subscription.currentPeriodEnd
+        ? new Date(subscription.currentPeriodEnd).toLocaleDateString("en-US", {
               month: "long",
               day: "numeric",
               year: "numeric",
@@ -211,11 +195,15 @@ function SubscriptionBanner({ meta }: { meta: PrivateMetadata }) {
                         {isAnnual ? "Annual" : "Monthly"} subscription
                     </span>
                 </div>
-                {nextChargeDate && (
+                {nextChargeDate && subscription.status !== "canceled" ? (
                     <p className="text-sm text-white/45">
                         Next charge: {nextChargeDate}
                     </p>
-                )}
+                ) : subscription.status === "canceled" && nextChargeDate ? (
+                    <p className="text-sm text-white/45">
+                        Access until: {nextChargeDate}
+                    </p>
+                ) : null}
             </div>
         </div>
     );
@@ -380,7 +368,7 @@ export default function PricingPage() {
             basePrice: paddlePrices[plan.slug] ?? plan.basePrice,
         })),
     );
-    const meta = usePrivateMetadata();
+    const subscription = useQuery(api.planLimits.getSubscriptionInfo);
 
     if (!isLoaded) {
         return (
@@ -463,12 +451,12 @@ export default function PricingPage() {
                             <BillingToggle value={billingCycle} onChange={setBillingCycle} />
                         </header>
 
-                        <SubscriptionBanner meta={meta} />
+                        <SubscriptionBanner subscription={subscription} />
 
                         <PricingCards
                             plans={plans}
                             billingCycle={billingCycle}
-                            currentPlanSlug={meta.plan}
+                            currentPlanSlug={subscription?.planSlug ?? undefined}
                             isAuthenticated={true}
                         />
                     </div>
