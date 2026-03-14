@@ -108,7 +108,7 @@ export function ClarificationThread({
                                         transition={{ delay: i * 0.05, ...THREAD_SPRING }}
                                         className="flex gap-2.5 justify-end"
                                     >
-                                        <div className="rounded-xl text-sm leading-relaxed max-w-[85%] bg-white/[0.06] border border-white/[0.08] text-white/80 px-3.5 py-2.5">
+                                        <div className="rounded-xl text-sm leading-relaxed max-w-[85%] bg-white/[0.06] border border-white/[0.08] text-white/80 px-3.5 py-2.5 whitespace-pre-wrap break-words">
                                             {msg.content}
                                         </div>
                                         <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
