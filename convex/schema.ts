@@ -185,12 +185,15 @@ export default defineSchema({
 
   // ─── AI Tutor ───
   courseTutorChats: defineTable({
-    courseId: v.id("courses"),
+    spaceId: v.id("spaces"),
+    courseId: v.optional(v.id("courses")),
     userId: v.string(),
     title: v.string(),
   })
     .index("by_course", ["courseId"])
-    .index("by_user_course", ["userId", "courseId"]),
+    .index("by_user_course", ["userId", "courseId"])
+    .index("by_space", ["spaceId"])
+    .index("by_user_space", ["userId", "spaceId"]),
   courseTutorMessages: defineTable({
     chatId: v.id("courseTutorChats"),
     role: v.union(

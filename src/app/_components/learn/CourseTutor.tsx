@@ -19,21 +19,31 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 interface CourseTutorProps {
-  courseId: Id<"courses">;
   spaceId: Id<"spaces">;
+  courseId?: Id<"courses">;
 }
 
-export function CourseTutor({ courseId, spaceId }: CourseTutorProps) {
+export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState<Id<"courseTutorChats"> | null>(null);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [toolActions, setToolActions] = useState<Array<{ name: string; success?: boolean; message?: string }>>([]);
   const [showChatList, setShowChatList] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const chats = useQuery(api.courseTutor.getChatsForCourse, { courseId });
+  // Use course-scoped or space-scoped chat list depending on context
+  const courseChats = useQuery(
+    api.courseTutor.getChatsForCourse,
+    courseId ? { courseId } : "skip",
+  );
+  const spaceChats = useQuery(
+    api.courseTutor.getChatsForSpace,
+    !courseId ? { spaceId } : "skip",
+  );
+  const chats = courseId ? courseChats : spaceChats;
   const messages = useQuery(
     api.courseTutor.getMessages,
     activeChatId ? { chatId: activeChatId } : "skip",
@@ -81,7 +91,8 @@ export function CourseTutor({ courseId, spaceId }: CourseTutorProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          courseId,
+          spaceId,
+          courseId: courseId ?? undefined,
           chatId: activeChatId ?? undefined,
           message: text,
         }),
@@ -126,6 +137,24 @@ export function CourseTutor({ courseId, spaceId }: CourseTutorProps) {
               setStreamingContent(accumulated);
             } else if (eventType === "chat_created" && typeof data.chatId === "string") {
               setActiveChatId(data.chatId as Id<"courseTutorChats">);
+            } else if (eventType === "tool_call") {
+              setToolActions((prev) => [
+                ...prev,
+                { name: String(data.name ?? "tool") },
+              ]);
+            } else if (eventType === "tool_result") {
+              setToolActions((prev) => {
+                const updated = [...prev];
+                const last = updated.findIndex((t) => t.name === String(data.name) && t.success === undefined);
+                if (last >= 0) {
+                  updated[last] = {
+                    ...updated[last]!,
+                    success: Boolean(data.success),
+                    message: String(data.message ?? ""),
+                  };
+                }
+                return updated;
+              });
             } else if (eventType === "error") {
               console.error("Tutor error:", data.error);
             }
@@ -139,8 +168,9 @@ export function CourseTutor({ courseId, spaceId }: CourseTutorProps) {
     } finally {
       setIsStreaming(false);
       setStreamingContent("");
+      setToolActions([]);
     }
-  }, [input, isStreaming, courseId, activeChatId]);
+  }, [input, isStreaming, spaceId, courseId, activeChatId]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -276,10 +306,12 @@ export function CourseTutor({ courseId, spaceId }: CourseTutorProps) {
                 <div className="flex flex-col items-center justify-center h-full text-center px-6 gap-3">
                   <Brain className="w-10 h-10 text-violet-400/50" />
                   <p className="text-white/50 text-sm">
-                    Ask me anything about this course — concepts, clarifications, practice problems, or study strategies.
+                    {courseId
+                      ? "Ask me anything about this course — concepts, clarifications, practice problems, or study strategies."
+                      : "Ask me anything about your learning — I have context across all your courses, knowledge, and progress."}
                   </p>
                   <p className="text-white/30 text-xs">
-                    I remember what you've learned and where you've struggled.
+                    I remember what you&apos;ve learned and where you&apos;ve struggled.
                   </p>
                 </div>
               )}
@@ -308,6 +340,27 @@ export function CourseTutor({ courseId, spaceId }: CourseTutorProps) {
                   </div>
                 </div>
               ))}
+
+              {/* Tool action indicators */}
+              {toolActions.length > 0 && (
+                <div className="space-y-1.5">
+                  {toolActions.map((action, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-white/50 px-2">
+                      {action.success === undefined ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
+                      ) : action.success ? (
+                        <span className="text-emerald-400">✓</span>
+                      ) : (
+                        <span className="text-red-400">✗</span>
+                      )}
+                      <span className="text-white/40">
+                        {action.name.replace(/_/g, " ")}
+                        {action.message ? `: ${action.message}` : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Streaming response */}
               {streamingContent && (

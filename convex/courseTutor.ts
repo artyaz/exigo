@@ -26,18 +26,40 @@ export const getChatsForCourse = query({
   },
 });
 
+export const getChatsForSpace = query({
+  args: { spaceId: v.id("spaces") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    return await ctx.db
+      .query("courseTutorChats")
+      .withIndex("by_user_space", (q) =>
+        q.eq("userId", userId).eq("spaceId", args.spaceId),
+      )
+      .order("desc")
+      .collect();
+  },
+});
+
 export const createChat = mutation({
   args: {
-    courseId: v.id("courses"),
+    spaceId: v.id("spaces"),
+    courseId: v.optional(v.id("courses")),
     title: v.string(),
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-    const course = await ctx.db.get(args.courseId);
-    if (!course || course.userId !== auth.userId) {
+    const space = await ctx.db.get(args.spaceId);
+    if (!space || space.userId !== auth.userId) {
       throw new Error("Unauthorized");
     }
+    if (args.courseId) {
+      const course = await ctx.db.get(args.courseId);
+      if (!course || course.userId !== auth.userId) {
+        throw new Error("Unauthorized");
+      }
+    }
     return await ctx.db.insert("courseTutorChats", {
+      spaceId: args.spaceId,
       courseId: args.courseId,
       userId: auth.userId,
       title: args.title,

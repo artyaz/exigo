@@ -15,6 +15,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { addKnowledgePieceAction, bulkImportKnowledgeAction } from "../../actions/knowledge";
 import { LearnTab } from "../../_components/learn/LearnTab";
+import { CourseTutor } from "../../_components/learn/CourseTutor";
 import { createTestServerAction } from "../../actions/spaces";
 import { RESOLUTION_THRESHOLD } from "../../../../shared/planConfig";
 import {
@@ -626,6 +627,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Space-level AI Tutor */}
+            <CourseTutor spaceId={space._id} />
         </div>
     );
 }
