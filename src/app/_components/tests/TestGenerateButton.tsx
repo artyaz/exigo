@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "../../../../convex/_generated/api";
 import { useMutation } from "convex/react";
@@ -17,6 +17,10 @@ interface TestGenerateButtonProps {
     spaceId: string;
     pieces: Doc<"knowledgePieces">[];
     fixedTopicId?: Id<"knowledgePieces">;
+}
+
+function getErrorMessage(error: unknown): string | null {
+    return error instanceof Error ? error.message : null;
 }
 
 export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenerateButtonProps) {
@@ -58,22 +62,7 @@ export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenera
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (showTopicPicker && event.key === "Escape") {
-                setShowTopicPicker(false);
-            }
-            if (!showTopicPicker && !showTypeDropdown && (event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                event.preventDefault();
-                handleTestMe();
-            }
-        };
-        window.addEventListener("keydown", handleKeyDown);
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [showTopicPicker, showTypeDropdown, pieces.length, isGenerating]);
-
-
-    const handleTestMe = async () => {
+    const handleTestMe = useCallback(async () => {
         if (pieces.length === 0 || isGenerating) return;
         setIsGenerating(true);
         setTestGenerateError(null);
@@ -101,17 +90,32 @@ export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenera
             });
 
             router.push(`/tests/${testId}`);
-        } catch (error: any) {
+        } catch (error) {
             console.error("Failed to generate test:", error);
-            if (error?.message?.includes("Upgrade your plan")) {
-                setTestGenerateError(error.message);
+            const errorMessage = getErrorMessage(error);
+            if (errorMessage?.includes("Upgrade your plan")) {
+                setTestGenerateError(errorMessage);
             } else {
                 setTestGenerateError("Failed to generate test. Please try again.");
             }
         } finally {
             setIsGenerating(false);
         }
-    };
+    }, [createTest, isGenerating, pieces, router, selectedTopicId, spaceId, testType, userId]);
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (showTopicPicker && event.key === "Escape") {
+                setShowTopicPicker(false);
+            }
+            if (!showTopicPicker && !showTypeDropdown && (event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                void handleTestMe();
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [handleTestMe, showTopicPicker, showTypeDropdown]);
 
     const selectedTopic = selectedTopicId ? pieces.find(p => p._id === selectedTopicId) : null;
 
@@ -122,7 +126,7 @@ export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenera
                     {/* Main generate button */}
                     <button
                         disabled={pieces.length === 0 || isGenerating}
-                        onClick={handleTestMe}
+                        onClick={() => void handleTestMe()}
                         className={`flex items-center gap-2.5 bg-white text-black font-medium pl-5 pr-4 py-2.5 spring-interact disabled:opacity-50 hover:opacity-90 text-sm ${!fixedTopicId ? 'rounded-l-xl' : 'rounded-xl'}`}
                     >
                         {isGenerating ? (

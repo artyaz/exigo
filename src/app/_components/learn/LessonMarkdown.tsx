@@ -6,12 +6,14 @@ import {
   useContext,
   useState,
   useCallback,
+  type ComponentPropsWithoutRef,
   type ReactNode,
 } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import type { Element, Root, RootContent } from "hast";
 
 interface LessonMarkdownProps {
   content: string;
@@ -21,13 +23,38 @@ interface LessonMarkdownProps {
   blockAppendages?: Record<number, ReactNode>;
 }
 
+type MarkdownElement = Element | undefined;
+type MarkdownTextTag = "h1" | "h2" | "h3" | "h4" | "p" | "li" | "blockquote";
+type MarkdownComponentProps<Tag extends MarkdownTextTag> =
+  ComponentPropsWithoutRef<Tag> & ExtraProps;
+
+function isElementNode(node: RootContent): node is Element {
+  return node.type === "element";
+}
+
+function getBlockIndex(node: MarkdownElement): number | null {
+  const rawValue = node?.properties["data-block-index"];
+
+  const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof candidate === "number") {
+    return candidate;
+  }
+
+  if (typeof candidate === "string") {
+    const parsed = Number.parseInt(candidate, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+}
+
 const rehypeBlockIndex = () => {
-  return (tree: any) => {
+  return (tree: Root) => {
     let index = 0;
-    for (const child of tree.children || []) {
-      if (child.type === 'element') {
-        child.properties = child.properties || {};
-        child.properties['data-block-index'] = String(index);
+    for (const child of tree.children ?? []) {
+      if (isElementNode(child)) {
+        child.properties ??= {};
+        child.properties["data-block-index"] = String(index);
         index++;
       }
     }
@@ -320,21 +347,20 @@ const FocusContext = createContext<{ focusModeEnabled: boolean; activeFocusTarge
   sectionKey: "",
 });
 
-function AppendageSlot({ node }: { node: any }) {
-  const blockIndexStr = node?.properties?.['data-block-index'];
+function AppendageSlot({ node }: { node: MarkdownElement }) {
   const appendages = useContext(BlockAppendagesContext);
-  if (blockIndexStr === undefined) return null;
-  const blockIndex = parseInt(blockIndexStr as string, 10);
+  const blockIndex = getBlockIndex(node);
+  if (blockIndex === null) return null;
   const appendage = appendages[blockIndex];
   if (!appendage) return null;
   return <div className="my-2 flex flex-col">{appendage}</div>;
 }
 
-function useFocusState(node: any, children: ReactNode) {
+function useFocusState(node: MarkdownElement, children: ReactNode) {
   const { focusModeEnabled, activeFocusTargets, sectionKey } = useContext(FocusContext);
-  const blockIndexStr = node?.properties?.['data-block-index'];
+  const blockIndex = getBlockIndex(node);
   const textHash = hashString(extractTextContent(children));
-  const targetId = `${sectionKey}-focus-${blockIndexStr ?? textHash}`;
+  const targetId = `${sectionKey}-focus-${blockIndex ?? textHash}`;
 
   let stateClass = "lesson-focus-target";
   if (focusModeEnabled) {
@@ -343,6 +369,123 @@ function useFocusState(node: any, children: ReactNode) {
       : "lesson-focus-target lesson-focus-target--inactive";
   }
   return { targetId, stateClass, sectionKey };
+}
+
+function HeadingOne({ node, children, className, ...props }: MarkdownComponentProps<"h1">) {
+  const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+  return (
+    <>
+      <h1
+        {...props}
+        data-focus-target={targetId}
+        className={mergeClasses("lesson-heading lesson-heading--hero", stateClass, className)}
+      >
+        <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
+          {decorateChildren(children, `${sectionKey}-h1`)}
+        </span>
+      </h1>
+      <AppendageSlot node={node} />
+    </>
+  );
+}
+
+function HeadingTwo({ node, children, className, ...props }: MarkdownComponentProps<"h2">) {
+  const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+  return (
+    <>
+      <h2
+        {...props}
+        data-focus-target={targetId}
+        className={mergeClasses("lesson-heading lesson-heading--section", stateClass, className)}
+      >
+        <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
+          {decorateChildren(children, `${sectionKey}-h2`)}
+        </span>
+      </h2>
+      <AppendageSlot node={node} />
+    </>
+  );
+}
+
+function HeadingThree({ node, children, className, ...props }: MarkdownComponentProps<"h3">) {
+  const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+  return (
+    <>
+      <h3
+        {...props}
+        data-focus-target={targetId}
+        className={mergeClasses("lesson-heading lesson-heading--subsection", stateClass, className)}
+      >
+        <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
+          {decorateChildren(children, `${sectionKey}-h3`)}
+        </span>
+      </h3>
+      <AppendageSlot node={node} />
+    </>
+  );
+}
+
+function HeadingFour({ node, children, className, ...props }: MarkdownComponentProps<"h4">) {
+  const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+  return (
+    <>
+      <h4
+        {...props}
+        data-focus-target={targetId}
+        className={mergeClasses("lesson-heading lesson-heading--minor", stateClass, className)}
+      >
+        <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
+          {decorateChildren(children, `${sectionKey}-h4`)}
+        </span>
+      </h4>
+      <AppendageSlot node={node} />
+    </>
+  );
+}
+
+function Paragraph({ node, children, className, ...props }: MarkdownComponentProps<"p">) {
+  const { targetId, stateClass } = useFocusState(node, children);
+  return (
+    <>
+      <p
+        {...props}
+        data-focus-target={targetId}
+        className={mergeClasses(stateClass, className)}
+      >
+        {decorateChildren(children, `${targetId}-p`)}
+      </p>
+      <AppendageSlot node={node} />
+    </>
+  );
+}
+
+function ListItem({ node, children, className, ...props }: MarkdownComponentProps<"li">) {
+  const { targetId, stateClass } = useFocusState(node, children);
+  return (
+    <li
+      {...props}
+      data-focus-target={targetId}
+      className={mergeClasses("lesson-list-item", getMarkerVariantClass(targetId), stateClass, className)}
+    >
+      {decorateChildren(children, `${targetId}-li`)}
+    </li>
+  );
+}
+
+function Blockquote({ node, children, className, ...props }: MarkdownComponentProps<"blockquote">) {
+  const { targetId, stateClass } = useFocusState(node, children);
+  return (
+    <>
+      <blockquote
+        {...props}
+        data-focus-target={targetId}
+        className={mergeClasses(stateClass, className)}
+      >
+        {decorateChildren(children, `${targetId}-blockquote`)}
+      </blockquote>
+      <AppendageSlot node={node} />
+    </>
+  );
 }
 
 function CodeBlockWithCopy({ language, code }: { language: string; code: string }) {
@@ -384,116 +527,13 @@ function CodeBlockWithCopy({ language, code }: { language: string; code: string 
 }
 
 const markdownComponents: Components = {
-  h1: ({ node, children, className, ...props }) => {
-    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
-    return (
-      <>
-        <h1
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses("lesson-heading lesson-heading--hero", stateClass, className)}
-        >
-          <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
-            {decorateChildren(children, `${sectionKey}-h1`)}
-          </span>
-        </h1>
-        <AppendageSlot node={node} />
-      </>
-    );
-  },
-  h2: ({ node, children, className, ...props }) => {
-    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
-    return (
-      <>
-        <h2
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses("lesson-heading lesson-heading--section", stateClass, className)}
-        >
-          <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
-            {decorateChildren(children, `${sectionKey}-h2`)}
-          </span>
-        </h2>
-        <AppendageSlot node={node} />
-      </>
-    );
-  },
-  h3: ({ node, children, className, ...props }) => {
-    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
-    return (
-      <>
-        <h3
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses("lesson-heading lesson-heading--subsection", stateClass, className)}
-        >
-          <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
-            {decorateChildren(children, `${sectionKey}-h3`)}
-          </span>
-        </h3>
-        <AppendageSlot node={node} />
-      </>
-    );
-  },
-  h4: ({ node, children, className, ...props }) => {
-    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
-    return (
-      <>
-        <h4
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses("lesson-heading lesson-heading--minor", stateClass, className)}
-        >
-          <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
-            {decorateChildren(children, `${sectionKey}-h4`)}
-          </span>
-        </h4>
-        <AppendageSlot node={node} />
-      </>
-    );
-  },
-  p: ({ node, children, className, ...props }) => {
-    const { targetId, stateClass } = useFocusState(node, children);
-    return (
-      <>
-        <p
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(stateClass, className)}
-        >
-          {decorateChildren(children, `${targetId}-p`)}
-        </p>
-        <AppendageSlot node={node} />
-      </>
-    );
-  },
-  li: ({ node, children, className, ...props }) => {
-    const { targetId, stateClass } = useFocusState(node, children);
-    return (
-      <li
-        {...props}
-        data-focus-target={targetId}
-        className={mergeClasses("lesson-list-item", getMarkerVariantClass(targetId), stateClass, className)}
-      >
-        {decorateChildren(children, `${targetId}-li`)}
-      </li>
-    );
-  },
-  blockquote: ({ node, children, className, ...props }) => {
-    const { targetId, stateClass } = useFocusState(node, children);
-    return (
-      <>
-        <blockquote
-          {...props}
-          data-focus-target={targetId}
-          className={mergeClasses(stateClass, className)}
-        >
-          {decorateChildren(children, `${targetId}-blockquote`)}
-        </blockquote>
-        <AppendageSlot node={node} />
-      </>
-    );
-  },
+  h1: HeadingOne,
+  h2: HeadingTwo,
+  h3: HeadingThree,
+  h4: HeadingFour,
+  p: Paragraph,
+  li: ListItem,
+  blockquote: Blockquote,
   ul: ({ node, className, ...props }) => (
     <>
       <ul {...props} className={mergeClasses("lesson-list lesson-list--unordered", className)} />
@@ -537,7 +577,7 @@ const markdownComponents: Components = {
   code: ({ node: _node, children, className, ...props }) => {
     const match = /language-(\w+)/.exec(className ?? "");
     const language = match?.[1];
-    const codeStr = String(children).replace(/\n$/, "");
+    const codeStr = extractTextContent(children).replace(/\n$/, "");
 
     // Inline code (no language class, not inside pre)
     if (!language) {
@@ -562,7 +602,7 @@ export function LessonMarkdown({
 
   return (
     <FocusContext.Provider value={{ focusModeEnabled, activeFocusTargets, sectionKey }}>
-      <BlockAppendagesContext.Provider value={blockAppendages || {}}>
+      <BlockAppendagesContext.Provider value={blockAppendages ?? {}}>
         <div className="lesson-content">
           <MarkerSvgFilters />
           <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePluginsList} components={markdownComponents}>

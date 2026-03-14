@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
-import type { Id, Doc } from "../../../../convex/_generated/dataModel";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Zap, ChevronRight, BookOpen, Play, CheckCircle2, X } from "lucide-react";
@@ -28,7 +28,7 @@ const LESSON_STATUS: Record<string, { label: string; color: string; bg: string }
   integrated: { label: "Done", color: "text-teal-400", bg: "bg-teal-500/10" },
 };
 
-export function LearnTab({ spaceId, userId, spaceName }: { spaceId: string; userId: string; spaceName: string }) {
+export function LearnTab({ spaceId, userId: _userId, spaceName }: { spaceId: string; userId: string; spaceName: string }) {
   const courses = useQuery(api.courses.getForSpace, { spaceId: spaceId as Id<"spaces"> });
   const course = courses?.[0] ?? null;
 

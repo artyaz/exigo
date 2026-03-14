@@ -21,6 +21,21 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+function parseMasteryGoals(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is string => typeof entry === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function getAiClient() {
   if (!process.env.GOOGLE_GEMINI_API_KEY)
     throw new Error("GOOGLE_GEMINI_API_KEY not set");
@@ -132,12 +147,7 @@ export async function POST(req: Request) {
       });
     }
 
-    let masteryGoals: string[] = [];
-    try {
-      masteryGoals = lesson.masteryGoals ? JSON.parse(lesson.masteryGoals) : [];
-    } catch {
-      /* empty */
-    }
+    const masteryGoals = parseMasteryGoals(lesson.masteryGoals);
 
     const historyStr = messages
       .slice(-20)
@@ -238,9 +248,10 @@ export async function POST(req: Request) {
 
           // Parse completed response
           const isComplete = fullText.includes("[LESSON_COMPLETE]");
-          const inputRequestMatch = fullText.match(
-            /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/,
-          );
+          const inputRequestMatch =
+            /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/.exec(
+              fullText,
+            );
 
           const messageType = inputRequestMatch
             ? "input_request"

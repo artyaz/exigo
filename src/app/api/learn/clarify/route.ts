@@ -143,7 +143,7 @@ export async function POST(req: Request) {
     const writer = writable.getWriter();
 
     // Fire-and-forget the streaming generation
-    (async () => {
+    void (async () => {
       try {
         const requestStartedAt = Date.now();
         const stream = await ai.models.generateContentStream({

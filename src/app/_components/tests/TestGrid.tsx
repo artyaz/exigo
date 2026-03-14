@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
     CheckCircle2, Clock, Zap, ArrowDown, ArrowUp, FileText,
 } from "lucide-react";
-import type { Doc, Id } from "../../../../convex/_generated/dataModel";
+import type { Doc } from "../../../../convex/_generated/dataModel";
 
 // Utility function for hashCode used in 3D stack
 function hashCode(str: string) {
@@ -83,7 +83,7 @@ export function TestGrid({ spaceTests, spaceQuestions }: TestGridProps) {
     if (sortBy === "date") sorted.sort((a, b) => b._creationTime - a._creationTime);
     else if (sortBy === "status") {
         const order: Record<"done" | "in_progress" | "new", number> = { done: 0, in_progress: 1, new: 2 };
-        sorted.sort((a, b) => order[a.progressStatus as "done" | "in_progress" | "new"] - order[b.progressStatus as "done" | "in_progress" | "new"]);
+        sorted.sort((a, b) => order[a.progressStatus] - order[b.progressStatus]);
     } else if (sortBy === "questions") {
         sorted.sort((a, b) => b.testQuestions.length - a.testQuestions.length);
     } else if (sortBy === "performance") {

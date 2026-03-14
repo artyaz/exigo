@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
-import { useState, useEffect, useLayoutEffect, useRef, use, useCallback, useMemo, type RefObject } from "react";
+import { useState, useEffect, useRef, use, useCallback, useMemo, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -38,7 +38,7 @@ import {
   type PersistedLessonCheckpointState,
   type RestoredCheckpointState as CheckpointState,
 } from "~/lib/lessonCheckpoints";
-import { FileText, Target } from "lucide-react";
+import { FileText } from "lucide-react";
 
 type ClientActionResult<T> =
   | { ok: true; data: T }
@@ -413,7 +413,7 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
                         fixedTopicId={activeLesson.knowledgePieceId} 
                       />
                       <div className="border-t border-white/5 my-2" />
-                      <p className="text-secondary text-sm">Tests specifically focused on this lesson's knowledge.</p>
+                      <p className="text-secondary text-sm">Tests specifically focused on this lesson knowledge.</p>
                       <TestGrid 
                         spaceTests={spaceTests.filter(t => t.knowledgePieceId === activeLesson.knowledgePieceId)} 
                         spaceQuestions={spaceQuestions} 
@@ -557,15 +557,6 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questions.length, isLoading]);
 
-  if (baselineResults) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-white/30" />
-        <p className="text-sm text-secondary">Loading your course...</p>
-      </div>
-    );
-  }
-
   const handleAnswer = async (questionId: string, answer: string) => {
     if (!answer.trim()) return;
     const q = questions.find(qu => qu.id === questionId);
@@ -622,6 +613,15 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
     void submit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questions]);
+
+  if (baselineResults) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-white/30" />
+        <p className="text-sm text-secondary">Loading your course...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-12rem)] flex flex-col">
@@ -1076,7 +1076,7 @@ function LessonPhase({
 
   // ─── Text selection + keydown trigger ───
   const [bubbleInitialChars, setBubbleInitialChars] = useState("");
-  const [isClarifySubmitting, setIsClarifySubmitting] = useState(false);
+  const isClarifySubmitting = false;
 
   // Ref-based pending in-thread reply to avoid forward dependency on handlers
   const pendingInThreadReply = useRef<{ threadId: string; question: string } | null>(null);
@@ -1218,7 +1218,7 @@ function LessonPhase({
         });
       }
       threadMap.get(tid)!.messages.push({
-        role: msg.role as ClarificationMessage["role"],
+        role: msg.role,
         content: msg.content,
       });
     }
@@ -1759,7 +1759,7 @@ function LessonPhase({
                   Array.from(clarificationThreads.values())
                     .filter(t => t.sectionIndex === i)
                     .reduce((acc, t) => {
-                      const existing = acc[t.blockIndex] || null;
+                      const existing = acc[t.blockIndex] ?? null;
                       acc[t.blockIndex] = (
                         <div key={t.threadId}>
                           {existing}
