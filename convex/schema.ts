@@ -152,6 +152,20 @@ export default defineSchema({
     targetsWeakness: v.boolean(),
     masteryGoals: v.optional(v.string()),
     verifierLogs: v.optional(v.string()),
+    checkpointStates: v.optional(v.array(v.object({
+      sectionIndex: v.number(),
+      question: v.string(),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("answered"),
+        v.literal("skipped"),
+      ),
+      answer: v.optional(v.string()),
+      verification: v.optional(v.object({
+        is_correct: v.boolean(),
+        feedback_block: v.string(),
+      })),
+    }))),
     summaryMarkdown: v.optional(v.string()),
     knowledgePieceId: v.optional(v.id("knowledgePieces")),
     pendingFeelsHardNodes: v.optional(v.array(v.string())),
@@ -185,7 +199,8 @@ export default defineSchema({
 
   // ─── AI Tutor ───
   courseTutorChats: defineTable({
-    spaceId: v.id("spaces"),
+    // Legacy course-scoped chats may not have spaceId yet.
+    spaceId: v.optional(v.id("spaces")),
     courseId: v.optional(v.id("courses")),
     userId: v.string(),
     title: v.string(),

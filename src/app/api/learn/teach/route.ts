@@ -3,7 +3,10 @@ import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
-import { ConvexAuthError, createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import {
+  ConvexAuthError,
+  createAuthedConvexClient,
+} from "../../../../lib/convexClientAuth";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -19,12 +22,13 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 function getAiClient() {
-  if (!process.env.GOOGLE_GEMINI_API_KEY) throw new Error("GOOGLE_GEMINI_API_KEY not set");
+  if (!process.env.GOOGLE_GEMINI_API_KEY)
+    throw new Error("GOOGLE_GEMINI_API_KEY not set");
   return new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
 }
 
 function getModel() {
-  return process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+  return process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
 }
 
 export async function POST(req: Request) {
@@ -33,14 +37,18 @@ export async function POST(req: Request) {
 
   const { userId, getToken } = await auth();
   if (!userId) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+    });
   }
 
   const body = (await req.json()) as { lessonId: string; userMessage?: string };
   const { lessonId, userMessage } = body;
 
   if (!lessonId) {
-    return new Response(JSON.stringify({ error: "lessonId required" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "lessonId required" }), {
+      status: 400,
+    });
   }
 
   let convex: Awaited<ReturnType<typeof createAuthedConvexClient>>;
@@ -56,7 +64,10 @@ export async function POST(req: Request) {
       ...getErrorAttributes(error),
     });
     if (error instanceof ConvexAuthError) {
-      return new Response(JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }), { status: 401 });
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }),
+        { status: 401 },
+      );
     }
     const msg = error instanceof Error ? error.message : "Unauthorized";
     return new Response(JSON.stringify({ error: msg }), { status: 500 });
@@ -65,7 +76,9 @@ export async function POST(req: Request) {
   try {
     const lessonIdTyped = lessonId as Id<"courseLessons">;
 
-    const lesson = await convex.query(api.courseLessons.get, { lessonId: lessonIdTyped });
+    const lesson = await convex.query(api.courseLessons.get, {
+      lessonId: lessonIdTyped,
+    });
     if (!lesson) throw new Error("Lesson not found");
 
     const courseId = lesson.courseId as Id<"courses">;
@@ -83,41 +96,63 @@ export async function POST(req: Request) {
     }
 
     // Get conversation history
-    const messages = await convex.query(api.courseLessonMessages.getForLesson, { lessonId: lessonIdTyped });
+    const messages = await convex.query(api.courseLessonMessages.getForLesson, {
+      lessonId: lessonIdTyped,
+    });
 
     // Safety: cap teacher messages per lesson to prevent infinite generation loops
     const MAX_TEACHER_MESSAGES = 15;
-    const teacherMessageCount = messages.filter((m: { role: string }) => m.role === "teacher").length;
+    const teacherMessageCount = messages.filter(
+      (m: { role: string }) => m.role === "teacher",
+    ).length;
     if (teacherMessageCount >= MAX_TEACHER_MESSAGES) {
       const encoder = new TextEncoder();
       const forceComplete = new ReadableStream({
         start(controller) {
           const text = "[LESSON_COMPLETE]";
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text })}\n\n`));
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", isComplete: true, inputRequest: null, fullText: text })}\n\n`));
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "delta", text })}\n\n`,
+            ),
+          );
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "done", isComplete: true, inputRequest: null, fullText: text })}\n\n`,
+            ),
+          );
           controller.close();
         },
       });
       return new Response(forceComplete, {
-        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
       });
     }
 
     let masteryGoals: string[] = [];
     try {
       masteryGoals = lesson.masteryGoals ? JSON.parse(lesson.masteryGoals) : [];
-    } catch { /* empty */ }
+    } catch {
+      /* empty */
+    }
 
     const historyStr = messages
       .slice(-20)
-      .map((m: { role: string; content: string }) =>
-        `${m.role === "teacher" ? "Teacher" : m.role === "user" ? "Student" : "System"}: ${m.content}`,
+      .map(
+        (m: { role: string; content: string }) =>
+          `${m.role === "teacher" ? "Teacher" : m.role === "user" ? "Student" : "System"}: ${m.content}`,
       )
       .join("\n");
 
-    const hasHistory = historyStr && historyStr !== "This is the beginning of the lesson.";
+    const hasHistory =
+      historyStr && historyStr !== "This is the beginning of the lesson.";
     const promptName = hasHistory ? "teacher_continue" : "teacher_start";
-    const promptDoc = await convex.query(api.coursePrompts.getPrompt, { name: promptName });
+    const promptDoc = await convex.query(api.coursePrompts.getPrompt, {
+      name: promptName,
+    });
 
     let prompt: string;
     if (hasHistory) {
@@ -153,7 +188,10 @@ export async function POST(req: Request) {
       async start(controller) {
         try {
           const requestStartedAt = Date.now();
-          const stream = await ai.models.generateContentStream({ model, contents: prompt });
+          const stream = await ai.models.generateContentStream({
+            model,
+            contents: prompt,
+          });
           let fullText = "";
           let firstTokenAt: number | undefined;
           let lastChunk: unknown;
@@ -165,7 +203,9 @@ export async function POST(req: Request) {
               firstTokenAt ??= Date.now();
               fullText += part;
               controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: "delta", text: part })}\n\n`),
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "delta", text: part })}\n\n`,
+                ),
               );
             }
           }
@@ -202,7 +242,11 @@ export async function POST(req: Request) {
             /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/,
           );
 
-          const messageType = inputRequestMatch ? "input_request" : isComplete ? "lesson_complete" : "narrative";
+          const messageType = inputRequestMatch
+            ? "input_request"
+            : isComplete
+              ? "lesson_complete"
+              : "narrative";
 
           // Save teacher message to DB
           await convex.mutation(api.courseLessonMessages.send, {
@@ -219,15 +263,17 @@ export async function POST(req: Request) {
             isComplete,
             inputRequest: inputRequestMatch
               ? {
-                type: inputRequestMatch[1]!.trim(),
-                question: inputRequestMatch[2]!.trim(),
-                expectedAnswer: inputRequestMatch[3]?.trim() ?? "",
-              }
+                  type: inputRequestMatch[1]!.trim(),
+                  question: inputRequestMatch[2]!.trim(),
+                  expectedAnswer: inputRequestMatch[3]?.trim() ?? "",
+                }
               : null,
             fullText,
           };
 
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(donePayload)}\n\n`));
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(donePayload)}\n\n`),
+          );
           controller.close();
         } catch (err) {
           logError("Teach stream failed", {
@@ -240,7 +286,9 @@ export async function POST(req: Request) {
           });
           const msg = err instanceof Error ? err.message : "Unknown error";
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "error", error: msg })}\n\n`),
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "error", error: msg })}\n\n`,
+            ),
           );
           controller.close();
         }

@@ -184,7 +184,9 @@ export async function POST(req: NextRequest) {
       }
       const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
 
-      const promptDoc = await convex.query(api.coursePrompts.getPrompt, { name: "answer_evaluator" });
+      const promptDoc = await convex.query(api.coursePrompts.getPrompt, {
+        name: "answer_evaluator",
+      });
       const prompt = renderPrompt(promptDoc.content, {
         questionText: question.question,
         questionAnswer: question.answer ?? "N/A",
@@ -192,8 +194,8 @@ export async function POST(req: NextRequest) {
       });
 
       // Enhanced model selection with fallback strategy
-      const primaryModel = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
-      const fallbackModel = "gemini-1.5-flash";
+      const primaryModel = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+      const fallbackModel = "gemini-3-flash-preview";
       let modelUsed = primaryModel;
       let response;
 

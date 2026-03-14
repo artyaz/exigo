@@ -23,13 +23,24 @@ interface CourseTutorProps {
   courseId?: Id<"courses">;
 }
 
+type ToolAction = {
+  id: string;
+  name: string;
+  success?: boolean;
+  message?: string;
+};
+
+function getSseString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
 export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState<Id<"courseTutorChats"> | null>(null);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
-  const [toolActions, setToolActions] = useState<Array<{ name: string; success?: boolean; message?: string }>>([]);
+  const [toolActions, setToolActions] = useState<ToolAction[]>([]);
   const [showChatList, setShowChatList] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -80,6 +91,7 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
     setInput("");
     setIsStreaming(true);
     setStreamingContent("");
+    setToolActions([]);
 
     // Reset textarea height
     if (textareaRef.current) {
@@ -108,6 +120,7 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
       const decoder = new TextDecoder();
       let buffer = "";
       let accumulated = "";
+      let nextToolActionIndex = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -138,21 +151,37 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
             } else if (eventType === "chat_created" && typeof data.chatId === "string") {
               setActiveChatId(data.chatId as Id<"courseTutorChats">);
             } else if (eventType === "tool_call") {
+              const toolName = getSseString(data.name) ?? "tool";
+              const toolId =
+                getSseString(data.id) ?? `${toolName}-${nextToolActionIndex++}`;
+
               setToolActions((prev) => [
                 ...prev,
-                { name: String(data.name ?? "tool") },
+                { id: toolId, name: toolName },
               ]);
             } else if (eventType === "tool_result") {
+              const toolName = getSseString(data.name) ?? "tool";
+              const toolId = getSseString(data.id);
+              const toolMessage = getSseString(data.message) ?? "";
+
               setToolActions((prev) => {
                 const updated = [...prev];
-                const last = updated.findIndex((t) => t.name === String(data.name) && t.success === undefined);
-                if (last >= 0) {
-                  updated[last] = {
-                    ...updated[last]!,
-                    success: Boolean(data.success),
-                    message: String(data.message ?? ""),
+                const targetIndex = toolId
+                  ? updated.findIndex((action) => action.id === toolId)
+                  : updated.findIndex(
+                      (action) =>
+                        action.name === toolName &&
+                        action.success === undefined,
+                    );
+
+                if (targetIndex >= 0) {
+                  updated[targetIndex] = {
+                    ...updated[targetIndex]!,
+                    success: data.success === true,
+                    message: toolMessage,
                   };
                 }
+
                 return updated;
               });
             } else if (eventType === "error") {
@@ -168,7 +197,6 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
     } finally {
       setIsStreaming(false);
       setStreamingContent("");
-      setToolActions([]);
     }
   }, [input, isStreaming, spaceId, courseId, activeChatId]);
 
@@ -187,6 +215,7 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
     setShowChatList(false);
     setInput("");
     setStreamingContent("");
+    setToolActions([]);
   }, []);
 
   const handleDeleteChat = useCallback(
@@ -278,6 +307,8 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
                         onClick={() => {
                           setActiveChatId(chat._id);
                           setShowChatList(false);
+                          setToolActions([]);
+                          setStreamingContent("");
                         }}
                       >
                         <span className="truncate flex-1 mr-2">
@@ -344,8 +375,8 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
               {/* Tool action indicators */}
               {toolActions.length > 0 && (
                 <div className="space-y-1.5">
-                  {toolActions.map((action, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs text-white/50 px-2">
+                  {toolActions.map((action) => (
+                    <div key={action.id} className="flex items-center gap-2 text-xs text-white/50 px-2">
                       {action.success === undefined ? (
                         <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
                       ) : action.success ? (

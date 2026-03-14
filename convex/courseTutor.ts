@@ -30,13 +30,58 @@ export const getChatsForSpace = query({
   args: { spaceId: v.id("spaces") },
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx);
-    return await ctx.db
+    const directChats = await ctx.db
       .query("courseTutorChats")
       .withIndex("by_user_space", (q) =>
         q.eq("userId", userId).eq("spaceId", args.spaceId),
       )
       .order("desc")
       .collect();
+
+    const space = await ctx.db.get(args.spaceId);
+    if (!space || space.userId !== userId) {
+      return directChats;
+    }
+
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+      .collect();
+
+    const legacyChatGroups = await Promise.all(
+      courses.map((course) =>
+        ctx.db
+          .query("courseTutorChats")
+          .withIndex("by_user_course", (q) =>
+            q.eq("userId", userId).eq("courseId", course._id),
+          )
+          .order("desc")
+          .collect(),
+      ),
+    );
+
+    const chatsById = new Map(directChats.map((chat) => [chat._id, chat] as const));
+    for (const chatsForCourse of legacyChatGroups) {
+      for (const chat of chatsForCourse) {
+        if (chat.spaceId === undefined) {
+          chatsById.set(chat._id, chat);
+        }
+      }
+    }
+
+    return Array.from(chatsById.values()).sort(
+      (a, b) => b._creationTime - a._creationTime,
+    );
+  },
+});
+
+export const getChat = query({
+  args: { chatId: v.id("courseTutorChats") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat || chat.userId !== userId) return null;
+    return chat;
   },
 });
 

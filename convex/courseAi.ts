@@ -12,6 +12,10 @@ import {
   createAiTraceId,
 } from "../shared/posthogAiObservability";
 import { renderPrompt } from "./coursePrompts";
+import {
+  isRequestedTopicCovered,
+  parseInsertTopicRequestContent,
+} from "../shared/courseTopicRequests";
 
 function getAiClient() {
   if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -49,6 +53,36 @@ function safeParseJson<T>(text: string): T {
       `Failed to parse AI response as JSON: ${(e as Error).message}\nRaw text: ${text.slice(0, 200)}`,
     );
   }
+}
+
+type PendingModuleTopicRequest = {
+  topic: string;
+  context: string;
+};
+
+function getPendingModuleTopicRequest(
+  activeNodes: Doc<"knowledgeNodes">[],
+  existingModuleTitles: string[],
+): PendingModuleTopicRequest | null {
+  const sortedNodes = [...activeNodes].sort(
+    (left, right) => right._creationTime - left._creationTime,
+  );
+
+  for (const node of sortedNodes) {
+    const request = parseInsertTopicRequestContent(node.content);
+    if (!request) {
+      continue;
+    }
+
+    const alreadyCovered = existingModuleTitles.some((moduleTitle) =>
+      isRequestedTopicCovered(request.topic, moduleTitle),
+    );
+    if (!alreadyCovered) {
+      return request;
+    }
+  }
+
+  return null;
 }
 
 // ─── ACTION 1: Normalize Topic (Course Architect AI) ───
@@ -318,11 +352,30 @@ export const generateModule = action({
       internal.knowledgeNodes.getActiveNodesForSpaceInternal,
       { spaceId: course.spaceId },
     );
+    const pendingTopicRequest = getPendingModuleTopicRequest(
+      activeNodes,
+      completedTopics,
+    );
+    const knowledgeNodeLines = activeNodes
+      .map((node) => {
+        const request = parseInsertTopicRequestContent(node.content);
+        if (request) {
+          return null;
+        }
+
+        return `- [${node.type.toUpperCase()}] ${node.content}`;
+      })
+      .filter((line): line is string => line !== null);
+
+    if (pendingTopicRequest) {
+      knowledgeNodeLines.unshift(
+        `- [FEELS_HARD] Student explicitly requested that the next module cover "${pendingTopicRequest.topic}". Context: ${pendingTopicRequest.context}`,
+      );
+    }
+
     const knowledgeNodesStr =
-      activeNodes.length > 0
-        ? activeNodes
-            .map((n) => `- [${n.type.toUpperCase()}] ${n.content}`)
-            .join("\n")
+      knowledgeNodeLines.length > 0
+        ? knowledgeNodeLines.join("\n")
         : "No knowledge nodes yet";
 
     const ai = getAiClient();
@@ -333,7 +386,7 @@ export const generateModule = action({
         name: "adaptive_syllabus",
       },
     );
-    const prompt = renderPrompt(promptDoc.content, {
+    const basePrompt = renderPrompt(promptDoc.content, {
       courseTitle: course.refinedTitle,
       courseDescription: course.courseDescription,
       baselineResults: course.baselineResults ?? "No baseline data",
@@ -341,6 +394,17 @@ export const generateModule = action({
       performanceSummaries: JSON.stringify(performanceSummaries),
       knowledgeNodes: knowledgeNodesStr,
     });
+    const prompt = pendingTopicRequest
+      ? [
+          basePrompt,
+          "",
+          "Additional hard requirement:",
+          `The student explicitly requested that the very next module cover "${pendingTopicRequest.topic}".`,
+          `Honor this request directly. The generated module_title must clearly name or center that topic.`,
+          `Use this context when shaping the module: ${pendingTopicRequest.context}.`,
+          "In adaptation_rationale, mention that this module was prioritized because of the explicit topic-insert request.",
+        ].join("\n")
+      : basePrompt;
 
     const startedAt = Date.now();
     const response = await ai.models.generateContent({
@@ -613,6 +677,7 @@ export const teachLesson = action({
 export const verifyInput = action({
   args: {
     lessonId: v.id("courseLessons"),
+    sectionIndex: v.number(),
     question: v.string(),
     expectedAnswer: v.string(),
     userAnswer: v.string(),
@@ -695,6 +760,20 @@ export const verifyInput = action({
     await ctx.runMutation(internal.courseLessons.updateVerifierLogsInternal, {
       lessonId: args.lessonId,
       verifierLogs: JSON.stringify(existingLogs),
+    });
+
+    await ctx.runMutation(internal.courseLessons.saveCheckpointStateInternal, {
+      lessonId: args.lessonId,
+      checkpointState: {
+        sectionIndex: args.sectionIndex,
+        question: args.question,
+        status: parsed.is_correct ? "answered" : "pending",
+        answer: args.userAnswer,
+        verification: {
+          is_correct: parsed.is_correct,
+          feedback_block: parsed.feedback_block,
+        },
+      },
     });
 
     // Save verification as a system message

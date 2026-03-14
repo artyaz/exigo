@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import { useState, useEffect, useLayoutEffect, useRef, use, useCallback, useMemo, type RefObject } from "react";
@@ -11,7 +11,7 @@ import {
   CornerDownLeft, XCircle, SkipForward, Zap, BookOpen
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import {
   generateBaselineQuestionAction,
@@ -29,44 +29,40 @@ import { ClarificationThread, type ClarificationMessage } from "~/app/_component
 import { CourseTutor } from "~/app/_components/learn/CourseTutor";
 import { TestGrid } from "~/app/_components/tests/TestGrid";
 import { TestGenerateButton } from "~/app/_components/tests/TestGenerateButton";
+import {
+  parseLessonSections,
+  restoreLessonRuntimeState,
+  shouldMarkLessonComplete,
+  type LessonInputRequest,
+  type LessonVerification,
+  type PersistedLessonCheckpointState,
+  type RestoredCheckpointState as CheckpointState,
+} from "~/lib/lessonCheckpoints";
 import { FileText, Target } from "lucide-react";
 
-/* ─── Lesson section parser ─── */
-interface LessonSection {
-  content: string;
-  inputRequest?: {
-    type: string;
-    question: string;
-    expectedAnswer: string;
-  };
+type ClientActionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
+function unwrapActionResult<T>(
+  result: ClientActionResult<T>,
+  fallbackMessage: string,
+) {
+  if (!result.ok) {
+    throw new Error(result.error ?? fallbackMessage);
+  }
+
+  return result.data;
 }
 
-function parseLessonSections(fullText: string): LessonSection[] {
-  const sections: LessonSection[] = [];
-  const inputRegex = /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+function serializeCheckpointMap(checkpoints: Map<number, CheckpointState>) {
+  return JSON.stringify(
+    Array.from(checkpoints.entries()).sort(([left], [right]) => left - right),
+  );
+}
 
-  while ((match = inputRegex.exec(fullText)) !== null) {
-    const content = fullText.slice(lastIndex, match.index).trim();
-    sections.push({
-      content,
-      inputRequest: {
-        type: match[1]!.trim(),
-        question: match[2]!.trim(),
-        expectedAnswer: match[3]?.trim() ?? "",
-      },
-    });
-    lastIndex = match.index + match[0].length;
-  }
-
-  // Remaining content after last INPUT_REQUEST
-  const remaining = fullText.slice(lastIndex).trim();
-  if (remaining) {
-    sections.push({ content: remaining });
-  }
-
-  return sections;
+function serializeVerification(verification: LessonVerification | null) {
+  return verification ? JSON.stringify(verification) : "";
 }
 
 
@@ -174,6 +170,8 @@ function FocusModeToggle({ enabled, onToggle }: { enabled: boolean; onToggle: ()
 export default function CoursePage({ params }: { params: Promise<{ spaceId: string; courseId: string }> }) {
   const { userId } = useAuth();
   const { spaceId, courseId } = use(params);
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const requestedLessonId = searchParams.get("lessonId");
   const [focusModeEnabled, setFocusModeEnabled] = useState(false);
@@ -208,10 +206,19 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
     };
   }, [course, lessons, modules, requestedLessonId]);
 
+  const activeModuleId = useMemo(() => {
+    if (!modules || !resolvedIndices) return null;
+    return modules.find((module) => module.moduleIndex === resolvedIndices.moduleIndex)?._id ?? null;
+  }, [modules, resolvedIndices]);
+
   const activeLesson = useMemo(() => {
-    if (!lessons || !resolvedIndices) return null;
-    return lessons[resolvedIndices.lessonIndex] ?? null;
-  }, [lessons, resolvedIndices]);
+    if (!lessons || !resolvedIndices || !activeModuleId) return null;
+    return lessons.find(
+      (lesson) =>
+        lesson.moduleId === activeModuleId
+        && lesson.lessonIndex === resolvedIndices.lessonIndex,
+    ) ?? null;
+  }, [activeModuleId, lessons, resolvedIndices]);
 
   const spaceTests = useQuery(api.tests.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
   const spaceQuestions = useQuery(api.questions.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
@@ -234,6 +241,18 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
   const toggleFocusMode = useCallback(() => {
     setFocusModeEnabled((previousValue) => !previousValue);
   }, []);
+
+  const returnToActiveLesson = useCallback(() => {
+    if (!requestedLessonId) return;
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("lessonId");
+    const nextQuery = nextSearchParams.toString();
+
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+      scroll: false,
+    });
+  }, [pathname, requestedLessonId, router, searchParams]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -347,12 +366,14 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
                   transition={{ duration: 0.2 }}
                 >
                     <LessonPhase
+                      key={`lesson-${requestedLessonId ?? `${resolvedIndices.moduleIndex}-${resolvedIndices.lessonIndex}`}`}
                       courseId={courseId}
                       spaceId={spaceId}
                       currentModuleIndex={resolvedIndices.moduleIndex}
                       currentLessonIndex={resolvedIndices.lessonIndex}
                       focusModeEnabled={focusModeEnabled}
                       onToggleFocusMode={toggleFocusMode}
+                      onReturnToActiveLesson={returnToActiveLesson}
                       modules={modules}
                       lessons={lessons}
                     />
@@ -366,10 +387,12 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
                   transition={{ duration: 0.2 }}
                 >
                     <SummaryPhase
+                      key={`summary-${requestedLessonId ?? activeLesson?._id ?? `${resolvedIndices.moduleIndex}-${resolvedIndices.lessonIndex}`}`}
                       courseId={courseId}
-                      currentLessonIndex={resolvedIndices.lessonIndex}
+                      currentLessonId={activeLesson?._id ?? null}
                       focusModeEnabled={focusModeEnabled}
                       onToggleFocusMode={toggleFocusMode}
+                      onReturnToActiveLesson={returnToActiveLesson}
                       lessons={lessons}
                     />
                 </motion.div>
@@ -882,6 +905,7 @@ function LessonPhase({
   currentLessonIndex,
   focusModeEnabled,
   onToggleFocusMode,
+  onReturnToActiveLesson,
   modules,
   lessons,
 }: {
@@ -891,8 +915,9 @@ function LessonPhase({
   currentLessonIndex: number;
   focusModeEnabled: boolean;
   onToggleFocusMode: () => void;
+  onReturnToActiveLesson: () => void;
   modules: Array<{ _id: string; moduleIndex: number; moduleTitle: string; subTopics: string }>;
-  lessons: Array<{ _id: string; moduleId: string; lessonIndex: number; title: string; focusArea: string; status: string; masteryGoals?: string; knowledgePieceId?: string }>;
+  lessons: Array<{ _id: string; moduleId: string; lessonIndex: number; title: string; focusArea: string; status: string; masteryGoals?: string; knowledgePieceId?: string; verifierLogs?: string; checkpointStates?: PersistedLessonCheckpointState[] }>;
 }) {
   const currentModule = modules.find((m) => m.moduleIndex === currentModuleIndex);
   const moduleLessons = lessons
@@ -906,27 +931,15 @@ function LessonPhase({
   // Progressive reveal: how many sections to show
   const [revealedCount, setRevealedCount] = useState(0);
   // Current input request state for retry flow
-  const [currentInputRequest, setCurrentInputRequest] = useState<{
-    type: string;
-    question: string;
-    expectedAnswer: string;
-  } | null>(null);
+  const [currentInputRequest, setCurrentInputRequest] = useState<LessonInputRequest | null>(null);
   const [userInput, setUserInput] = useState("");
-  const [lastVerification, setLastVerification] = useState<{
-    is_correct: boolean;
-    feedback_block: string;
-  } | null>(null);
+  const [lastVerification, setLastVerification] = useState<LessonVerification | null>(null);
   // Track answered/skipped checkpoints: sectionIndex → { answer?, skipped?, verification? }
-  const [answeredCheckpoints, setAnsweredCheckpoints] = useState<Map<number, {
-    answer?: string;
-    skipped?: boolean;
-    verification?: { is_correct: boolean; feedback_block: string };
-  }>>(new Map());
+  const [answeredCheckpoints, setAnsweredCheckpoints] = useState<Map<number, CheckpointState>>(new Map());
   const [isLessonComplete, setIsLessonComplete] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isAdvancingCourse, setIsAdvancingCourse] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
 
   // ─── Clarification state ───
   const [selectionState, setSelectionState] = useState<{
@@ -950,6 +963,7 @@ function LessonPhase({
 
   const lessonContentRef = useRef<HTMLDivElement>(null);
   const contentEndRef = useRef<HTMLDivElement>(null);
+  const teachStartedForLessonRef = useRef<string | null>(null);
 
   // ─── "Feels Hard" context menu ───
   const [contextMenu, setContextMenu] = useState<{
@@ -1012,6 +1026,34 @@ function LessonPhase({
   const lessonMessages = useQuery(
     api.courseLessonMessages.getForLesson,
     currentLesson ? { lessonId: currentLesson._id as Id<"courseLessons"> } : "skip"
+  );
+  const saveCheckpointState = useMutation(api.courseLessons.saveCheckpointState);
+  const currentLessonId = currentLesson?._id ?? null;
+  const currentLessonCheckpointStates = currentLesson?.checkpointStates;
+  const currentLessonVerifierLogs = currentLesson?.verifierLogs;
+  const restoredLessonRuntime = useMemo(() => {
+    if (!currentLessonId || lessonMessages === undefined) return null;
+
+    return restoreLessonRuntimeState({
+      lessonMessages,
+      verifierLogs: currentLessonVerifierLogs,
+      checkpointStates: currentLessonCheckpointStates,
+    });
+  }, [
+    currentLessonCheckpointStates,
+    currentLessonId,
+    currentLessonVerifierLogs,
+    lessonMessages,
+  ]);
+  const currentAnsweredCheckpointsKey = useMemo(
+    () => serializeCheckpointMap(answeredCheckpoints),
+    [answeredCheckpoints],
+  );
+  const restoredAnsweredCheckpointsKey = useMemo(
+    () => restoredLessonRuntime
+      ? serializeCheckpointMap(restoredLessonRuntime.answeredCheckpoints)
+      : "[]",
+    [restoredLessonRuntime],
   );
 
   // Parse sections from accumulated text
@@ -1369,114 +1411,58 @@ function LessonPhase({
     void streamClarification(thread.quote, question, threadId, thread.sectionIndex, thread.blockIndex);
   }, [clarificationThreads, streamClarification]);
 
-  // Restore from DB on mount
+  // Restore from DB whenever the active lesson snapshot changes.
   useEffect(() => {
-    if (initialized || !lessonMessages) return;
+    if (!restoredLessonRuntime) return;
 
-    if (lessonMessages.length > 0) {
-      // Find the main teacher lesson messages (exclude clarification responses)
-      const teacherMessages = lessonMessages.filter(
-        (m) => m.role === "teacher" && m.messageType !== "clarification",
-      );
-      if (teacherMessages.length > 0) {
-        // Concatenate all teacher messages to reconstruct the full lesson
-        const reconstructed = teacherMessages.map(m => m.content).join("\n\n");
-        setFullText(reconstructed);
+    const currentInputQuestion = currentInputRequest?.question ?? null;
+    const restoredInputQuestion = restoredLessonRuntime.currentInputRequest?.question ?? null;
+    const waitingForLocalAdvance =
+      lastVerification?.is_correct === true
+      && currentInputQuestion !== null
+      && currentInputQuestion !== restoredInputQuestion;
 
-        // Check if lesson was completed
-        const lastMsg = teacherMessages[teacherMessages.length - 1];
-        if (lastMsg?.messageType === "lesson_complete" || reconstructed.includes("[LESSON_COMPLETE]")) {
-          setIsLessonComplete(true);
-          // Reveal all sections
-          const parsed = parseLessonSections(reconstructed);
-          setRevealedCount(parsed.length);
-        } else {
-          // Figure out how far the user got based on verification messages
-          const verifications = lessonMessages.filter((m: { messageType?: string }) => m.messageType === "verification");
-          const parsed = parseLessonSections(reconstructed);
-          
-          // Find actual checkpoint section indices
-          const checkpointIndices: number[] = [];
-          for (let i = 0; i < parsed.length; i++) {
-            if (parsed[i]?.inputRequest) {
-              checkpointIndices.push(i);
-            }
-          }
-          
-          // Map verification count to the real next checkpoint
-          const nextCheckpointIdx = checkpointIndices[verifications.length];
-          
-          if (nextCheckpointIdx !== undefined) {
-            // Reveal up to and including the checkpoint section
-            setRevealedCount(nextCheckpointIdx + 1);
-            const section = parsed[nextCheckpointIdx];
-            if (section?.inputRequest) {
-              setCurrentInputRequest(section.inputRequest);
-            }
-          } else {
-            // All checkpoints answered — reveal everything
-            setRevealedCount(parsed.length);
-          }
-        }
+    if (waitingForLocalAdvance) return;
 
-        // Restore answered checkpoint state from verification messages
-        const verifications = lessonMessages.filter((m) => m.messageType === "verification");
-        const parsed = parseLessonSections(reconstructed);
-        if (verifications.length > 0) {
-          const restoredCheckpoints = new Map<number, {
-            answer?: string;
-            skipped?: boolean;
-            verification?: { is_correct: boolean; feedback_block: string };
-          }>();
+    const needsRestore =
+      fullText !== restoredLessonRuntime.fullText
+      || revealedCount !== restoredLessonRuntime.revealedCount
+      || currentInputQuestion !== restoredInputQuestion
+      || currentAnsweredCheckpointsKey !== restoredAnsweredCheckpointsKey
+      || serializeVerification(lastVerification) !== serializeVerification(restoredLessonRuntime.lastVerification)
+      || isLessonComplete !== restoredLessonRuntime.isLessonComplete;
 
-          // Match verifications to their corresponding checkpoint sections
-          let verIdx = 0;
-          for (let i = 0; i < parsed.length && verIdx < verifications.length; i++) {
-            if (parsed[i]?.inputRequest) {
-              const verMsg = verifications[verIdx];
-              if (verMsg) {
-                // Find the user message preceding this verification
-                const verMsgIndex = lessonMessages.indexOf(verMsg);
-                const userMsg = verMsgIndex > 0
-                  ? lessonMessages.slice(0, verMsgIndex).reverse().find(
-                      (m) => m.role === "user" && m.messageType !== "clarification",
-                    )
-                  : undefined;
+    if (!needsRestore) return;
 
-                try {
-                  const parsed_ver = JSON.parse(verMsg.content) as {
-                    is_correct: boolean;
-                    feedback_block: string;
-                  };
-                  restoredCheckpoints.set(i, {
-                    answer: userMsg?.content,
-                    verification: parsed_ver,
-                  });
-                } catch {
-                  // If verification content isn't valid JSON, mark as answered
-                  restoredCheckpoints.set(i, { answer: userMsg?.content });
-                }
-              }
-              verIdx++;
-            }
-          }
-
-          if (restoredCheckpoints.size > 0) {
-            setAnsweredCheckpoints(restoredCheckpoints);
-          }
-        }
-      }
-    }
-
-    setInitialized(true);
-  }, [lessonMessages, initialized]);
+    setFullText(restoredLessonRuntime.fullText);
+    setAnsweredCheckpoints(new Map(restoredLessonRuntime.answeredCheckpoints));
+    setIsLessonComplete(restoredLessonRuntime.isLessonComplete);
+    setRevealedCount(restoredLessonRuntime.revealedCount);
+    setCurrentInputRequest(restoredLessonRuntime.currentInputRequest);
+    setLastVerification(restoredLessonRuntime.lastVerification);
+    setUserInput("");
+  }, [
+    currentAnsweredCheckpointsKey,
+    currentInputRequest,
+    fullText,
+    isLessonComplete,
+    lastVerification,
+    restoredAnsweredCheckpointsKey,
+    restoredLessonRuntime,
+    revealedCount,
+  ]);
 
   const teach = useCallback(async () => {
     if (!currentLesson) return;
     setIsTeaching(true);
     setError(null);
     setFullText("");
-    setRevealedCount(1);
+    setAnsweredCheckpoints(new Map());
+    setCurrentInputRequest(null);
+    setIsLessonComplete(false);
+    setLastVerification(null);
+    setRevealedCount(0);
+    setUserInput("");
 
     try {
       const res = await fetch("/api/learn/teach", {
@@ -1530,13 +1516,21 @@ function LessonPhase({
             } else if (payload.type === "done") {
               const final = payload.fullText ?? accumulated;
               setFullText(final);
-              setIsLessonComplete(payload.isComplete ?? false);
 
               // Pause at first input request
               const parsed = parseLessonSections(final);
-              if (parsed.length > 0 && parsed[0]?.inputRequest) {
-                setCurrentInputRequest(parsed[0].inputRequest);
+              const nextInputRequest = payload.inputRequest ?? parsed[0]?.inputRequest ?? null;
+              setIsLessonComplete(shouldMarkLessonComplete({
+                hasCompletionSignal: payload.isComplete ?? false,
+                currentInputRequest: nextInputRequest,
+              }));
+
+              if (nextInputRequest) {
+                setCurrentInputRequest(nextInputRequest);
                 setRevealedCount(1);
+              } else {
+                setCurrentInputRequest(null);
+                setRevealedCount(parsed.length);
               }
             } else if (payload.type === "error") {
               setError(payload.error ?? "Teaching failed");
@@ -1551,16 +1545,19 @@ function LessonPhase({
     }
   }, [currentLesson]);
 
-  // Start teaching on mount only if no DB messages
+  // Start teaching only after the lesson snapshot has definitively loaded empty.
   useEffect(() => {
-    if (currentLesson && initialized && fullText.length === 0 && !lessonMessages?.length) {
-      void teach();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialized]);
+    if (!currentLessonId || lessonMessages === undefined) return;
+    if (restoredLessonRuntime?.fullText) return;
+    if (fullText.length > 0 || isTeaching) return;
+    if (teachStartedForLessonRef.current === currentLessonId) return;
+
+    teachStartedForLessonRef.current = currentLessonId;
+    void teach();
+  }, [currentLessonId, fullText, isTeaching, lessonMessages, restoredLessonRuntime, teach]);
 
   // Advance past the current checkpoint, revealing content until the next checkpoint or end
-  const advanceToNextCheckpoint = (opts?: { answer?: string; skipped?: boolean; verification?: { is_correct: boolean; feedback_block: string } }) => {
+  const advanceToNextCheckpoint = (opts?: { answer?: string; skipped?: boolean; verification?: LessonVerification }) => {
     // Record the current checkpoint as answered/skipped
     const currentSectionIdx = revealedCount - 1;
     if (currentSectionIdx >= 0 && sections[currentSectionIdx]?.inputRequest) {
@@ -1582,32 +1579,33 @@ function LessonPhase({
     // Reveal sections one at a time, but skip through content-only sections
     let nextIdx = revealedCount;
     while (nextIdx < sections.length) {
-      nextIdx += 1;
       const upcoming = sections[nextIdx];
+      nextIdx += 1;
       // If the next section has a checkpoint, pause there
       if (upcoming?.inputRequest) {
-        setRevealedCount(nextIdx + 1);
+        setRevealedCount(nextIdx);
         setCurrentInputRequest(upcoming.inputRequest);
         return;
       }
-      // If we've revealed everything, stop
-      if (nextIdx >= sections.length) {
-        setRevealedCount(nextIdx);
-        return;
-      }
     }
-    setRevealedCount(nextIdx);
+    setRevealedCount(sections.length);
+    setIsLessonComplete(shouldMarkLessonComplete({
+      hasCompletionSignal: hasLessonCompleteMarker,
+      currentInputRequest: null,
+    }));
   };
 
   const handleSubmitInput = async () => {
     if (!userInput.trim() || !currentInputRequest || !currentLesson) return;
 
     const input = userInput.trim();
+    const currentSectionIdx = revealedCount - 1;
     setUserInput("");
 
     try {
       const verifyResult = await verifyInputAction(
         currentLesson._id,
+        currentSectionIdx,
         currentInputRequest.question,
         currentInputRequest.expectedAnswer,
         input,
@@ -1632,17 +1630,45 @@ function LessonPhase({
     }
   };
 
-  const handleSkip = () => {
-    advanceToNextCheckpoint({ skipped: true });
+  const handleSkip = async () => {
+    if (!currentLesson) return;
+
+    const currentSectionIdx = revealedCount - 1;
+    const currentSection = sections[currentSectionIdx];
+    if (!currentSection?.inputRequest) return;
+
+    try {
+      await saveCheckpointState({
+        lessonId: currentLesson._id as Id<"courseLessons">,
+        checkpointState: {
+          sectionIndex: currentSectionIdx,
+          question: currentSection.inputRequest.question,
+          status: "skipped",
+        },
+      });
+      advanceToNextCheckpoint({ skipped: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save checkpoint");
+    }
   };
 
   const handleSummarize = async () => {
     if (!currentLesson) return;
     setIsSummarizing(true);
+    setError(null);
     try {
-      await completeLessonAction(currentLesson._id);
-      await summarizeLessonAction(currentLesson._id);
-      await advanceCourseAction(courseId);
+      unwrapActionResult(
+        await completeLessonAction(currentLesson._id),
+        "Failed to complete lesson",
+      );
+      unwrapActionResult(
+        await summarizeLessonAction(currentLesson._id),
+        "Failed to generate knowledge piece",
+      );
+      unwrapActionResult(
+        await advanceCourseAction(courseId),
+        "Failed to advance course",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Summary failed");
     } finally {
@@ -1843,7 +1869,7 @@ function LessonPhase({
                   {/* Skip button */}
                   {!lastVerification?.is_correct && (
                     <button
-                      onClick={handleSkip}
+                      onClick={() => { void handleSkip(); }}
                       className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1"
                     >
                       <SkipForward className="w-3 h-3" />
@@ -1905,7 +1931,7 @@ function LessonPhase({
 
       {/* Lesson complete */}
       {/* Lesson complete — show when all sections revealed and not streaming */}
-      {(hasLessonCompleteMarker || (revealedCount >= totalSections && totalSections > 0)) && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
+      {!currentInputRequest && (hasLessonCompleteMarker || (revealedCount >= totalSections && totalSections > 0)) && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
         currentLesson && ["summarized", "integrated"].includes(currentLesson.status) ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -1926,7 +1952,13 @@ function LessonPhase({
                   setIsAdvancingCourse(true);
                   setError(null);
                   try {
-                    await advanceCourseAction(courseId);
+                    const advanceResult = unwrapActionResult(
+                      await advanceCourseAction(courseId),
+                      "Failed to advance course",
+                    );
+                    if (advanceResult.nextPhase !== "lesson_summary") {
+                      onReturnToActiveLesson();
+                    }
                   } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to advance course");
                   } finally {
@@ -1965,18 +1997,20 @@ function LessonPhase({
 // ─── Summary Phase ───
 function SummaryPhase({
   courseId,
-  currentLessonIndex,
+  currentLessonId,
   focusModeEnabled,
   onToggleFocusMode,
+  onReturnToActiveLesson,
   lessons,
 }: {
   courseId: string;
-  currentLessonIndex: number;
+  currentLessonId: string | null;
   focusModeEnabled: boolean;
   onToggleFocusMode: () => void;
+  onReturnToActiveLesson: () => void;
   lessons: Array<{ _id: string; lessonIndex: number; summaryMarkdown?: string; status: string }>;
 }) {
-  const currentLesson = lessons.find((l) => l.lessonIndex === currentLessonIndex);
+  const currentLesson = lessons.find((lesson) => lesson._id === currentLessonId);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const summaryContentRef = useRef<HTMLDivElement>(null);
@@ -1988,8 +2022,13 @@ function SummaryPhase({
 
   const handleAdvance = async () => {
     setIsAdvancing(true);
+    setError(null);
     try {
-      await advanceCourseAction(courseId);
+      unwrapActionResult(
+        await advanceCourseAction(courseId),
+        "Failed to advance course",
+      );
+      onReturnToActiveLesson();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to advance");
     } finally {

@@ -12,6 +12,10 @@ import {
   captureAiGenerationEvent,
   createAiTraceId,
 } from "../../../../../shared/posthogAiObservability";
+import {
+  CURRENT_MODULE_INSERT_PLACEMENTS,
+  type CurrentModuleInsertionPlacement,
+} from "../../../../../shared/currentModuleInsertion";
 import type { ConvexHttpClient } from "convex/browser";
 
 export const runtime = "nodejs";
@@ -40,6 +44,104 @@ async function generateEmbedding(
 
 function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function getOptionalString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function getRequiredStringArg(
+  args: Record<string, unknown>,
+  key: string,
+  label: string,
+): string {
+  const value = getOptionalString(args[key]);
+  if (!value) {
+    throw new Error(`${label} is required.`);
+  }
+  return value;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function getOptionalInsertPlacement(
+  value: unknown,
+): CurrentModuleInsertionPlacement | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  return CURRENT_MODULE_INSERT_PLACEMENTS.includes(
+    value as CurrentModuleInsertionPlacement,
+  )
+    ? (value as CurrentModuleInsertionPlacement)
+    : undefined;
+}
+
+function getCourseKnowledgePieceSource(courseId: Id<"courses">): string {
+  return `adaptive-course:${courseId}`;
+}
+
+async function getOrCreateCourseKnowledgePieceId(
+  convex: ConvexHttpClient,
+  spaceId: Id<"spaces">,
+  courseId: Id<"courses">,
+): Promise<Id<"knowledgePieces">> {
+  const knowledgePieces = await convex.query(api.knowledgePieces.getForSpace, {
+    spaceId,
+  });
+  const coursePiece = knowledgePieces.find(
+    (piece: { source?: string }) =>
+      piece.source === getCourseKnowledgePieceSource(courseId),
+  );
+  if (coursePiece) {
+    return coursePiece._id;
+  }
+
+  const fallbackPiece = knowledgePieces[0];
+  if (fallbackPiece) {
+    return fallbackPiece._id;
+  }
+
+  const course = await convex.query(api.courses.get, { courseId });
+  if (!course) {
+    throw new Error("Course not found.");
+  }
+
+  return await convex.mutation(api.knowledgePieces.add, {
+    spaceId,
+    title: `${course.refinedTitle} notes`,
+    content: `Tutor-managed curriculum notes for ${course.refinedTitle}.`,
+    source: getCourseKnowledgePieceSource(courseId),
+  });
+}
+
+async function addCourseKnowledgeNode(params: {
+  convex: ConvexHttpClient;
+  spaceId: Id<"spaces">;
+  courseId: Id<"courses">;
+  type: "struggle" | "improvement" | "feels_hard";
+  content: string;
+}) {
+  const knowledgePieceId = await getOrCreateCourseKnowledgePieceId(
+    params.convex,
+    params.spaceId,
+    params.courseId,
+  );
+
+  await params.convex.mutation(api.knowledgeNodes.create, {
+    spaceId: params.spaceId,
+    knowledgePieceId,
+    type: params.type,
+    content: params.content,
+  });
 }
 
 // ─── Tool Declarations for Gemini Function Calling ───
@@ -86,7 +188,7 @@ const tutorToolDeclarations: FunctionDeclaration[] = [
   {
     name: "insert_topic",
     description:
-      "Insert a specific topic into the course curriculum as the next module. Use when the student explicitly asks to add a topic to their learning path.",
+      "Insert a specific topic into the current active module as a lesson, placing it where it best fits in the remaining lesson sequence. Use when the student explicitly asks to add a topic to the module they are currently working through.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -96,7 +198,26 @@ const tutorToolDeclarations: FunctionDeclaration[] = [
         },
         context: {
           type: Type.STRING,
-          description: "Why this topic should be added and where it fits",
+          description: "Why this topic should be added and how it connects to the current module",
+        },
+        focusArea: {
+          type: Type.STRING,
+          description: "A concise focus area description for the inserted lesson",
+        },
+        placement: {
+          type: Type.STRING,
+          description:
+            "Where to place the topic in the current module. Use one of: after_current_lesson, before_lesson, after_lesson, end_of_module",
+        },
+        referenceLessonTitle: {
+          type: Type.STRING,
+          description:
+            "When placement is before_lesson or after_lesson, give the exact lesson title to place this topic relative to",
+        },
+        targetsWeakness: {
+          type: Type.BOOLEAN,
+          description:
+            "Set true when the inserted lesson is primarily remediating a weakness or confusion",
         },
       },
       required: ["topic"],
@@ -126,33 +247,31 @@ async function executeTool(
           message: "No active course — the student needs to start or select a course first.",
         };
       }
-      const topic = String(args.topic ?? "");
-      // Store as a curriculum suggestion on the course
+
       try {
-        // Create a "feels hard" style node to signal interest in this topic
-        const knowledgePieces = await convex.query(
-          api.knowledgePieces.getForSpace,
-          { spaceId },
-        );
-        // Find a piece linked to this course, or use first available
-        const coursePiece = knowledgePieces.find(
-          (p: { source?: string }) =>
-            p.source?.includes(courseId),
-        );
-        if (coursePiece) {
-          await convex.mutation(api.knowledgeNodes.create, {
-            spaceId,
-            knowledgePieceId: coursePiece._id,
-            type: "feels_hard",
-            content: `Student requested lesson on: ${topic}. Reason: ${String(args.reason ?? "Student interest")}`,
-          });
-        }
+        const topic = getRequiredStringArg(args, "topic", "A lesson topic");
+        const reason = getOptionalString(args.reason) ?? "Student interest";
+
+        await addCourseKnowledgeNode({
+          convex,
+          spaceId,
+          courseId,
+          type: "feels_hard",
+          content: `Student requested lesson on: ${topic}. Reason: ${reason}`,
+        });
+
         return {
           success: true,
           message: `Noted! I've flagged "${topic}" as a topic you want covered. The adaptive curriculum will prioritize this in upcoming module generation.`,
         };
-      } catch {
-        return { success: false, message: "Failed to register the lesson request." };
+      } catch (error) {
+        return {
+          success: false,
+          message: getErrorMessage(
+            error,
+            "Failed to register the lesson request.",
+          ),
+        };
       }
     }
 
@@ -163,30 +282,34 @@ async function executeTool(
           message: "No active course to modify curriculum for.",
         };
       }
-      const suggestion = String(args.suggestion ?? "");
+
       try {
-        const knowledgePieces = await convex.query(
-          api.knowledgePieces.getForSpace,
-          { spaceId },
+        const suggestion = getRequiredStringArg(
+          args,
+          "suggestion",
+          "A curriculum suggestion",
         );
-        const coursePiece = knowledgePieces.find(
-          (p: { source?: string }) =>
-            p.source?.includes(courseId),
-        );
-        if (coursePiece) {
-          await convex.mutation(api.knowledgeNodes.create, {
-            spaceId,
-            knowledgePieceId: coursePiece._id,
-            type: "struggle",
-            content: `Curriculum feedback: ${suggestion}`,
-          });
-        }
+
+        await addCourseKnowledgeNode({
+          convex,
+          spaceId,
+          courseId,
+          type: "struggle",
+          content: `Curriculum feedback: ${suggestion}`,
+        });
+
         return {
           success: true,
           message: `Curriculum feedback recorded: "${suggestion}". The adaptive system will consider this when generating the next module.`,
         };
-      } catch {
-        return { success: false, message: "Failed to record curriculum suggestion." };
+      } catch (error) {
+        return {
+          success: false,
+          message: getErrorMessage(
+            error,
+            "Failed to record curriculum suggestion.",
+          ),
+        };
       }
     }
 
@@ -197,30 +320,44 @@ async function executeTool(
           message: "No active course — need a course context to insert a topic.",
         };
       }
-      const topic = String(args.topic ?? "");
+
       try {
-        const knowledgePieces = await convex.query(
-          api.knowledgePieces.getForSpace,
-          { spaceId },
+        const topic = getRequiredStringArg(args, "topic", "A topic");
+        const context = getOptionalString(args.context) ?? "Student request";
+        const focusArea = getOptionalString(args.focusArea) ?? context;
+        const placement = getOptionalInsertPlacement(args.placement);
+        const referenceLessonTitle = getOptionalString(args.referenceLessonTitle);
+        const targetsWeakness = args.targetsWeakness === true;
+
+        const result = await convex.mutation(
+          api.courseLessons.insertIntoCurrentModule,
+          {
+            courseId,
+            title: topic,
+            focusArea,
+            placement,
+            referenceLessonTitle: referenceLessonTitle ?? undefined,
+            targetsWeakness,
+          },
         );
-        const coursePiece = knowledgePieces.find(
-          (p: { source?: string }) =>
-            p.source?.includes(courseId),
-        );
-        if (coursePiece) {
-          await convex.mutation(api.knowledgeNodes.create, {
-            spaceId,
-            knowledgePieceId: coursePiece._id,
-            type: "feels_hard",
-            content: `INSERT TOPIC REQUEST: "${topic}". Context: ${String(args.context ?? "Student request")}. This should be the next module topic.`,
-          });
-        }
+
+        await addCourseKnowledgeNode({
+          convex,
+          spaceId,
+          courseId,
+          type: "improvement",
+          content: `Tutor inserted "${topic}" into the current module "${result.moduleTitle}" ${result.placementSummary}. Context: ${context}`,
+        });
+
         return {
           success: true,
-          message: `Topic "${topic}" has been queued for insertion. It will be prioritized in the next module generation cycle.`,
+          message: `Inserted "${topic}" into the current module ${result.placementSummary}.`,
         };
-      } catch {
-        return { success: false, message: "Failed to insert topic." };
+      } catch (error) {
+        return {
+          success: false,
+          message: getErrorMessage(error, "Failed to insert topic."),
+        };
       }
     }
 
@@ -286,6 +423,7 @@ async function assembleContext(
   // Course-specific context (if courseId provided)
   let courseContext = "No specific course context — space-level conversation";
   let currentLessonContext = "No active lesson";
+  let currentModuleContext = "No active module context";
   let courseName = "General";
 
   if (courseId) {
@@ -303,20 +441,54 @@ async function assembleContext(
         `Lessons completed: ${lessons?.filter((l: { status: string }) => ["summarized", "integrated"].includes(l.status)).length ?? 0}/${lessons?.length ?? 0}`,
       ].join("\n");
 
-      const currentLesson = lessons?.find(
-        (l: { lessonIndex: number }) => l.lessonIndex === course.currentLessonIndex,
+      const currentModule = modules?.find(
+        (m: { moduleIndex: number; _id: string; moduleTitle: string }) =>
+          m.moduleIndex === course.currentModuleIndex,
       );
-      if (currentLesson) {
-        currentLessonContext = [
-          `Title: ${currentLesson.title}`,
-          `Focus: ${currentLesson.focusArea}`,
-          `Status: ${currentLesson.status}`,
-          currentLesson.summaryMarkdown
-            ? `Summary: ${currentLesson.summaryMarkdown.slice(0, 500)}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
+      if (currentModule) {
+        const currentModuleLessons = (lessons ?? [])
+          .filter(
+            (lesson: { moduleId: string }) => lesson.moduleId === currentModule._id,
+          )
+          .sort(
+            (
+              left: { lessonIndex: number },
+              right: { lessonIndex: number },
+            ) => left.lessonIndex - right.lessonIndex,
+          );
+        const currentLesson =
+          currentModuleLessons[course.currentLessonIndex] ?? null;
+
+        if (currentLesson) {
+          currentLessonContext = [
+            `Title: ${currentLesson.title}`,
+            `Focus: ${currentLesson.focusArea}`,
+            `Status: ${currentLesson.status}`,
+            currentLesson.summaryMarkdown
+              ? `Summary: ${currentLesson.summaryMarkdown.slice(0, 500)}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n");
+        }
+
+        currentModuleContext = [
+          `Current module: ${currentModule.moduleTitle}`,
+          `Current module lesson sequence:`,
+          ...currentModuleLessons.map(
+            (
+              lesson: { title: string; status: string },
+              index: number,
+            ) =>
+              `- ${index + 1}. ${lesson.title} [${lesson.status}]${
+                index === course.currentLessonIndex
+                  ? " (current)"
+                  : index < course.currentLessonIndex
+                    ? " (already passed)"
+                    : ""
+              }`,
+          ),
+        ].join("\n");
       }
     }
   } else {
@@ -339,6 +511,7 @@ async function assembleContext(
     memoriesContext,
     relevantMemories,
     courseName,
+    currentModuleContext,
   };
 }
 
@@ -387,13 +560,18 @@ export async function POST(req: Request) {
       try {
         // Get or create chat
         let chatId: Id<"courseTutorChats">;
+        let effectiveCourseId = courseId;
         if (body.chatId) {
           chatId = body.chatId as Id<"courseTutorChats">;
+          if (!effectiveCourseId) {
+            const chat = await convex.query(api.courseTutor.getChat, { chatId });
+            effectiveCourseId = chat?.courseId ?? null;
+          }
         } else {
           const title = userMessage.slice(0, 60) + (userMessage.length > 60 ? "..." : "");
           chatId = await convex.mutation(api.courseTutor.createChat, {
             spaceId,
-            courseId: courseId ?? undefined,
+            courseId: effectiveCourseId ?? undefined,
             title,
           });
           send("chat_created", { chatId });
@@ -408,7 +586,13 @@ export async function POST(req: Request) {
 
         // ─── Assemble Context ───
         const ai = getAiClient();
-        const ctx = await assembleContext(convex, spaceId, courseId, ai, userMessage);
+        const ctx = await assembleContext(
+          convex,
+          spaceId,
+          effectiveCourseId,
+          ai,
+          userMessage,
+        );
 
         // Chat history
         const chatHistory = await convex.query(api.courseTutor.getMessages, { chatId });
@@ -433,7 +617,7 @@ export async function POST(req: Request) {
           return;
         }
 
-        const prompt = renderPrompt(promptDoc.content, {
+        const renderedPrompt = renderPrompt(promptDoc.content, {
           courseContext: ctx.courseContext,
           knowledgeNodes: ctx.nodesContext,
           relevantMemories: ctx.memoriesContext,
@@ -441,13 +625,21 @@ export async function POST(req: Request) {
           chatHistory: historyContext,
           userMessage,
         });
+        const prompt = [
+          renderedPrompt,
+          "",
+          "Tool guidance:",
+          "- `insert_topic` inserts a lesson into the current active module, not a future module.",
+          "- When you use `insert_topic`, choose a placement anywhere within the current module lesson sequence wherever the topic best fits.",
+          `Current module sequencing context:\n${ctx.currentModuleContext}`,
+        ].join("\n");
 
         const model = getModel();
         const startedAt = Date.now();
 
         // ─── Generate with Tool Support ───
         // First call: non-streaming to check for function calls
-        const toolConfig = courseId
+        const toolConfig = effectiveCourseId
           ? {
               tools: [{ functionDeclarations: tutorToolDeclarations }],
               toolConfig: {
@@ -469,18 +661,29 @@ export async function POST(req: Request) {
         if (functionCalls && functionCalls.length > 0) {
           // Execute tools and build response
           const toolResults: string[] = [];
-          for (const call of functionCalls) {
+          for (const [index, call] of functionCalls.entries()) {
             if (!call.name) continue;
-            const args = (call.args ?? {}) as Record<string, unknown>;
-            send("tool_call", { name: call.name, args });
+            const args = call.args ?? {};
+            const toolCallId = `${call.name}-${index}`;
+            send("tool_call", { id: toolCallId, name: call.name, args });
 
-            const result = await executeTool(call.name, args, convex, spaceId, courseId);
+            const result = await executeTool(
+              call.name,
+              args,
+              convex,
+              spaceId,
+              effectiveCourseId,
+            );
             toolResults.push(
               result.success
                 ? `✅ **${call.name}**: ${result.message}`
                 : `❌ **${call.name}**: ${result.message}`,
             );
-            send("tool_result", { name: call.name, ...result });
+            send("tool_result", {
+              id: toolCallId,
+              name: call.name,
+              ...result,
+            });
           }
 
           // Generate follow-up response with tool results
@@ -615,7 +818,7 @@ export async function POST(req: Request) {
                 content: mem.content,
                 category: mem.category,
                 sourceType: "tutor_chat" as const,
-                sourceCourseId: courseId ?? undefined,
+                sourceCourseId: effectiveCourseId ?? undefined,
                 embedding,
               });
             }
