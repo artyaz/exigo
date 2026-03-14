@@ -16,6 +16,7 @@ import type * as courseLessons from "../courseLessons.js";
 import type * as courseModules from "../courseModules.js";
 import type * as courseOrchestrator from "../courseOrchestrator.js";
 import type * as coursePrompts from "../coursePrompts.js";
+import type * as courseTutor from "../courseTutor.js";
 import type * as courses from "../courses.js";
 import type * as crons from "../crons.js";
 import type * as debugPlan from "../debugPlan.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   courseModules: typeof courseModules;
   courseOrchestrator: typeof courseOrchestrator;
   coursePrompts: typeof coursePrompts;
+  courseTutor: typeof courseTutor;
   courses: typeof courses;
   crons: typeof crons;
   debugPlan: typeof debugPlan;

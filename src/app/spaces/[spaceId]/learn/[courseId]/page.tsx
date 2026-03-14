@@ -26,6 +26,7 @@ import { createFeelsHardNodeAction } from "../../../../actions/knowledge";
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
 import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
 import { ClarificationThread, type ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
+import { CourseTutor } from "~/app/_components/learn/CourseTutor";
 import { TestGrid } from "~/app/_components/tests/TestGrid";
 import { TestGenerateButton } from "~/app/_components/tests/TestGenerateButton";
 import { FileText, Target } from "lucide-react";
@@ -415,6 +416,11 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
           </div>
         )}
       </div>
+
+      {/* AI Tutor — available during lesson, summary, and completed phases */}
+      {(course.phase === "lesson" || course.phase === "lesson_summary" || course.phase === "completed") && (
+        <CourseTutor courseId={courseId as Id<"courses">} spaceId={spaceId as Id<"spaces">} />
+      )}
     </div>
   );
 }

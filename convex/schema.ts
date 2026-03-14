@@ -181,4 +181,47 @@ export default defineSchema({
     clarificationSectionIndex: v.optional(v.number()),
   })
     .index("by_lesson", ["lessonId"]),
+
+  // ─── AI Tutor ───
+  courseTutorChats: defineTable({
+    courseId: v.id("courses"),
+    userId: v.string(),
+    title: v.string(),
+  })
+    .index("by_course", ["courseId"])
+    .index("by_user_course", ["userId", "courseId"]),
+  courseTutorMessages: defineTable({
+    chatId: v.id("courseTutorChats"),
+    role: v.union(
+      v.literal("user"),
+      v.literal("tutor"),
+      v.literal("system"),
+    ),
+    content: v.string(),
+  })
+    .index("by_chat", ["chatId"]),
+  spaceTutorMemories: defineTable({
+    spaceId: v.id("spaces"),
+    userId: v.string(),
+    content: v.string(),
+    category: v.union(
+      v.literal("preference"),
+      v.literal("struggle"),
+      v.literal("insight"),
+      v.literal("goal"),
+    ),
+    sourceType: v.union(
+      v.literal("lesson"),
+      v.literal("clarification"),
+      v.literal("tutor_chat"),
+    ),
+    sourceCourseId: v.optional(v.id("courses")),
+    embedding: v.array(v.float64()),
+  })
+    .index("by_space_user", ["spaceId", "userId"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 768,
+      filterFields: ["spaceId", "userId"],
+    }),
 });
