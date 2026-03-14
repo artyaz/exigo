@@ -187,6 +187,7 @@ export async function teachLessonAction(
 
 export async function verifyInputAction(
   lessonId: string,
+  sectionIndex: number,
   question: string,
   expectedAnswer: string,
   userAnswer: string,
@@ -202,6 +203,7 @@ export async function verifyInputAction(
     const convex = await createAuthedConvexClient(getToken, "actions.learn.verifyInputAction");
     const result = await convex.action(api.courseAi.verifyInput, {
       lessonId: lessonId as Id<"courseLessons">,
+      sectionIndex,
       question,
       expectedAnswer,
       userAnswer,

@@ -199,9 +199,12 @@ export const chat = action({
         });
         const historyPrompt = buildHistoryPrompt(pastMessages, args.message);
 
-        const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-          name: "tutor",
-        });
+        const promptDoc = await ctx.runQuery(
+          internal.coursePrompts.getPromptInternal,
+          {
+            name: "tutor",
+          },
+        );
         const prompt = renderPrompt(promptDoc.content, {
           question_text: question.question,
           question_answer: question.answer ?? "N/A",
@@ -211,7 +214,7 @@ export const chat = action({
           historyPrompt,
         });
 
-        const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+        const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
         const startedAt = Date.now();
         const response = await ai.models.generateContent({
           model,

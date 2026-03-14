@@ -292,7 +292,7 @@ export function LearnTab({ spaceId, userId, spaceName }: { spaceId: string; user
                       return (
                         <Link
                           key={lesson._id}
-                          href={`/spaces/${spaceId}/learn/${course._id}`}
+                          href={`/spaces/${spaceId}/learn/${course._id}?lessonId=${lesson._id}`}
                         >
                           <motion.div
                             whileHover={{ x: 4 }}

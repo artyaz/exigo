@@ -1,16 +1,17 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import { useState, useEffect, useLayoutEffect, useRef, use, useCallback, useMemo, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Loader2, CheckCircle2, ChevronRight, ChevronLeft,
-  CornerDownLeft, XCircle, SkipForward,
+  CornerDownLeft, XCircle, SkipForward, Zap, BookOpen
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import {
   generateBaselineQuestionAction,
@@ -21,46 +22,47 @@ import {
   completeLessonAction,
   summarizeLessonAction,
 } from "../../../../actions/learn";
+import { createFeelsHardNodeAction, queueFeelsHardNodeAction } from "../../../../actions/knowledge";
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
 import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
 import { ClarificationThread, type ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
+import { CourseTutor } from "~/app/_components/learn/CourseTutor";
+import { TestGrid } from "~/app/_components/tests/TestGrid";
+import { TestGenerateButton } from "~/app/_components/tests/TestGenerateButton";
+import {
+  parseLessonSections,
+  restoreLessonRuntimeState,
+  shouldMarkLessonComplete,
+  type LessonInputRequest,
+  type LessonVerification,
+  type PersistedLessonCheckpointState,
+  type RestoredCheckpointState as CheckpointState,
+} from "~/lib/lessonCheckpoints";
+import { FileText, Target } from "lucide-react";
 
-/* ─── Lesson section parser ─── */
-interface LessonSection {
-  content: string;
-  inputRequest?: {
-    type: string;
-    question: string;
-    expectedAnswer: string;
-  };
+type ClientActionResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
+function unwrapActionResult<T>(
+  result: ClientActionResult<T>,
+  fallbackMessage: string,
+) {
+  if (!result.ok) {
+    throw new Error(result.error ?? fallbackMessage);
+  }
+
+  return result.data;
 }
 
-function parseLessonSections(fullText: string): LessonSection[] {
-  const sections: LessonSection[] = [];
-  const inputRegex = /\[INPUT_REQUEST:\s*([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]*?))?\s*\]/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+function serializeCheckpointMap(checkpoints: Map<number, CheckpointState>) {
+  return JSON.stringify(
+    Array.from(checkpoints.entries()).sort(([left], [right]) => left - right),
+  );
+}
 
-  while ((match = inputRegex.exec(fullText)) !== null) {
-    const content = fullText.slice(lastIndex, match.index).trim();
-    sections.push({
-      content,
-      inputRequest: {
-        type: match[1]!.trim(),
-        question: match[2]!.trim(),
-        expectedAnswer: match[3]?.trim() ?? "",
-      },
-    });
-    lastIndex = match.index + match[0].length;
-  }
-
-  // Remaining content after last INPUT_REQUEST
-  const remaining = fullText.slice(lastIndex).trim();
-  if (remaining) {
-    sections.push({ content: remaining });
-  }
-
-  return sections;
+function serializeVerification(verification: LessonVerification | null) {
+  return verification ? JSON.stringify(verification) : "";
 }
 
 
@@ -168,15 +170,89 @@ function FocusModeToggle({ enabled, onToggle }: { enabled: boolean; onToggle: ()
 export default function CoursePage({ params }: { params: Promise<{ spaceId: string; courseId: string }> }) {
   const { userId } = useAuth();
   const { spaceId, courseId } = use(params);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedLessonId = searchParams.get("lessonId");
   const [focusModeEnabled, setFocusModeEnabled] = useState(false);
 
   const course = useQuery(api.courses.get, userId ? { courseId: courseId as Id<"courses"> } : "skip");
   const modules = useQuery(api.courseModules.getForCourse, userId ? { courseId: courseId as Id<"courses"> } : "skip");
   const lessons = useQuery(api.courseLessons.getForCourse, userId ? { courseId: courseId as Id<"courses"> } : "skip");
 
+  // Determine which lesson/module to actually show.
+  // By default, it's the user's active progress (`course.current...`).
+  // But if there's a specific `?lessonId=...` requested in the URL, override it.
+  const resolvedIndices = useMemo(() => {
+    if (!course || !lessons || !modules) return null;
+    
+    if (requestedLessonId) {
+      const requestedLesson = lessons.find(l => l._id === requestedLessonId);
+      if (requestedLesson) {
+        // Find which module this lesson belongs to
+        const parentModule = modules.find(m => m._id === requestedLesson.moduleId);
+        if (parentModule) {
+          return {
+            moduleIndex: parentModule.moduleIndex,
+            lessonIndex: requestedLesson.lessonIndex,
+          };
+        }
+      }
+    }
+    
+    return {
+      moduleIndex: course.currentModuleIndex,
+      lessonIndex: course.currentLessonIndex,
+    };
+  }, [course, lessons, modules, requestedLessonId]);
+
+  const activeModuleId = useMemo(() => {
+    if (!modules || !resolvedIndices) return null;
+    return modules.find((module) => module.moduleIndex === resolvedIndices.moduleIndex)?._id ?? null;
+  }, [modules, resolvedIndices]);
+
+  const activeLesson = useMemo(() => {
+    if (!lessons || !resolvedIndices || !activeModuleId) return null;
+    return lessons.find(
+      (lesson) =>
+        lesson.moduleId === activeModuleId
+        && lesson.lessonIndex === resolvedIndices.lessonIndex,
+    ) ?? null;
+  }, [activeModuleId, lessons, resolvedIndices]);
+
+  const spaceTests = useQuery(api.tests.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
+  const spaceQuestions = useQuery(api.questions.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
+  const pieces = useQuery(api.knowledgePieces.getForSpace, userId ? { spaceId: spaceId as Id<"spaces"> } : "skip");
+
+  const [activeTab, setActiveTab] = useState<"lesson" | "summary" | "tests">("lesson");
+
+  // Auto-switch to summary when lesson is summarized AND summary content exists
+  useEffect(() => {
+    if (
+      (course?.phase === "lesson_summary" || course?.phase === "completed") &&
+      activeLesson?.summaryMarkdown
+    ) {
+        setActiveTab("summary");
+    } else if (course?.phase === "lesson") {
+        setActiveTab("lesson");
+    }
+  }, [course?.phase, activeLesson?.summaryMarkdown]);
+
   const toggleFocusMode = useCallback(() => {
     setFocusModeEnabled((previousValue) => !previousValue);
   }, []);
+
+  const returnToActiveLesson = useCallback(() => {
+    if (!requestedLessonId) return;
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("lessonId");
+    const nextQuery = nextSearchParams.toString();
+
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+      scroll: false,
+    });
+  }, [pathname, requestedLessonId, router, searchParams]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -254,26 +330,105 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
           <GeneratingPhase courseId={courseId} phase={course.phase} />
         )}
 
-        {course.phase === "lesson" && lessons && modules && (
-          <LessonPhase
-            courseId={courseId}
-            currentModuleIndex={course.currentModuleIndex}
-            currentLessonIndex={course.currentLessonIndex}
-            focusModeEnabled={focusModeEnabled}
-            onToggleFocusMode={toggleFocusMode}
-            modules={modules}
-            lessons={lessons}
-          />
-        )}
+        {(course.phase === "lesson" || course.phase === "lesson_summary") && lessons && modules && resolvedIndices && (
+          <>
+            {/* Tab navigation */}
+            <div className="flex gap-4 border-b border-white/10 pb-3 mb-6 overflow-x-auto hide-scrollbar">
+                <button
+                    onClick={() => setActiveTab("lesson")}
+                    className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 whitespace-nowrap ${activeTab === "lesson" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                >
+                    <Zap className="w-3.5 h-3.5" /> Lesson Content
+                </button>
+                {course.phase === "lesson_summary" && (
+                    <button
+                        onClick={() => setActiveTab("summary")}
+                        className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 whitespace-nowrap ${activeTab === "summary" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                    >
+                        <BookOpen className="w-3.5 h-3.5" /> Summary
+                    </button>
+                )}
+                <button
+                    onClick={() => setActiveTab("tests")}
+                    className={`pb-2 font-medium text-sm transition-colors border-b-2 -mb-[13px] flex items-center gap-1.5 whitespace-nowrap ${activeTab === "tests" ? "border-white text-primary" : "border-transparent text-secondary hover:text-primary"}`}
+                >
+                    <FileText className="w-3.5 h-3.5" /> Tests
+                </button>
+            </div>
 
-        {course.phase === "lesson_summary" && lessons && (
-          <SummaryPhase
-            courseId={courseId}
-            currentLessonIndex={course.currentLessonIndex}
-            focusModeEnabled={focusModeEnabled}
-            onToggleFocusMode={toggleFocusMode}
-            lessons={lessons}
-          />
+            <AnimatePresence mode="wait">
+              {activeTab === "lesson" ? (
+                <motion.div
+                  key="lesson-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                    <LessonPhase
+                      key={`lesson-${requestedLessonId ?? `${resolvedIndices.moduleIndex}-${resolvedIndices.lessonIndex}`}`}
+                      courseId={courseId}
+                      spaceId={spaceId}
+                      currentModuleIndex={resolvedIndices.moduleIndex}
+                      currentLessonIndex={resolvedIndices.lessonIndex}
+                      focusModeEnabled={focusModeEnabled}
+                      onToggleFocusMode={toggleFocusMode}
+                      onReturnToActiveLesson={returnToActiveLesson}
+                      modules={modules}
+                      lessons={lessons}
+                    />
+                </motion.div>
+              ) : activeTab === "summary" ? (
+                <motion.div
+                  key="summary-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                    <SummaryPhase
+                      key={`summary-${requestedLessonId ?? activeLesson?._id ?? `${resolvedIndices.moduleIndex}-${resolvedIndices.lessonIndex}`}`}
+                      courseId={courseId}
+                      currentLessonId={activeLesson?._id ?? null}
+                      focusModeEnabled={focusModeEnabled}
+                      onToggleFocusMode={toggleFocusMode}
+                      onReturnToActiveLesson={returnToActiveLesson}
+                      lessons={lessons}
+                    />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="tests-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex flex-col gap-6"
+                >
+                  {activeLesson?.knowledgePieceId && pieces && spaceTests && spaceQuestions ? (
+                    <>
+                      <TestGenerateButton 
+                        spaceId={spaceId} 
+                        pieces={pieces} 
+                        fixedTopicId={activeLesson.knowledgePieceId} 
+                      />
+                      <div className="border-t border-white/5 my-2" />
+                      <p className="text-secondary text-sm">Tests specifically focused on this lesson's knowledge.</p>
+                      <TestGrid 
+                        spaceTests={spaceTests.filter(t => t.knowledgePieceId === activeLesson.knowledgePieceId)} 
+                        spaceQuestions={spaceQuestions} 
+                      />
+                    </>
+                  ) : (
+                    <div className="glass-card border-dashed rounded-2xl p-12 text-center flex flex-col items-center gap-3">
+                        <Loader2 className="w-8 h-8 text-white/10 animate-spin" />
+                        <p className="text-secondary text-sm">Waiting for lesson knowledge piece...</p>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
         )}
 
         {course.phase === "completed" && (
@@ -284,6 +439,11 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
           </div>
         )}
       </div>
+
+      {/* AI Tutor — available during lesson, summary, and completed phases */}
+      {(course.phase === "lesson" || course.phase === "lesson_summary" || course.phase === "completed") && (
+        <CourseTutor courseId={courseId as Id<"courses">} spaceId={spaceId as Id<"spaces">} />
+      )}
     </div>
   );
 }
@@ -315,6 +475,7 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
   const [error, setError] = useState<string | null>(null);
 
   const arenaRef = useRef<HTMLDivElement>(null);
+  const isGeneratingRef = useRef(false);
   const [arenaW, setArenaW] = useState(800);
   const [arenaH, setArenaH] = useState(600);
 
@@ -341,6 +502,8 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
   const generateNextQuestion = useCallback(async (prevQuestions: typeof questions) => {
     const step = prevQuestions.length + 1;
     if (step > 5) return;
+    if (isGeneratingRef.current) return;
+    isGeneratingRef.current = true;
 
     setIsLoading(true);
     setError(null);
@@ -354,9 +517,14 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
           feedback: q.feedback,
         }));
 
+      // Include concept tags alongside question text for stronger deduplication
+      const prevQuestionsWithConcepts = prevQuestions.map(
+        q => `[${q.concept_tag}] ${q.question_text}`,
+      );
+
       const result = await generateBaselineQuestionAction(
         courseId, courseTopic, step,
-        prevQuestions.map(q => q.question_text),
+        prevQuestionsWithConcepts,
         previousResults.length > 0 ? previousResults : undefined,
       );
       if (!result.ok) { setError(result.error); return; }
@@ -371,6 +539,7 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate question");
     } finally {
+      isGeneratingRef.current = false;
       setIsLoading(false);
     }
   }, [courseId, courseTopic]);
@@ -731,20 +900,24 @@ function GeneratingPhase({ courseId, phase }: { courseId: string; phase: string 
 // ─── Lesson Phase ───
 function LessonPhase({
   courseId,
+  spaceId,
   currentModuleIndex,
   currentLessonIndex,
   focusModeEnabled,
   onToggleFocusMode,
+  onReturnToActiveLesson,
   modules,
   lessons,
 }: {
   courseId: string;
+  spaceId: string;
   currentModuleIndex: number;
   currentLessonIndex: number;
   focusModeEnabled: boolean;
   onToggleFocusMode: () => void;
+  onReturnToActiveLesson: () => void;
   modules: Array<{ _id: string; moduleIndex: number; moduleTitle: string; subTopics: string }>;
-  lessons: Array<{ _id: string; moduleId: string; lessonIndex: number; title: string; focusArea: string; status: string; masteryGoals?: string }>;
+  lessons: Array<{ _id: string; moduleId: string; lessonIndex: number; title: string; focusArea: string; status: string; masteryGoals?: string; knowledgePieceId?: string; verifierLogs?: string; checkpointStates?: PersistedLessonCheckpointState[] }>;
 }) {
   const currentModule = modules.find((m) => m.moduleIndex === currentModuleIndex);
   const moduleLessons = lessons
@@ -758,27 +931,15 @@ function LessonPhase({
   // Progressive reveal: how many sections to show
   const [revealedCount, setRevealedCount] = useState(0);
   // Current input request state for retry flow
-  const [currentInputRequest, setCurrentInputRequest] = useState<{
-    type: string;
-    question: string;
-    expectedAnswer: string;
-  } | null>(null);
+  const [currentInputRequest, setCurrentInputRequest] = useState<LessonInputRequest | null>(null);
   const [userInput, setUserInput] = useState("");
-  const [lastVerification, setLastVerification] = useState<{
-    is_correct: boolean;
-    feedback_block: string;
-  } | null>(null);
+  const [lastVerification, setLastVerification] = useState<LessonVerification | null>(null);
   // Track answered/skipped checkpoints: sectionIndex → { answer?, skipped?, verification? }
-  const [answeredCheckpoints, setAnsweredCheckpoints] = useState<Map<number, {
-    answer?: string;
-    skipped?: boolean;
-    verification?: { is_correct: boolean; feedback_block: string };
-  }>>(new Map());
+  const [answeredCheckpoints, setAnsweredCheckpoints] = useState<Map<number, CheckpointState>>(new Map());
   const [isLessonComplete, setIsLessonComplete] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isAdvancingCourse, setIsAdvancingCourse] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
 
   // ─── Clarification state ───
   const [selectionState, setSelectionState] = useState<{
@@ -786,6 +947,8 @@ function LessonPhase({
     position: { top: number; left: number };
     sectionIndex: number;
     blockIndex: number;
+    /** If set, submission should reply to this thread instead of creating a new one */
+    replyThreadId?: string;
   } | null>(null);
   const [clarificationThreads, setClarificationThreads] = useState<Map<string, {
     quote: string;
@@ -795,14 +958,102 @@ function LessonPhase({
     messages: ClarificationMessage[];
     streamingText?: string;
     isLoading: boolean;
+    isExpanded: boolean;
   }>>(new Map());
 
   const lessonContentRef = useRef<HTMLDivElement>(null);
   const contentEndRef = useRef<HTMLDivElement>(null);
+  const teachStartedForLessonRef = useRef<string | null>(null);
+
+  // ─── "Feels Hard" context menu ───
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    selectedText: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      const container = lessonContentRef.current;
+      if (!container) return;
+      if (!container.contains(e.target as Node)) {
+        setContextMenu(null);
+        return;
+      }
+
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) return;
+      const selectedText = selection.toString().trim();
+      if (selectedText.length < 3) return;
+
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY, selectedText });
+    };
+
+    const handleClick = () => setContextMenu(null);
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("click", handleClick);
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("click", handleClick);
+    };
+  }, []);
+
+  const handleFeelsHard = useCallback(async (text: string) => {
+    setContextMenu(null);
+    const lesson = moduleLessons[currentLessonIndex];
+    const content = `Feels hard: "${text.slice(0, 200)}"`;
+
+    try {
+      if (lesson?.knowledgePieceId) {
+        await createFeelsHardNodeAction(spaceId, lesson.knowledgePieceId, content);
+      } else if (lesson?._id) {
+        await queueFeelsHardNodeAction(lesson._id, content);
+      } else {
+        return;
+      }
+      setFeelsHardFeedback("Marked as hard — we'll focus on this! 💪");
+      setTimeout(() => setFeelsHardFeedback(null), 2000);
+    } catch {
+      setFeelsHardFeedback("Failed to save, try again.");
+      setTimeout(() => setFeelsHardFeedback(null), 2000);
+    }
+  }, [spaceId, moduleLessons, currentLessonIndex]);
+
+  const [feelsHardFeedback, setFeelsHardFeedback] = useState<string | null>(null);
 
   const lessonMessages = useQuery(
     api.courseLessonMessages.getForLesson,
     currentLesson ? { lessonId: currentLesson._id as Id<"courseLessons"> } : "skip"
+  );
+  const saveCheckpointState = useMutation(api.courseLessons.saveCheckpointState);
+  const currentLessonId = currentLesson?._id ?? null;
+  const currentLessonCheckpointStates = currentLesson?.checkpointStates;
+  const currentLessonVerifierLogs = currentLesson?.verifierLogs;
+  const restoredLessonRuntime = useMemo(() => {
+    if (!currentLessonId || lessonMessages === undefined) return null;
+
+    return restoreLessonRuntimeState({
+      lessonMessages,
+      verifierLogs: currentLessonVerifierLogs,
+      checkpointStates: currentLessonCheckpointStates,
+    });
+  }, [
+    currentLessonCheckpointStates,
+    currentLessonId,
+    currentLessonVerifierLogs,
+    lessonMessages,
+  ]);
+  const currentAnsweredCheckpointsKey = useMemo(
+    () => serializeCheckpointMap(answeredCheckpoints),
+    [answeredCheckpoints],
+  );
+  const restoredAnsweredCheckpointsKey = useMemo(
+    () => restoredLessonRuntime
+      ? serializeCheckpointMap(restoredLessonRuntime.answeredCheckpoints)
+      : "[]",
+    [restoredLessonRuntime],
   );
 
   // Parse sections from accumulated text
@@ -857,7 +1108,8 @@ function LessonPhase({
       const range = selection.getRangeAt(0);
       if (!container.contains(range.commonAncestorContainer)) return;
 
-      // Check if selection is inside a clarification thread — send as follow-up
+      // Check if selection is inside a clarification thread — show the bubble
+      // but route submission as a reply to that thread instead of a new one.
       let node: Node | null = range.commonAncestorContainer;
       while (node && node !== container) {
         if (node instanceof HTMLElement && node.hasAttribute("data-clarify-thread-id")) {
@@ -865,8 +1117,19 @@ function LessonPhase({
           const thread = clarificationThreads.get(existingThreadId);
           if (thread && !thread.isLoading) {
             e.preventDefault();
-            pendingInThreadReply.current = { threadId: existingThreadId, question: selectedText };
-            setClarificationThreads(prev => new Map(prev));
+            const rect = range.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            setBubbleInitialChars(e.key);
+            setSelectionState({
+              quote: selectedText,
+              position: {
+                top: rect.bottom - containerRect.top,
+                left: rect.left - containerRect.left + rect.width / 2,
+              },
+              sectionIndex: thread.sectionIndex,
+              blockIndex: thread.blockIndex,
+              replyThreadId: existingThreadId,
+            });
           }
           return;
         }
@@ -938,6 +1201,7 @@ function LessonPhase({
       blockIndex: number;
       messages: ClarificationMessage[];
       isLoading: boolean;
+      isExpanded: boolean;
     }>();
 
     for (const msg of clarificationMsgs) {
@@ -950,6 +1214,7 @@ function LessonPhase({
           blockIndex: msg.clarificationBlockIndex ?? 0,
           messages: [],
           isLoading: false,
+          isExpanded: false, // Default restored threads to collapsed
         });
       }
       threadMap.get(tid)!.messages.push({
@@ -972,9 +1237,12 @@ function LessonPhase({
             blockIndex: existing.isLoading ? existing.blockIndex : dbThread.blockIndex,
             // Keep optimistic messages while loading (Convex sync might be slightly behind)
             messages: existing.isLoading ? existing.messages : dbThread.messages,
+            // Preserve the user's expand/collapse preference across DB syncs,
+            // but only if this thread actually has history in the UI (not a fresh shell)
+            isExpanded: existing.messages.length > 0 ? existing.isExpanded : false,
           });
         } else {
-          next.set(tid, dbThread);
+          next.set(tid, { ...dbThread, isExpanded: false });
         }
       }
       return next;
@@ -1012,6 +1280,7 @@ function LessonPhase({
           messages: [{ role: "user", content: question }],
           streamingText: "",
           isLoading: true,
+          isExpanded: true,
         });
       }
       return next;
@@ -1142,53 +1411,58 @@ function LessonPhase({
     void streamClarification(thread.quote, question, threadId, thread.sectionIndex, thread.blockIndex);
   }, [clarificationThreads, streamClarification]);
 
-  // Restore from DB on mount
+  // Restore from DB whenever the active lesson snapshot changes.
   useEffect(() => {
-    if (initialized || !lessonMessages) return;
+    if (!restoredLessonRuntime) return;
 
-    if (lessonMessages.length > 0) {
-      // Find the main teacher lesson message (the full lesson)
-      const teacherMessages = lessonMessages.filter((m) => m.role === "teacher");
-      if (teacherMessages.length > 0) {
-        // Concatenate all teacher messages to reconstruct the full lesson
-        const reconstructed = teacherMessages.map(m => m.content).join("\n\n");
-        setFullText(reconstructed);
+    const currentInputQuestion = currentInputRequest?.question ?? null;
+    const restoredInputQuestion = restoredLessonRuntime.currentInputRequest?.question ?? null;
+    const waitingForLocalAdvance =
+      lastVerification?.is_correct === true
+      && currentInputQuestion !== null
+      && currentInputQuestion !== restoredInputQuestion;
 
-        // Check if lesson was completed
-        const lastMsg = teacherMessages[teacherMessages.length - 1];
-        if (lastMsg?.messageType === "lesson_complete" || reconstructed.includes("[LESSON_COMPLETE]")) {
-          setIsLessonComplete(true);
-          // Reveal all sections
-          const parsed = parseLessonSections(reconstructed);
-          setRevealedCount(parsed.length);
-        } else {
-          // Figure out how far the user got based on verification messages
-          const verifications = lessonMessages.filter((m) => m.messageType === "verification");
-          const parsed = parseLessonSections(reconstructed);
-          // Each verification means one checkpoint was passed
-          const checkpoint = Math.min(verifications.length + 1, parsed.length);
-          setRevealedCount(checkpoint);
+    if (waitingForLocalAdvance) return;
 
-          // If stopped at a checkpoint, restore the input request
-          if (checkpoint <= parsed.length) {
-            const currentSection = parsed[checkpoint - 1];
-            if (currentSection?.inputRequest) {
-              setCurrentInputRequest(currentSection.inputRequest);
-            }
-          }
-        }
-      }
-    }
+    const needsRestore =
+      fullText !== restoredLessonRuntime.fullText
+      || revealedCount !== restoredLessonRuntime.revealedCount
+      || currentInputQuestion !== restoredInputQuestion
+      || currentAnsweredCheckpointsKey !== restoredAnsweredCheckpointsKey
+      || serializeVerification(lastVerification) !== serializeVerification(restoredLessonRuntime.lastVerification)
+      || isLessonComplete !== restoredLessonRuntime.isLessonComplete;
 
-    setInitialized(true);
-  }, [lessonMessages, initialized]);
+    if (!needsRestore) return;
+
+    setFullText(restoredLessonRuntime.fullText);
+    setAnsweredCheckpoints(new Map(restoredLessonRuntime.answeredCheckpoints));
+    setIsLessonComplete(restoredLessonRuntime.isLessonComplete);
+    setRevealedCount(restoredLessonRuntime.revealedCount);
+    setCurrentInputRequest(restoredLessonRuntime.currentInputRequest);
+    setLastVerification(restoredLessonRuntime.lastVerification);
+    setUserInput("");
+  }, [
+    currentAnsweredCheckpointsKey,
+    currentInputRequest,
+    fullText,
+    isLessonComplete,
+    lastVerification,
+    restoredAnsweredCheckpointsKey,
+    restoredLessonRuntime,
+    revealedCount,
+  ]);
 
   const teach = useCallback(async () => {
     if (!currentLesson) return;
     setIsTeaching(true);
     setError(null);
     setFullText("");
-    setRevealedCount(1);
+    setAnsweredCheckpoints(new Map());
+    setCurrentInputRequest(null);
+    setIsLessonComplete(false);
+    setLastVerification(null);
+    setRevealedCount(0);
+    setUserInput("");
 
     try {
       const res = await fetch("/api/learn/teach", {
@@ -1242,13 +1516,21 @@ function LessonPhase({
             } else if (payload.type === "done") {
               const final = payload.fullText ?? accumulated;
               setFullText(final);
-              setIsLessonComplete(payload.isComplete ?? false);
 
               // Pause at first input request
               const parsed = parseLessonSections(final);
-              if (parsed.length > 0 && parsed[0]?.inputRequest) {
-                setCurrentInputRequest(parsed[0].inputRequest);
+              const nextInputRequest = payload.inputRequest ?? parsed[0]?.inputRequest ?? null;
+              setIsLessonComplete(shouldMarkLessonComplete({
+                hasCompletionSignal: payload.isComplete ?? false,
+                currentInputRequest: nextInputRequest,
+              }));
+
+              if (nextInputRequest) {
+                setCurrentInputRequest(nextInputRequest);
                 setRevealedCount(1);
+              } else {
+                setCurrentInputRequest(null);
+                setRevealedCount(parsed.length);
               }
             } else if (payload.type === "error") {
               setError(payload.error ?? "Teaching failed");
@@ -1263,16 +1545,19 @@ function LessonPhase({
     }
   }, [currentLesson]);
 
-  // Start teaching on mount only if no DB messages
+  // Start teaching only after the lesson snapshot has definitively loaded empty.
   useEffect(() => {
-    if (currentLesson && initialized && fullText.length === 0 && !lessonMessages?.length) {
-      void teach();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialized]);
+    if (!currentLessonId || lessonMessages === undefined) return;
+    if (restoredLessonRuntime?.fullText) return;
+    if (fullText.length > 0 || isTeaching) return;
+    if (teachStartedForLessonRef.current === currentLessonId) return;
+
+    teachStartedForLessonRef.current = currentLessonId;
+    void teach();
+  }, [currentLessonId, fullText, isTeaching, lessonMessages, restoredLessonRuntime, teach]);
 
   // Advance past the current checkpoint, revealing content until the next checkpoint or end
-  const advanceToNextCheckpoint = (opts?: { answer?: string; skipped?: boolean; verification?: { is_correct: boolean; feedback_block: string } }) => {
+  const advanceToNextCheckpoint = (opts?: { answer?: string; skipped?: boolean; verification?: LessonVerification }) => {
     // Record the current checkpoint as answered/skipped
     const currentSectionIdx = revealedCount - 1;
     if (currentSectionIdx >= 0 && sections[currentSectionIdx]?.inputRequest) {
@@ -1294,32 +1579,33 @@ function LessonPhase({
     // Reveal sections one at a time, but skip through content-only sections
     let nextIdx = revealedCount;
     while (nextIdx < sections.length) {
-      nextIdx += 1;
       const upcoming = sections[nextIdx];
+      nextIdx += 1;
       // If the next section has a checkpoint, pause there
       if (upcoming?.inputRequest) {
-        setRevealedCount(nextIdx + 1);
+        setRevealedCount(nextIdx);
         setCurrentInputRequest(upcoming.inputRequest);
         return;
       }
-      // If we've revealed everything, stop
-      if (nextIdx >= sections.length) {
-        setRevealedCount(nextIdx);
-        return;
-      }
     }
-    setRevealedCount(nextIdx);
+    setRevealedCount(sections.length);
+    setIsLessonComplete(shouldMarkLessonComplete({
+      hasCompletionSignal: hasLessonCompleteMarker,
+      currentInputRequest: null,
+    }));
   };
 
   const handleSubmitInput = async () => {
     if (!userInput.trim() || !currentInputRequest || !currentLesson) return;
 
     const input = userInput.trim();
+    const currentSectionIdx = revealedCount - 1;
     setUserInput("");
 
     try {
       const verifyResult = await verifyInputAction(
         currentLesson._id,
+        currentSectionIdx,
         currentInputRequest.question,
         currentInputRequest.expectedAnswer,
         input,
@@ -1344,17 +1630,45 @@ function LessonPhase({
     }
   };
 
-  const handleSkip = () => {
-    advanceToNextCheckpoint({ skipped: true });
+  const handleSkip = async () => {
+    if (!currentLesson) return;
+
+    const currentSectionIdx = revealedCount - 1;
+    const currentSection = sections[currentSectionIdx];
+    if (!currentSection?.inputRequest) return;
+
+    try {
+      await saveCheckpointState({
+        lessonId: currentLesson._id as Id<"courseLessons">,
+        checkpointState: {
+          sectionIndex: currentSectionIdx,
+          question: currentSection.inputRequest.question,
+          status: "skipped",
+        },
+      });
+      advanceToNextCheckpoint({ skipped: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save checkpoint");
+    }
   };
 
   const handleSummarize = async () => {
     if (!currentLesson) return;
     setIsSummarizing(true);
+    setError(null);
     try {
-      await completeLessonAction(currentLesson._id);
-      await summarizeLessonAction(currentLesson._id);
-      await advanceCourseAction(courseId);
+      unwrapActionResult(
+        await completeLessonAction(currentLesson._id),
+        "Failed to complete lesson",
+      );
+      unwrapActionResult(
+        await summarizeLessonAction(currentLesson._id),
+        "Failed to generate knowledge piece",
+      );
+      unwrapActionResult(
+        await advanceCourseAction(courseId),
+        "Failed to advance course",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Summary failed");
     } finally {
@@ -1406,7 +1720,17 @@ function LessonPhase({
             initialChars={bubbleInitialChars}
             isSubmitting={isClarifySubmitting}
             onSubmit={(question) => {
-              handleClarify(selectionState.quote, question, selectionState.sectionIndex, selectionState.blockIndex);
+              if (selectionState.replyThreadId) {
+                // Reply inside an existing thread — include the selected text as context
+                const questionWithContext = selectionState.quote
+                  ? `About: "${selectionState.quote}"\n\n${question}`
+                  : question;
+                setSelectionState(null);
+                handleClarificationReply(selectionState.replyThreadId, questionWithContext);
+              } else {
+                // New thread from lesson text
+                handleClarify(selectionState.quote, question, selectionState.sectionIndex, selectionState.blockIndex);
+              }
             }}
             onClose={() => {
               setSelectionState(null);
@@ -1446,6 +1770,15 @@ function LessonPhase({
                               streamingText={t.streamingText}
                               onReply={(q) => handleClarificationReply(t.threadId, q)}
                               isLoading={t.isLoading}
+                              isExpanded={t.isExpanded}
+                              onToggleExpanded={() => {
+                                setClarificationThreads(prev => {
+                                  const next = new Map(prev);
+                                  const thread = next.get(t.threadId);
+                                  if (thread) next.set(t.threadId, { ...thread, isExpanded: !thread.isExpanded });
+                                  return next;
+                                });
+                              }}
                             />
                           </div>
                         </div>
@@ -1536,7 +1869,7 @@ function LessonPhase({
                   {/* Skip button */}
                   {!lastVerification?.is_correct && (
                     <button
-                      onClick={handleSkip}
+                      onClick={() => { void handleSkip(); }}
                       className="mt-2 text-xs text-white/30 hover:text-white/50 transition-colors flex items-center gap-1"
                     >
                       <SkipForward className="w-3 h-3" />
@@ -1560,13 +1893,45 @@ function LessonPhase({
         )}
 
         <div ref={contentEndRef} />
+
+        {/* "Feels Hard" context menu */}
+        {contextMenu && createPortal(
+          <div
+            className="fixed z-[100] bg-neutral-900 border border-white/10 rounded-lg shadow-2xl py-1 min-w-[180px]"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => void handleFeelsHard(contextMenu.selectedText)}
+              className="w-full px-3 py-2 text-left text-sm text-white/80 hover:bg-white/[0.06] transition-colors flex items-center gap-2"
+              type="button"
+            >
+              <span>😣</span> Feels Hard
+            </button>
+          </div>,
+          document.body,
+        )}
+
+        {/* "Feels Hard" feedback toast */}
+        <AnimatePresence>
+          {feelsHardFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-neutral-800 border border-white/10 rounded-lg px-4 py-2 text-sm text-white/80 shadow-xl"
+            >
+              {feelsHardFeedback}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       {/* Lesson complete */}
       {/* Lesson complete — show when all sections revealed and not streaming */}
-      {(hasLessonCompleteMarker || (revealedCount >= totalSections && totalSections > 0)) && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
+      {!currentInputRequest && (hasLessonCompleteMarker || (revealedCount >= totalSections && totalSections > 0)) && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
         currentLesson && ["summarized", "integrated"].includes(currentLesson.status) ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -1587,7 +1952,13 @@ function LessonPhase({
                   setIsAdvancingCourse(true);
                   setError(null);
                   try {
-                    await advanceCourseAction(courseId);
+                    const advanceResult = unwrapActionResult(
+                      await advanceCourseAction(courseId),
+                      "Failed to advance course",
+                    );
+                    if (advanceResult.nextPhase !== "lesson_summary") {
+                      onReturnToActiveLesson();
+                    }
                   } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to advance course");
                   } finally {
@@ -1626,18 +1997,20 @@ function LessonPhase({
 // ─── Summary Phase ───
 function SummaryPhase({
   courseId,
-  currentLessonIndex,
+  currentLessonId,
   focusModeEnabled,
   onToggleFocusMode,
+  onReturnToActiveLesson,
   lessons,
 }: {
   courseId: string;
-  currentLessonIndex: number;
+  currentLessonId: string | null;
   focusModeEnabled: boolean;
   onToggleFocusMode: () => void;
+  onReturnToActiveLesson: () => void;
   lessons: Array<{ _id: string; lessonIndex: number; summaryMarkdown?: string; status: string }>;
 }) {
-  const currentLesson = lessons.find((l) => l.lessonIndex === currentLessonIndex);
+  const currentLesson = lessons.find((lesson) => lesson._id === currentLessonId);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const summaryContentRef = useRef<HTMLDivElement>(null);
@@ -1649,8 +2022,13 @@ function SummaryPhase({
 
   const handleAdvance = async () => {
     setIsAdvancing(true);
+    setError(null);
     try {
-      await advanceCourseAction(courseId);
+      unwrapActionResult(
+        await advanceCourseAction(courseId),
+        "Failed to advance course",
+      );
+      onReturnToActiveLesson();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to advance");
     } finally {

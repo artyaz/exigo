@@ -152,8 +152,23 @@ export default defineSchema({
     targetsWeakness: v.boolean(),
     masteryGoals: v.optional(v.string()),
     verifierLogs: v.optional(v.string()),
+    checkpointStates: v.optional(v.array(v.object({
+      sectionIndex: v.number(),
+      question: v.string(),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("answered"),
+        v.literal("skipped"),
+      ),
+      answer: v.optional(v.string()),
+      verification: v.optional(v.object({
+        is_correct: v.boolean(),
+        feedback_block: v.string(),
+      })),
+    }))),
     summaryMarkdown: v.optional(v.string()),
     knowledgePieceId: v.optional(v.id("knowledgePieces")),
+    pendingFeelsHardNodes: v.optional(v.array(v.string())),
     status: v.union(
       v.literal("pending"),
       v.literal("goals_set"),
@@ -181,4 +196,51 @@ export default defineSchema({
     clarificationSectionIndex: v.optional(v.number()),
   })
     .index("by_lesson", ["lessonId"]),
+
+  // ─── AI Tutor ───
+  courseTutorChats: defineTable({
+    // Legacy course-scoped chats may not have spaceId yet.
+    spaceId: v.optional(v.id("spaces")),
+    courseId: v.optional(v.id("courses")),
+    userId: v.string(),
+    title: v.string(),
+  })
+    .index("by_course", ["courseId"])
+    .index("by_user_course", ["userId", "courseId"])
+    .index("by_space", ["spaceId"])
+    .index("by_user_space", ["userId", "spaceId"]),
+  courseTutorMessages: defineTable({
+    chatId: v.id("courseTutorChats"),
+    role: v.union(
+      v.literal("user"),
+      v.literal("tutor"),
+      v.literal("system"),
+    ),
+    content: v.string(),
+  })
+    .index("by_chat", ["chatId"]),
+  spaceTutorMemories: defineTable({
+    spaceId: v.id("spaces"),
+    userId: v.string(),
+    content: v.string(),
+    category: v.union(
+      v.literal("preference"),
+      v.literal("struggle"),
+      v.literal("insight"),
+      v.literal("goal"),
+    ),
+    sourceType: v.union(
+      v.literal("lesson"),
+      v.literal("clarification"),
+      v.literal("tutor_chat"),
+    ),
+    sourceCourseId: v.optional(v.id("courses")),
+    embedding: v.array(v.float64()),
+  })
+    .index("by_space_user", ["spaceId", "userId"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 768,
+      filterFields: ["spaceId", "userId"],
+    }),
 });

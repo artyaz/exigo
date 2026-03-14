@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Loader2, ArrowUp } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -18,6 +18,8 @@ export interface ClarificationThreadProps {
     streamingText?: string;
     onReply: (question: string) => void;
     isLoading?: boolean;
+    isExpanded?: boolean;
+    onToggleExpanded?: () => void;
 }
 
 const THREAD_SPRING = {
@@ -33,17 +35,11 @@ export function ClarificationThread({
     streamingText,
     onReply,
     isLoading,
+    isExpanded = true,
+    onToggleExpanded,
 }: ClarificationThreadProps) {
-    const [isExpanded, setIsExpanded] = useState(true);
     const [replyText, setReplyText] = useState("");
     const bottomRef = useRef<HTMLDivElement>(null);
-
-    // Auto-scroll to bottom when streaming text updates
-    useEffect(() => {
-        if (streamingText || isLoading) {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
-    }, [streamingText, isLoading]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,7 +61,7 @@ export function ClarificationThread({
         >
             {/* Accordion header */}
             <button
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => onToggleExpanded?.()}
                 className="w-full px-4 py-3 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
             >
                 <div className="flex items-center gap-2.5 min-w-0">
@@ -101,41 +97,35 @@ export function ClarificationThread({
                             {/* Existing messages */}
                             {messages.map((msg, i) => {
                                 const isUser = msg.role === "user";
-                                return (
+                                // Teacher messages must NOT animate in (no opacity:0→1)
+                                // because they replace the live streaming bubble.
+                                // Animating them in causes a visible flash/blink.
+                                return isUser ? (
                                     <motion.div
                                         key={i}
                                         initial={{ opacity: 0, y: 6 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: i * 0.05, ...THREAD_SPRING }}
-                                        className={`flex gap-2.5 ${isUser ? "justify-end" : ""}`}
+                                        className="flex gap-2.5 justify-end"
                                     >
-                                        {!isUser && (
-                                            <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
-                                                <span className="text-[10px] text-white/50">AI</span>
-                                            </div>
-                                        )}
-                                        <div
-                                            className={`rounded-xl text-sm leading-relaxed max-w-[85%] ${isUser
-                                                ? "bg-white/[0.06] border border-white/[0.08] text-white/80 px-3.5 py-2.5"
-                                                : "text-white/70"
-                                                }`}
-                                        >
-                                            {isUser ? (
-                                                msg.content
-                                            ) : (
-                                                <div className="clarification-markdown">
-                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                        {msg.content}
-                                                    </ReactMarkdown>
-                                                </div>
-                                            )}
+                                        <div className="rounded-xl text-sm leading-relaxed max-w-[85%] bg-white/[0.06] border border-white/[0.08] text-white/80 px-3.5 py-2.5 whitespace-pre-wrap break-words">
+                                            {msg.content}
                                         </div>
-                                        {isUser && (
-                                            <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
-                                                <span className="text-[10px] text-white/50">You</span>
-                                            </div>
-                                        )}
+                                        <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                                            <span className="text-[10px] text-white/50">You</span>
+                                        </div>
                                     </motion.div>
+                                ) : (
+                                    <div key={i} className="flex gap-2.5">
+                                        <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
+                                            <span className="text-[10px] text-white/50">AI</span>
+                                        </div>
+                                        <div className="text-white/70 text-sm leading-relaxed max-w-[85%]">
+                                            <div className="clarification-markdown">
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                                            </div>
+                                        </div>
+                                    </div>
                                 );
                             })}
 
@@ -186,18 +176,29 @@ export function ClarificationThread({
                             {/* Reply input — hidden while loading */}
                             {!isLoading && messages.length > 0 && (
                                 <form onSubmit={handleSubmit} className="flex gap-2 mt-1">
-                                    <input
-                                        type="text"
+                                    <textarea
                                         value={replyText}
                                         onChange={(e) => setReplyText(e.target.value)}
                                         placeholder="Ask a follow-up..."
+                                        rows={1}
                                         disabled={isLoading}
-                                        className="flex-1 bg-black/30 border border-white/[0.06] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/[0.15] transition-colors"
+                                        className="flex-1 bg-black/30 border border-white/[0.06] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/[0.15] transition-colors resize-none"
+                                        onInput={(e) => {
+                                            const el = e.currentTarget;
+                                            el.style.height = "auto";
+                                            el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSubmit(e);
+                                            }
+                                        }}
                                     />
                                     <button
                                         type="submit"
                                         disabled={!replyText.trim() || isLoading}
-                                        className="shrink-0 w-8 h-8 rounded-lg bg-white/[0.06] text-white/50 flex items-center justify-center hover:bg-white/[0.1] hover:text-white/70 disabled:opacity-30 transition-all"
+                                        className="shrink-0 w-8 h-8 rounded-lg bg-white/[0.06] text-white/50 flex items-center justify-center hover:bg-white/[0.1] hover:text-white/70 disabled:opacity-30 transition-all self-end"
                                     >
                                         <ArrowUp className="w-3.5 h-3.5" />
                                     </button>

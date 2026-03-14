@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ArrowUp, Loader2, X } from "lucide-react";
 
@@ -28,19 +28,27 @@ export function SelectionBubble({
     onClose,
     isSubmitting,
 }: SelectionBubbleProps) {
-    const inputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const autoResize = useCallback(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    }, []);
 
     useEffect(() => {
-        if (inputRef.current) {
-            inputRef.current.value = initialChars;
-            inputRef.current.focus();
-            inputRef.current.setSelectionRange(initialChars.length, initialChars.length);
+        if (textareaRef.current) {
+            textareaRef.current.value = initialChars;
+            textareaRef.current.focus();
+            textareaRef.current.setSelectionRange(initialChars.length, initialChars.length);
+            autoResize();
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSubmit = (e?: React.FormEvent) => {
         e?.preventDefault();
-        const value = inputRef.current?.value.trim();
+        const value = textareaRef.current?.value.trim();
         if (!value || isSubmitting) return;
         onSubmit(value);
     };
@@ -58,14 +66,15 @@ export function SelectionBubble({
             exit={{ scale: 0.5, opacity: 0, y: -8 }}
             transition={BOUNCE_SPRING}
         >
-            {/* Pointer arrow */}
-            <div className="flex justify-center -mb-[1px]">
-                <div className="w-3 h-3 rotate-45 bg-neutral-900 border-t border-l border-white/[0.08]" />
-            </div>
+            <div 
+                className="absolute z-10 -top-[5px] left-1/2 -translate-x-1/2 w-[11px] h-[11px] rotate-45 border-t border-l border-[rgba(255,255,255,0.08)]"
+                style={{ backgroundColor: "#171717", borderBottom: "none", borderRight: "none" }}
+            />
 
             <form
                 onSubmit={handleSubmit}
-                className="bg-neutral-900 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-xl p-2 flex flex-col gap-2 min-w-[320px] max-w-[420px]"
+                className="relative z-0 bg-neutral-900 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-xl p-2 flex flex-col gap-2 min-w-[320px] max-w-[420px]"
+                style={{ backgroundColor: "#171717" }}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
             >
@@ -84,24 +93,28 @@ export function SelectionBubble({
                 </div>
 
                 {/* Input */}
-                <div className="relative flex items-center bg-black/40 rounded-lg border border-white/[0.05] focus-within:border-white/[0.15] transition-colors">
-                    <input
-                        ref={inputRef}
-                        type="text"
+                <div className="relative flex items-end bg-black/40 rounded-lg border border-white/[0.05] focus-within:border-white/[0.15] transition-colors">
+                    <textarea
+                        ref={textareaRef}
                         placeholder="What does this mean?"
-                        className="flex-1 bg-transparent text-sm text-white focus:outline-none px-3 py-2 placeholder:text-white/20"
+                        rows={1}
+                        className="flex-1 bg-transparent text-sm text-white focus:outline-none px-3 py-2 placeholder:text-white/20 resize-none"
                         disabled={isSubmitting}
+                        onInput={autoResize}
                         onKeyDown={(e) => {
                             if (e.key === "Escape") {
                                 e.preventDefault();
                                 onClose();
+                            } else if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSubmit();
                             }
                         }}
                     />
                     <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="shrink-0 w-7 h-7 rounded-md bg-white/[0.08] text-white/60 flex items-center justify-center hover:bg-white/[0.12] hover:text-white/80 disabled:opacity-30 transition-all mr-1"
+                        className="shrink-0 w-7 h-7 rounded-md bg-white/[0.08] text-white/60 flex items-center justify-center hover:bg-white/[0.12] hover:text-white/80 disabled:opacity-30 transition-all mr-1 mb-1"
                     >
                         {isSubmitting ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
