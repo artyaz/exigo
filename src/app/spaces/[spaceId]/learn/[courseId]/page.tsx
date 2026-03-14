@@ -22,6 +22,7 @@ import {
   completeLessonAction,
   summarizeLessonAction,
 } from "../../../../actions/learn";
+import { createFeelsHardNodeAction } from "../../../../actions/knowledge";
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
 import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
 import { ClarificationThread, type ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
@@ -217,14 +218,17 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
 
   const [activeTab, setActiveTab] = useState<"lesson" | "summary" | "tests">("lesson");
 
-  // Auto-switch to summary when lesson is summarized
+  // Auto-switch to summary when lesson is summarized AND summary content exists
   useEffect(() => {
-    if (course?.phase === "lesson_summary" || course?.phase === "completed") {
+    if (
+      (course?.phase === "lesson_summary" || course?.phase === "completed") &&
+      activeLesson?.summaryMarkdown
+    ) {
         setActiveTab("summary");
     } else if (course?.phase === "lesson") {
         setActiveTab("lesson");
     }
-  }, [course?.phase]);
+  }, [course?.phase, activeLesson?.summaryMarkdown]);
 
   const toggleFocusMode = useCallback(() => {
     setFocusModeEnabled((previousValue) => !previousValue);
@@ -343,6 +347,7 @@ export default function CoursePage({ params }: { params: Promise<{ spaceId: stri
                 >
                     <LessonPhase
                       courseId={courseId}
+                      spaceId={spaceId}
                       currentModuleIndex={resolvedIndices.moduleIndex}
                       currentLessonIndex={resolvedIndices.lessonIndex}
                       focusModeEnabled={focusModeEnabled}
@@ -441,6 +446,7 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
   const [error, setError] = useState<string | null>(null);
 
   const arenaRef = useRef<HTMLDivElement>(null);
+  const isGeneratingRef = useRef(false);
   const [arenaW, setArenaW] = useState(800);
   const [arenaH, setArenaH] = useState(600);
 
@@ -467,6 +473,8 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
   const generateNextQuestion = useCallback(async (prevQuestions: typeof questions) => {
     const step = prevQuestions.length + 1;
     if (step > 5) return;
+    if (isGeneratingRef.current) return;
+    isGeneratingRef.current = true;
 
     setIsLoading(true);
     setError(null);
@@ -480,9 +488,14 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
           feedback: q.feedback,
         }));
 
+      // Include concept tags alongside question text for stronger deduplication
+      const prevQuestionsWithConcepts = prevQuestions.map(
+        q => `[${q.concept_tag}] ${q.question_text}`,
+      );
+
       const result = await generateBaselineQuestionAction(
         courseId, courseTopic, step,
-        prevQuestions.map(q => q.question_text),
+        prevQuestionsWithConcepts,
         previousResults.length > 0 ? previousResults : undefined,
       );
       if (!result.ok) { setError(result.error); return; }
@@ -497,6 +510,7 @@ function BaselinePhase({ courseId, courseTopic, baselineResults }: { courseId: s
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate question");
     } finally {
+      isGeneratingRef.current = false;
       setIsLoading(false);
     }
   }, [courseId, courseTopic]);
@@ -857,6 +871,7 @@ function GeneratingPhase({ courseId, phase }: { courseId: string; phase: string 
 // ─── Lesson Phase ───
 function LessonPhase({
   courseId,
+  spaceId,
   currentModuleIndex,
   currentLessonIndex,
   focusModeEnabled,
@@ -865,12 +880,13 @@ function LessonPhase({
   lessons,
 }: {
   courseId: string;
+  spaceId: string;
   currentModuleIndex: number;
   currentLessonIndex: number;
   focusModeEnabled: boolean;
   onToggleFocusMode: () => void;
   modules: Array<{ _id: string; moduleIndex: number; moduleTitle: string; subTopics: string }>;
-  lessons: Array<{ _id: string; moduleId: string; lessonIndex: number; title: string; focusArea: string; status: string; masteryGoals?: string }>;
+  lessons: Array<{ _id: string; moduleId: string; lessonIndex: number; title: string; focusArea: string; status: string; masteryGoals?: string; knowledgePieceId?: string }>;
 }) {
   const currentModule = modules.find((m) => m.moduleIndex === currentModuleIndex);
   const moduleLessons = lessons
@@ -928,6 +944,62 @@ function LessonPhase({
 
   const lessonContentRef = useRef<HTMLDivElement>(null);
   const contentEndRef = useRef<HTMLDivElement>(null);
+
+  // ─── "Feels Hard" context menu ───
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    selectedText: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      const container = lessonContentRef.current;
+      if (!container) return;
+      if (!container.contains(e.target as Node)) {
+        setContextMenu(null);
+        return;
+      }
+
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) return;
+      const selectedText = selection.toString().trim();
+      if (selectedText.length < 3) return;
+
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY, selectedText });
+    };
+
+    const handleClick = () => setContextMenu(null);
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("click", handleClick);
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("click", handleClick);
+    };
+  }, []);
+
+  const handleFeelsHard = useCallback(async (text: string) => {
+    setContextMenu(null);
+    const lesson = moduleLessons[currentLessonIndex];
+    if (!lesson?.knowledgePieceId) return;
+
+    try {
+      await createFeelsHardNodeAction(
+        spaceId,
+        lesson.knowledgePieceId,
+        `Feels hard: "${text.slice(0, 200)}"`,
+      );
+      setFeelsHardFeedback("Marked as hard — we'll focus on this! 💪");
+      setTimeout(() => setFeelsHardFeedback(null), 2000);
+    } catch {
+      setFeelsHardFeedback("Failed to save, try again.");
+      setTimeout(() => setFeelsHardFeedback(null), 2000);
+    }
+  }, [spaceId, moduleLessons, currentLessonIndex]);
+
+  const [feelsHardFeedback, setFeelsHardFeedback] = useState<string | null>(null);
 
   const lessonMessages = useQuery(
     api.courseLessonMessages.getForLesson,
@@ -1294,8 +1366,10 @@ function LessonPhase({
     if (initialized || !lessonMessages) return;
 
     if (lessonMessages.length > 0) {
-      // Find the main teacher lesson message (the full lesson)
-      const teacherMessages = lessonMessages.filter((m) => m.role === "teacher");
+      // Find the main teacher lesson messages (exclude clarification responses)
+      const teacherMessages = lessonMessages.filter(
+        (m) => m.role === "teacher" && m.messageType !== "clarification",
+      );
       if (teacherMessages.length > 0) {
         // Concatenate all teacher messages to reconstruct the full lesson
         const reconstructed = teacherMessages.map(m => m.content).join("\n\n");
@@ -1322,6 +1396,53 @@ function LessonPhase({
             if (currentSection?.inputRequest) {
               setCurrentInputRequest(currentSection.inputRequest);
             }
+          }
+        }
+
+        // Restore answered checkpoint state from verification messages
+        const verifications = lessonMessages.filter((m) => m.messageType === "verification");
+        const parsed = parseLessonSections(reconstructed);
+        if (verifications.length > 0) {
+          const restoredCheckpoints = new Map<number, {
+            answer?: string;
+            skipped?: boolean;
+            verification?: { is_correct: boolean; feedback_block: string };
+          }>();
+
+          // Match verifications to their corresponding checkpoint sections
+          let verIdx = 0;
+          for (let i = 0; i < parsed.length && verIdx < verifications.length; i++) {
+            if (parsed[i]?.inputRequest) {
+              const verMsg = verifications[verIdx];
+              if (verMsg) {
+                // Find the user message preceding this verification
+                const verMsgIndex = lessonMessages.indexOf(verMsg);
+                const userMsg = verMsgIndex > 0
+                  ? lessonMessages.slice(0, verMsgIndex).reverse().find(
+                      (m) => m.role === "user" && m.messageType !== "clarification",
+                    )
+                  : undefined;
+
+                try {
+                  const parsed_ver = JSON.parse(verMsg.content) as {
+                    is_correct: boolean;
+                    feedback_block: string;
+                  };
+                  restoredCheckpoints.set(i, {
+                    answer: userMsg?.content,
+                    verification: parsed_ver,
+                  });
+                } catch {
+                  // If verification content isn't valid JSON, mark as answered
+                  restoredCheckpoints.set(i, { answer: userMsg?.content });
+                }
+              }
+              verIdx++;
+            }
+          }
+
+          if (restoredCheckpoints.size > 0) {
+            setAnsweredCheckpoints(restoredCheckpoints);
           }
         }
       }
@@ -1726,6 +1847,38 @@ function LessonPhase({
         )}
 
         <div ref={contentEndRef} />
+
+        {/* "Feels Hard" context menu */}
+        {contextMenu && createPortal(
+          <div
+            className="fixed z-[100] bg-neutral-900 border border-white/10 rounded-lg shadow-2xl py-1 min-w-[180px]"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => void handleFeelsHard(contextMenu.selectedText)}
+              className="w-full px-3 py-2 text-left text-sm text-white/80 hover:bg-white/[0.06] transition-colors flex items-center gap-2"
+              type="button"
+            >
+              <span>😣</span> Feels Hard
+            </button>
+          </div>,
+          document.body,
+        )}
+
+        {/* "Feels Hard" feedback toast */}
+        <AnimatePresence>
+          {feelsHardFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-neutral-800 border border-white/10 rounded-lg px-4 py-2 text-sm text-white/80 shadow-xl"
+            >
+              {feelsHardFeedback}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}

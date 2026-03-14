@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import { GoogleGenAI } from "@google/genai";
 import {
@@ -11,7 +11,7 @@ import {
   captureAiGenerationEvent,
   createAiTraceId,
 } from "../shared/posthogAiObservability";
-import { getPromptInternal, renderPrompt } from "./coursePrompts";
+import { renderPrompt } from "./coursePrompts";
 
 function getAiClient() {
   if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -21,14 +21,21 @@ function getAiClient() {
 }
 
 function getModel() {
-  return process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+  return process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+}
+
+function getModelPro() {
+  return process.env.GEMINI_MODEL_PRO ?? "gemini-3-flash-preview";
 }
 
 /** Strip markdown code fences and parse JSON safely */
 function safeParseJson<T>(text: string): T {
   let cleaned = text.trim();
   // Strip markdown code fences
-  cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  cleaned = cleaned
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
   // If still not valid JSON, try extracting JSON object/array
   if (!cleaned.startsWith("{") && !cleaned.startsWith("[")) {
     const objectMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -38,7 +45,9 @@ function safeParseJson<T>(text: string): T {
   try {
     return JSON.parse(cleaned) as T;
   } catch (e) {
-    throw new Error(`Failed to parse AI response as JSON: ${(e as Error).message}\nRaw text: ${text.slice(0, 200)}`);
+    throw new Error(
+      `Failed to parse AI response as JSON: ${(e as Error).message}\nRaw text: ${text.slice(0, 200)}`,
+    );
   }
 }
 
@@ -53,10 +62,13 @@ export const normalizeTopic = action({
     requireEducatorAccess(auth);
 
     const ai = getAiClient();
-    const model = getModel();
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "course_architect",
-    });
+    const model = getModelPro();
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "course_architect",
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, { rawInput: args.rawTopic });
 
     const startedAt = Date.now();
@@ -80,13 +92,16 @@ export const normalizeTopic = action({
       course_description: string;
     }>(text);
 
-    const courseId: Id<"courses"> = await ctx.runMutation(internal.courses.createInternal, {
-      spaceId: args.spaceId,
-      userId: auth.userId,
-      rawTopic: args.rawTopic,
-      refinedTitle: parsed.refined_title,
-      courseDescription: parsed.course_description,
-    });
+    const courseId: Id<"courses"> = await ctx.runMutation(
+      internal.courses.createInternal,
+      {
+        spaceId: args.spaceId,
+        userId: auth.userId,
+        rawTopic: args.rawTopic,
+        refinedTitle: parsed.refined_title,
+        courseDescription: parsed.course_description,
+      },
+    );
 
     return {
       courseId,
@@ -106,10 +121,13 @@ export const normalizeTopicOnly = action({
     requireEducatorAccess(auth);
 
     const ai = getAiClient();
-    const model = getModel();
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "course_architect",
-    });
+    const model = getModelPro();
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "course_architect",
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, { rawInput: args.rawTopic });
 
     const startedAt = Date.now();
@@ -147,11 +165,15 @@ export const generateBaselineQuestion = action({
     courseTopic: v.string(),
     currentStep: v.number(),
     previousQuestions: v.array(v.string()),
-    previousResults: v.optional(v.array(v.object({
-      question: v.string(),
-      isCorrect: v.boolean(),
-      feedback: v.optional(v.string()),
-    }))),
+    previousResults: v.optional(
+      v.array(
+        v.object({
+          question: v.string(),
+          isCorrect: v.boolean(),
+          feedback: v.optional(v.string()),
+        }),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContextForAction(ctx);
@@ -164,9 +186,12 @@ export const generateBaselineQuestion = action({
         ? `\n[Previous Answer Results]: ${JSON.stringify(args.previousResults)}\n\nIMPORTANT: Adapt difficulty based on the student's performance. If they struggled with previous questions, make this question slightly easier to match their level. If they answered correctly, maintain or increase difficulty.`
         : "";
 
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "sequential_diagnostic",
-    });
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "sequential_diagnostic",
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, {
       courseTopic: args.courseTopic,
       targetAudienceLevel: "intermediate",
@@ -216,9 +241,12 @@ export const evaluateBaselineAnswer = action({
 
     const ai = getAiClient();
     const model = getModel();
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "baseline_evaluation",
-    });
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "baseline_evaluation",
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, {
       questionText: args.questionText,
       referenceAnswer: args.referenceAnswer,
@@ -226,7 +254,10 @@ export const evaluateBaselineAnswer = action({
     });
 
     const startedAt = Date.now();
-    const response = await ai.models.generateContent({ model, contents: prompt });
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
     captureAiGenerationEvent({
       distinctId: auth.userId,
       traceId: createAiTraceId(),
@@ -251,9 +282,12 @@ export const generateModule = action({
     const auth = await getAuthedContextForAction(ctx);
     requireEducatorAccess(auth);
 
-    const course: Doc<"courses"> | null = await ctx.runQuery(internal.courses.getInternal, {
-      courseId: args.courseId,
-    });
+    const course: Doc<"courses"> | null = await ctx.runQuery(
+      internal.courses.getInternal,
+      {
+        courseId: args.courseId,
+      },
+    );
     if (!course || course.userId !== auth.userId)
       throw new Error("Course not found");
 
@@ -261,7 +295,9 @@ export const generateModule = action({
       internal.courseModules.getForCourseInternal,
       { courseId: args.courseId },
     );
-    const completedTopics = existingModules.map((m: Doc<"courseModules">) => m.moduleTitle);
+    const completedTopics = existingModules.map(
+      (m: Doc<"courseModules">) => m.moduleTitle,
+    );
 
     // Collect performance summaries from completed lessons
     const performanceSummaries: string[] = [];
@@ -282,17 +318,21 @@ export const generateModule = action({
       internal.knowledgeNodes.getActiveNodesForSpaceInternal,
       { spaceId: course.spaceId },
     );
-    const knowledgeNodesStr = activeNodes.length > 0
-      ? activeNodes
-        .map((n) => `- [${n.type.toUpperCase()}] ${n.content}`)
-        .join("\n")
-      : "No knowledge nodes yet";
+    const knowledgeNodesStr =
+      activeNodes.length > 0
+        ? activeNodes
+            .map((n) => `- [${n.type.toUpperCase()}] ${n.content}`)
+            .join("\n")
+        : "No knowledge nodes yet";
 
     const ai = getAiClient();
-    const model = getModel();
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "adaptive_syllabus",
-    });
+    const model = getModelPro();
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "adaptive_syllabus",
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, {
       courseTitle: course.refinedTitle,
       courseDescription: course.courseDescription,
@@ -383,17 +423,23 @@ export const setMasteryGoals = action({
     );
     if (!lesson) throw new Error("Lesson not found");
 
-    const course: Doc<"courses"> | null = await ctx.runQuery(internal.courses.getInternal, {
-      courseId: lesson.courseId,
-    });
+    const course: Doc<"courses"> | null = await ctx.runQuery(
+      internal.courses.getInternal,
+      {
+        courseId: lesson.courseId,
+      },
+    );
     if (!course || course.userId !== auth.userId)
       throw new Error("Unauthorized");
 
     const ai = getAiClient();
     const model = getModel();
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "curator",
-    });
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "curator",
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, {
       topic: course.refinedTitle,
       subTopic: lesson.title,
@@ -418,13 +464,10 @@ export const setMasteryGoals = action({
     const text = response.text?.trim() ?? "";
     const masteryGoals = safeParseJson<string[]>(text);
 
-    await ctx.runMutation(
-      internal.courseLessons.updateMasteryGoalsInternal,
-      {
-        lessonId: args.lessonId,
-        masteryGoals: JSON.stringify(masteryGoals),
-      },
-    );
+    await ctx.runMutation(internal.courseLessons.updateMasteryGoalsInternal, {
+      lessonId: args.lessonId,
+      masteryGoals: JSON.stringify(masteryGoals),
+    });
 
     return { masteryGoals };
   },
@@ -446,9 +489,12 @@ export const teachLesson = action({
     );
     if (!lesson) throw new Error("Lesson not found");
 
-    const course: Doc<"courses"> | null = await ctx.runQuery(internal.courses.getInternal, {
-      courseId: lesson.courseId,
-    });
+    const course: Doc<"courses"> | null = await ctx.runQuery(
+      internal.courses.getInternal,
+      {
+        courseId: lesson.courseId,
+      },
+    );
     if (!course || course.userId !== auth.userId)
       throw new Error("Unauthorized");
 
@@ -471,7 +517,9 @@ export const teachLesson = action({
     let masteryGoals: string[] = [];
     try {
       masteryGoals = lesson.masteryGoals ? JSON.parse(lesson.masteryGoals) : [];
-    } catch { /* corrupted data, proceed with empty goals */ }
+    } catch {
+      /* corrupted data, proceed with empty goals */
+    }
 
     // Build context from conversation history
     const ai = getAiClient();
@@ -484,12 +532,17 @@ export const teachLesson = action({
       )
       .join("\n");
     const context = historyStr || "This is the beginning of the lesson.";
-    const isFirstMessage = context === "This is the beginning of the lesson." || !context.includes("Teacher:");
+    const isFirstMessage =
+      context === "This is the beginning of the lesson." ||
+      !context.includes("Teacher:");
 
     const promptName = isFirstMessage ? "teacher_start" : "teacher_continue";
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: promptName,
-    });
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: promptName,
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, {
       topic: course.refinedTitle,
       subTopic: lesson.title,
@@ -547,10 +600,10 @@ export const teachLesson = action({
       isComplete,
       inputRequest: inputRequestMatch
         ? {
-          type: inputRequestMatch[1]!.trim(),
-          question: inputRequestMatch[2]!.trim(),
-          expectedAnswer: inputRequestMatch[3]!.trim(),
-        }
+            type: inputRequestMatch[1]!.trim(),
+            question: inputRequestMatch[2]!.trim(),
+            expectedAnswer: inputRequestMatch[3]!.trim(),
+          }
         : null,
     };
   },
@@ -574,17 +627,23 @@ export const verifyInput = action({
     );
     if (!lesson) throw new Error("Lesson not found");
 
-    const course: Doc<"courses"> | null = await ctx.runQuery(internal.courses.getInternal, {
-      courseId: lesson.courseId,
-    });
+    const course: Doc<"courses"> | null = await ctx.runQuery(
+      internal.courses.getInternal,
+      {
+        courseId: lesson.courseId,
+      },
+    );
     if (!course || course.userId !== auth.userId)
       throw new Error("Unauthorized");
 
     const ai = getAiClient();
     const model = getModel();
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "verifier",
-    });
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "verifier",
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, {
       lessonContext: `${course.refinedTitle} - ${lesson.title}`,
       question: args.question,
@@ -623,7 +682,9 @@ export const verifyInput = action({
     }> = [];
     try {
       existingLogs = lesson.verifierLogs ? JSON.parse(lesson.verifierLogs) : [];
-    } catch { /* corrupted data, proceed with empty logs */ }
+    } catch {
+      /* corrupted data, proceed with empty logs */
+    }
     existingLogs.push({
       question: args.question,
       userAnswer: args.userAnswer,
@@ -631,13 +692,10 @@ export const verifyInput = action({
       feedback: parsed.feedback_block,
     });
 
-    await ctx.runMutation(
-      internal.courseLessons.updateVerifierLogsInternal,
-      {
-        lessonId: args.lessonId,
-        verifierLogs: JSON.stringify(existingLogs),
-      },
-    );
+    await ctx.runMutation(internal.courseLessons.updateVerifierLogsInternal, {
+      lessonId: args.lessonId,
+      verifierLogs: JSON.stringify(existingLogs),
+    });
 
     // Save verification as a system message
     await ctx.runMutation(internal.courseLessonMessages.sendInternal, {
@@ -670,9 +728,12 @@ export const clarifyConcept = action({
     );
     if (!lesson) throw new Error("Lesson not found");
 
-    const course: Doc<"courses"> | null = await ctx.runQuery(internal.courses.getInternal, {
-      courseId: lesson.courseId,
-    });
+    const course: Doc<"courses"> | null = await ctx.runQuery(
+      internal.courses.getInternal,
+      {
+        courseId: lesson.courseId,
+      },
+    );
     if (!course || course.userId !== auth.userId)
       throw new Error("Unauthorized");
 
@@ -692,19 +753,27 @@ export const clarifyConcept = action({
       internal.courseLessonMessages.getForLessonInternal,
       { lessonId: args.lessonId },
     );
-    const threadMessages = allMessages.filter((m) => m.threadId === args.threadId);
+    const threadMessages = allMessages.filter(
+      (m) => m.threadId === args.threadId,
+    );
 
     // Build context
     const ai = getAiClient();
     const model = getModel();
     const historyStr = threadMessages
       .slice(-10)
-      .map((m) => `${m.role === "teacher" || m.role === "system" ? "Teacher" : "Student"}: ${m.content}`)
+      .map(
+        (m) =>
+          `${m.role === "teacher" || m.role === "system" ? "Teacher" : "Student"}: ${m.content}`,
+      )
       .join("\n");
 
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "clarifier",
-    });
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "clarifier",
+      },
+    );
 
     const prompt = renderPrompt(promptDoc.content, {
       lessonContext: `${course.refinedTitle} - ${lesson.title}`,
@@ -760,16 +829,21 @@ export const summarizeLesson = action({
     );
     if (!lesson) throw new Error("Lesson not found");
 
-    const course: Doc<"courses"> | null = await ctx.runQuery(internal.courses.getInternal, {
-      courseId: lesson.courseId,
-    });
+    const course: Doc<"courses"> | null = await ctx.runQuery(
+      internal.courses.getInternal,
+      {
+        courseId: lesson.courseId,
+      },
+    );
     if (!course || course.userId !== auth.userId)
       throw new Error("Unauthorized");
 
     let masteryGoals: string[] = [];
     try {
       masteryGoals = lesson.masteryGoals ? JSON.parse(lesson.masteryGoals) : [];
-    } catch { /* corrupted data, proceed with empty goals */ }
+    } catch {
+      /* corrupted data, proceed with empty goals */
+    }
     let verifierLogs: Array<{
       question: string;
       userAnswer: string;
@@ -778,34 +852,54 @@ export const summarizeLesson = action({
     }> = [];
     try {
       verifierLogs = lesson.verifierLogs ? JSON.parse(lesson.verifierLogs) : [];
-    } catch { /* corrupted data, proceed with empty logs */ }
+    } catch {
+      /* corrupted data, proceed with empty logs */
+    }
 
-    // Inject clarifications as virtual verifier logs so summarizer accounts for them
+    // Build clarification context separately (instead of forcing isCorrect: false)
     const allMessages: Doc<"courseLessonMessages">[] = await ctx.runQuery(
       internal.courseLessonMessages.getForLessonInternal,
       { lessonId: args.lessonId },
     );
-    const clarifications = allMessages.filter(
-      (m) => m.messageType === "clarification" && m.role === "user"
+    const userClarifications = allMessages.filter(
+      (m) => m.messageType === "clarification" && m.role === "user",
     );
-    for (const c of clarifications) {
-      verifierLogs.push({
-        question: `User asked for clarification on quote: "${c.clarificationQuote}"`,
-        userAnswer: c.content,
-        isCorrect: false, // Flagging as false ensures it becomes a struggle node automatically
-        feedback: "User needed additional human-like explanation for this concept.",
+    const teacherClarifications = allMessages.filter(
+      (m) => m.messageType === "clarification" && m.role === "teacher",
+    );
+
+    // Build paired clarification context: user question + AI response
+    const clarificationPairs: Array<{
+      quote: string;
+      userQuestion: string;
+      aiResponse: string;
+    }> = [];
+    for (const uc of userClarifications) {
+      const matchingResponse = teacherClarifications.find(
+        (tc) => tc.threadId === uc.threadId && tc._creationTime > uc._creationTime,
+      );
+      clarificationPairs.push({
+        quote: uc.clarificationQuote ?? "",
+        userQuestion: uc.content,
+        aiResponse: matchingResponse?.content ?? "(no response recorded)",
       });
     }
 
     const ai = getAiClient();
     const model = getModel();
-    const promptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "summarizer",
-    });
+    const promptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "summarizer",
+      },
+    );
     const prompt = renderPrompt(promptDoc.content, {
       topicCovered: `${course.refinedTitle} - ${lesson.title}`,
       masteryQuestions: JSON.stringify(masteryGoals),
       verifierLogs: JSON.stringify(verifierLogs),
+      clarifications: clarificationPairs.length > 0
+        ? JSON.stringify(clarificationPairs)
+        : "None",
     });
 
     const startedAt = Date.now();
@@ -827,7 +921,10 @@ export const summarizeLesson = action({
 
     // Post-process: strip any strengths/weaknesses sections the AI may include despite prompt
     const summaryMarkdown = rawSummary
-      .replace(/(?:^|\n)#+\s*(?:Strengths?|Weaknesses?|Areas?\s+(?:of\s+)?(?:Strength|Weakness|Improvement)|What\s+(?:Went\s+)?Well|(?:Areas?\s+)?(?:to\s+)?Improve).*?(?=\n#|\n\*\*[A-Z]|\n---|\Z)/gis, "")
+      .replace(
+        /(?:^|\n)#+\s*(?:Strengths?|Weaknesses?|Areas?\s+(?:of\s+)?(?:Strength|Weakness|Improvement)|What\s+(?:Went\s+)?Well|(?:Areas?\s+)?(?:to\s+)?Improve).*?(?=\n#|\n\*\*[A-Z]|\n---|\Z)/gis,
+        "",
+      )
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
@@ -852,22 +949,25 @@ export const summarizeLesson = action({
     );
 
     // Link piece to lesson
-    await ctx.runMutation(
-      internal.courseLessons.setKnowledgePieceIdInternal,
-      {
-        lessonId: args.lessonId,
-        knowledgePieceId: pieceId,
-      },
-    );
+    await ctx.runMutation(internal.courseLessons.setKnowledgePieceIdInternal, {
+      lessonId: args.lessonId,
+      knowledgePieceId: pieceId,
+    });
 
     // 2. Generate knowledge nodes via AI
-    const nodesPromptDoc = await ctx.runQuery(internal.coursePrompts.getPromptInternal, {
-      name: "lesson_knowledge_nodes",
-    });
+    const nodesPromptDoc = await ctx.runQuery(
+      internal.coursePrompts.getPromptInternal,
+      {
+        name: "lesson_knowledge_nodes",
+      },
+    );
     const nodesPrompt = renderPrompt(nodesPromptDoc.content, {
       topicCovered: `${course.refinedTitle} - ${lesson.title}`,
       masteryQuestions: JSON.stringify(masteryGoals),
       verifierLogs: JSON.stringify(verifierLogs),
+      clarifications: clarificationPairs.length > 0
+        ? JSON.stringify(clarificationPairs)
+        : "None",
     });
 
     const nodesStartedAt = Date.now();
@@ -886,15 +986,24 @@ export const summarizeLesson = action({
     });
 
     const nodesText = nodesResponse.text?.trim() ?? "[]";
-    let knowledgeNodeEntries: Array<{ type: "improvement" | "struggle"; content: string }> = [];
+    let knowledgeNodeEntries: Array<{
+      type: "improvement" | "struggle";
+      content: string;
+    }> = [];
     try {
-      knowledgeNodeEntries = safeParseJson<Array<{ type: "improvement" | "struggle"; content: string }>>(nodesText);
+      knowledgeNodeEntries =
+        safeParseJson<
+          Array<{ type: "improvement" | "struggle"; content: string }>
+        >(nodesText);
     } catch {
-      console.error("Failed to parse knowledge nodes from AI response, falling back to empty nodes.");
+      console.error(
+        "Failed to parse knowledge nodes from AI response, falling back to empty nodes.",
+      );
     }
 
     for (const entry of knowledgeNodeEntries) {
-      const nodeType = entry.type === "improvement" ? "improvement" : "struggle";
+      const nodeType =
+        entry.type === "improvement" ? "improvement" : "struggle";
       await ctx.runMutation(internal.knowledgeNodes.createInternal, {
         spaceId: course.spaceId,
         knowledgePieceId: pieceId,

@@ -211,10 +211,12 @@ Inputs:
 [Topic Covered]: {{topicCovered}}
 [Target Mastery Questions]: {{masteryQuestions}}
 [Verifier Logs]: {{verifierLogs}}
+[Student Clarification Requests]: {{clarifications}}
 
 Rules:
 1. Tone: Casual, encouraging, highly scannable bullet points.
 2. Content: Identify conceptual blind spots, not just typos.
+3. Clarifications give context about what confused the student — use them to understand depth of understanding, but NOT all clarifications indicate struggle. A student asking "how does this work under the hood?" is curious, not struggling.
 
 Output Format (Markdown text):
 
@@ -348,14 +350,16 @@ Inputs:
 [Topic Covered]: {{topicCovered}}
 [Target Mastery Questions]: {{masteryQuestions}}
 [Verifier Logs (questions, answers, correctness, feedback)]: {{verifierLogs}}
+[Student Clarification Requests]: {{clarifications}}
 
 Rules:
 1. Analyze the verifier logs to identify patterns of understanding and misunderstanding.
 2. For each CORRECT answer, create an "improvement" node describing what the student demonstrated mastery of. Be specific about the concept, not just the question.
-3. For each INCORRECT answer or clarification request, create a "struggle" node describing the specific conceptual gap. Include what the student likely misunderstands and why.
-4. Merge related items: if multiple questions test the same underlying concept, create a single node that captures the broader pattern.
-5. Each node content should be 1-2 sentences, specific and actionable.
-6. Generate between 2-8 nodes total depending on the lesson complexity.
+3. For each INCORRECT answer, create a "struggle" node describing the specific conceptual gap. Include what the student likely misunderstands and why.
+4. For clarification requests: CAREFULLY distinguish between genuine confusion (→ "struggle" node) and intellectual curiosity or deep-dive questions (→ "improvement" node or skip). Look at both the student's question AND the AI's response to judge if the student was stuck or just exploring.
+5. Merge related items: if multiple questions test the same underlying concept, create a single node that captures the broader pattern.
+6. Each node content should be 1-2 sentences, specific and actionable.
+7. Generate between 2-8 nodes total depending on the lesson complexity.
 
 Output Format (Strict JSON Array ONLY):
 [

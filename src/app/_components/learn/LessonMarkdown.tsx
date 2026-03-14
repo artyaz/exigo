@@ -4,10 +4,14 @@ import {
   isValidElement,
   createContext,
   useContext,
+  useState,
+  useCallback,
   type ReactNode,
 } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 
 interface LessonMarkdownProps {
   content: string;
@@ -341,6 +345,44 @@ function useFocusState(node: any, children: ReactNode) {
   return { targetId, stateClass, sectionKey };
 }
 
+function CodeBlockWithCopy({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    void navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [code]);
+
+  return (
+    <div className="relative group/code">
+      <div className="flex items-center justify-between px-4 pt-2 pb-0 text-[10px] font-[family-name:var(--font-geist-mono)] uppercase tracking-[0.1em] text-white/25">
+        <span>{language}</span>
+        <button
+          onClick={handleCopy}
+          className="text-white/25 hover:text-white/60 transition-colors text-[10px] tracking-[0.1em] uppercase cursor-pointer"
+          type="button"
+        >
+          {copied ? "Copied!" : "Copy"}
+        </button>
+      </div>
+      <SyntaxHighlighter
+        language={language}
+        style={oneDark}
+        customStyle={{
+          margin: 0,
+          padding: "1rem",
+          background: "transparent",
+          fontSize: "13px",
+        }}
+        codeTagProps={{ style: { fontFamily: "var(--font-geist-mono)" } }}
+      >
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
+
 const markdownComponents: Components = {
   h1: ({ node, children, className, ...props }) => {
     const { targetId, stateClass, sectionKey } = useFocusState(node, children);
@@ -483,6 +525,26 @@ const markdownComponents: Components = {
         {children}
       </a>
     );
+  },
+  pre: ({ node, children, className, ...props }) => (
+    <>
+      <pre {...props} className={mergeClasses("relative group", className)}>
+        {children}
+      </pre>
+      <AppendageSlot node={node} />
+    </>
+  ),
+  code: ({ node: _node, children, className, ...props }) => {
+    const match = /language-(\w+)/.exec(className ?? "");
+    const language = match?.[1];
+    const codeStr = String(children).replace(/\n$/, "");
+
+    // Inline code (no language class, not inside pre)
+    if (!language) {
+      return <code {...props} className={className}>{children}</code>;
+    }
+
+    return <CodeBlockWithCopy language={language} code={codeStr} />;
   },
 };
 
