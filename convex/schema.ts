@@ -154,6 +154,7 @@ export default defineSchema({
     verifierLogs: v.optional(v.string()),
     summaryMarkdown: v.optional(v.string()),
     knowledgePieceId: v.optional(v.id("knowledgePieces")),
+    pendingFeelsHardNodes: v.optional(v.array(v.string())),
     status: v.union(
       v.literal("pending"),
       v.literal("goals_set"),

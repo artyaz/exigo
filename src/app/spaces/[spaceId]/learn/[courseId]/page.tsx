@@ -22,7 +22,7 @@ import {
   completeLessonAction,
   summarizeLessonAction,
 } from "../../../../actions/learn";
-import { createFeelsHardNodeAction } from "../../../../actions/knowledge";
+import { createFeelsHardNodeAction, queueFeelsHardNodeAction } from "../../../../actions/knowledge";
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
 import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
 import { ClarificationThread, type ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
@@ -989,14 +989,16 @@ function LessonPhase({
   const handleFeelsHard = useCallback(async (text: string) => {
     setContextMenu(null);
     const lesson = moduleLessons[currentLessonIndex];
-    if (!lesson?.knowledgePieceId) return;
+    const content = `Feels hard: "${text.slice(0, 200)}"`;
 
     try {
-      await createFeelsHardNodeAction(
-        spaceId,
-        lesson.knowledgePieceId,
-        `Feels hard: "${text.slice(0, 200)}"`,
-      );
+      if (lesson?.knowledgePieceId) {
+        await createFeelsHardNodeAction(spaceId, lesson.knowledgePieceId, content);
+      } else if (lesson?._id) {
+        await queueFeelsHardNodeAction(lesson._id, content);
+      } else {
+        return;
+      }
       setFeelsHardFeedback("Marked as hard — we'll focus on this! 💪");
       setTimeout(() => setFeelsHardFeedback(null), 2000);
     } catch {
@@ -1390,18 +1392,30 @@ function LessonPhase({
           setRevealedCount(parsed.length);
         } else {
           // Figure out how far the user got based on verification messages
-          const verifications = lessonMessages.filter((m) => m.messageType === "verification");
+          const verifications = lessonMessages.filter((m: { messageType?: string }) => m.messageType === "verification");
           const parsed = parseLessonSections(reconstructed);
-          // Each verification means one checkpoint was passed
-          const checkpoint = Math.min(verifications.length + 1, parsed.length);
-          setRevealedCount(checkpoint);
-
-          // If stopped at a checkpoint, restore the input request
-          if (checkpoint <= parsed.length) {
-            const currentSection = parsed[checkpoint - 1];
-            if (currentSection?.inputRequest) {
-              setCurrentInputRequest(currentSection.inputRequest);
+          
+          // Find actual checkpoint section indices
+          const checkpointIndices: number[] = [];
+          for (let i = 0; i < parsed.length; i++) {
+            if (parsed[i]?.inputRequest) {
+              checkpointIndices.push(i);
             }
+          }
+          
+          // Map verification count to the real next checkpoint
+          const nextCheckpointIdx = checkpointIndices[verifications.length];
+          
+          if (nextCheckpointIdx !== undefined) {
+            // Reveal up to and including the checkpoint section
+            setRevealedCount(nextCheckpointIdx + 1);
+            const section = parsed[nextCheckpointIdx];
+            if (section?.inputRequest) {
+              setCurrentInputRequest(section.inputRequest);
+            }
+          } else {
+            // All checkpoints answered — reveal everything
+            setRevealedCount(parsed.length);
           }
         }
 

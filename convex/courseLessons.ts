@@ -147,6 +147,32 @@ export const getInternal = internalQuery({
   },
 });
 
+export const addPendingFeelsHard = mutation({
+  args: {
+    lessonId: v.id("courseLessons"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    const lesson = await ctx.db.get(args.lessonId);
+    if (!lesson) throw new Error("Lesson not found");
+    const course = await ctx.db.get(lesson.courseId);
+    if (!course || course.userId !== userId) throw new Error("Unauthorized");
+
+    const existing = lesson.pendingFeelsHardNodes ?? [];
+    await ctx.db.patch(args.lessonId, {
+      pendingFeelsHardNodes: [...existing, args.content],
+    });
+  },
+});
+
+export const clearPendingFeelsHardInternal = internalMutation({
+  args: { lessonId: v.id("courseLessons") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.lessonId, { pendingFeelsHardNodes: [] });
+  },
+});
+
 export const getForModuleInternal = internalQuery({
   args: { moduleId: v.id("courseModules") },
   handler: async (ctx, args) => {

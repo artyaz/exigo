@@ -954,6 +954,29 @@ export const summarizeLesson = action({
       knowledgePieceId: pieceId,
     });
 
+    // Flush any pending "feels hard" nodes queued before the piece existed
+    const updatedLesson = await ctx.runQuery(
+      internal.courseLessons.getInternal,
+      { lessonId: args.lessonId },
+    );
+    if (
+      updatedLesson?.pendingFeelsHardNodes &&
+      updatedLesson.pendingFeelsHardNodes.length > 0
+    ) {
+      for (const content of updatedLesson.pendingFeelsHardNodes) {
+        await ctx.runMutation(internal.knowledgeNodes.createInternal, {
+          spaceId: course.spaceId,
+          knowledgePieceId: pieceId,
+          type: "feels_hard",
+          content,
+        });
+      }
+      await ctx.runMutation(
+        internal.courseLessons.clearPendingFeelsHardInternal,
+        { lessonId: args.lessonId },
+      );
+    }
+
     // 2. Generate knowledge nodes via AI
     const nodesPromptDoc = await ctx.runQuery(
       internal.coursePrompts.getPromptInternal,
