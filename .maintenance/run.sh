@@ -8,7 +8,7 @@ set -euo pipefail
 # then checks back for review comments.
 #─────────────────────────────────────────────
 
-REPO="/Users/artemchmylenko/development/Exigo"
+REPO="${EXIGO_REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
 INSTRUCTIONS="$REPO/.maintenance/AGENT_INSTRUCTIONS.md"
 LOG_DIR="$REPO/.maintenance/logs"
 BRANCH_PREFIX="maint"
@@ -123,8 +123,13 @@ After making changes:
 
 log "Starting Claude Code..."
 
+SKIP_PERMS_FLAG=()
+if [[ "${CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS:-0}" == "1" ]]; then
+  SKIP_PERMS_FLAG=(--dangerously-skip-permissions)
+fi
+
 claude -p "$PROMPT" \
-  --dangerously-skip-permissions \
+  "${SKIP_PERMS_FLAG[@]}" \
   --verbose \
   >> "$LOG_FILE" 2>&1 || {
     log "Claude Code exited with error (may still have made changes)"
@@ -201,7 +206,9 @@ COMMENTS=$(gh pr view "$PR_NUMBER" --json reviews,comments --jq '
   [.reviews[].body // empty, .comments[].body // empty] | join("\n---\n")
 ' 2>/dev/null || echo "")
 
-REVIEW_COMMENTS=$(gh api "repos/artyaz/exigo/pulls/$PR_NUMBER/comments" --jq '
+REPO_SLUG=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || git remote get-url origin | sed 's|.*github.com[:/]\(.*\)\.git|\1|;s|.*github.com[:/]\(.*\)|\1|')
+
+REVIEW_COMMENTS=$(gh api "repos/$REPO_SLUG/pulls/$PR_NUMBER/comments" --jq '
   [.[] | "\(.path):\(.line // .original_line): \(.body)"] | join("\n---\n")
 ' 2>/dev/null || echo "")
 
@@ -228,7 +235,7 @@ $ALL_FEEDBACK
 Read the relevant files, understand the feedback, make the fixes, and commit with a clear message describing what you fixed. Run \`npx tsc --noEmit\` after changes."
 
 claude -p "$FIX_PROMPT" \
-  --dangerously-skip-permissions \
+  "${SKIP_PERMS_FLAG[@]}" \
   --verbose \
   >> "$LOG_FILE" 2>&1 || {
     log "Claude Code (review fix) exited with error"

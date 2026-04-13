@@ -8,8 +8,9 @@ set -euo pipefail
 
 PLIST_NAME="com.exigo.maintenance"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
-SCRIPT="/Users/artemchmylenko/development/Exigo/.maintenance/run.sh"
-LOG_DIR="/Users/artemchmylenko/development/Exigo/.maintenance/logs"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT="$SCRIPT_DIR/run.sh"
+LOG_DIR="$SCRIPT_DIR/logs"
 
 case "${1:-help}" in
   install)
@@ -24,13 +25,14 @@ case "${1:-help}" in
     <string>$PLIST_NAME</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
+        <string>/usr/bin/env</string>
+        <string>zsh</string>
         <string>$SCRIPT</string>
     </array>
     <key>StartInterval</key>
     <integer>21600</integer>
     <key>WorkingDirectory</key>
-    <string>/Users/artemchmylenko/development/Exigo</string>
+    <string>$SCRIPT_DIR/..</string>
     <key>StandardOutPath</key>
     <string>$LOG_DIR/launchd-stdout.log</string>
     <key>StandardErrorPath</key>
@@ -40,7 +42,7 @@ case "${1:-help}" in
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>HOME</key>
-        <string>/Users/artemchmylenko</string>
+        <string>$HOME</string>
     </dict>
 </dict>
 </plist>

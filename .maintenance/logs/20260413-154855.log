@@ -1,6 +1,0 @@
-[15:48:55] Category: actions
-[15:48:55] Pattern: src/app/actions/*.ts
-[15:48:55] Target files (3):
-[15:48:55]   src/app/actions/learn.ts
-[15:48:55]   src/app/actions/knowledge.ts
-[15:48:55]   src/app/actions/spaces.ts
