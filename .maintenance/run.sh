@@ -217,6 +217,8 @@ fi
 
 log "Found review comments. Running Claude to address them..."
 
+REVIEW_FIX_BASE_HEAD=$(git rev-parse HEAD)
+
 FIX_PROMPT="You are working on PR #$PR_NUMBER on branch $BRANCH_NAME.
 
 The PR was a maintenance sweep of the \`$CATEGORY\` category. Here are the review comments that need to be addressed:
@@ -238,8 +240,9 @@ if [[ -n "$(git status --porcelain)" ]]; then
   git commit -m "address review feedback on maintenance PR" --quiet
 fi
 
-REVIEW_FIX_COMMITS=$(git rev-list --count "origin/$BRANCH_NAME"..HEAD 2>/dev/null || echo 0)
-if [[ "$REVIEW_FIX_COMMITS" -gt 0 ]]; then
+REVIEW_FIX_HEAD=$(git rev-parse HEAD)
+if [[ "$REVIEW_FIX_HEAD" != "$REVIEW_FIX_BASE_HEAD" ]]; then
+  REVIEW_FIX_COMMITS=$(git rev-list --count "$REVIEW_FIX_BASE_HEAD"..HEAD 2>/dev/null || echo 0)
   git push origin "$BRANCH_NAME" --quiet 2>&1 | tee -a "$LOG_FILE"
   log "Pushed $REVIEW_FIX_COMMITS fix commit(s)"
   gh pr comment "$PR_NUMBER" --body "Addressed review comments in $REVIEW_FIX_COMMITS commit(s)." 2>/dev/null
