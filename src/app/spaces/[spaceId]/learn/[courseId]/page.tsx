@@ -1900,6 +1900,7 @@ function LessonPhase({
             className="fixed z-[100] bg-neutral-900 border border-white/10 rounded-lg shadow-2xl py-1 min-w-[180px]"
             style={{ top: contextMenu.y, left: contextMenu.x }}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => void handleFeelsHard(contextMenu.selectedText)}

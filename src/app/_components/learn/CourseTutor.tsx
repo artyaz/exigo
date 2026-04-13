@@ -306,9 +306,10 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
                 >
                   <div className="max-h-48 overflow-y-auto p-2 space-y-1">
                     {chats.map((chat: { _id: Id<"courseTutorChats">; title: string }) => (
-                      <div
+                      <button
                         key={chat._id}
-                        className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                        type="button"
+                        className={`flex items-center justify-between w-full text-left px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
                           activeChatId === chat._id
                             ? "bg-white/10 text-white"
                             : "text-white/60 hover:bg-white/5 hover:text-white/80"
@@ -324,16 +325,25 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
                           <MessageCircle className="w-3 h-3 inline mr-1.5 opacity-50" />
                           {chat.title}
                         </span>
-                        <button
+                        <span
+                          role="button"
+                          tabIndex={0}
                           onClick={(e) => {
                             e.stopPropagation();
                             void handleDeleteChat(chat._id);
                           }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleDeleteChat(chat._id);
+                            }
+                          }}
                           className="p-1 rounded hover:bg-white/10 text-white/30 hover:text-red-400 transition-colors"
                         >
                           <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
+                        </span>
+                      </button>
                     ))}
                   </div>
                 </motion.div>
