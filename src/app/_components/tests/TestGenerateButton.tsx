@@ -32,7 +32,7 @@ export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenera
     // Persist test type in localStorage (except when unmounting, we just read/write directly)
     const [testType, setTestType] = useState<"select" | "write">("select");
     useEffect(() => {
-        const saved = localStorage.getItem("preffered-test-type");
+        const saved = localStorage.getItem("preferred-test-type");
         if (saved === "select" || saved === "write") {
             setTestType(saved);
         }
@@ -40,7 +40,7 @@ export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenera
 
     const selectType = (type: "select" | "write") => {
         setTestType(type);
-        localStorage.setItem("preffered-test-type", type);
+        localStorage.setItem("preferred-test-type", type);
     };
 
     const [isGenerating, setIsGenerating] = useState(false);
@@ -91,7 +91,6 @@ export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenera
 
             router.push(`/tests/${testId}`);
         } catch (error) {
-            console.error("Failed to generate test:", error);
             const errorMessage = getErrorMessage(error);
             if (errorMessage?.includes("Upgrade your plan")) {
                 setTestGenerateError(errorMessage);

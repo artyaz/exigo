@@ -50,7 +50,7 @@ function safeParseJson<T>(text: string): T {
     return JSON.parse(cleaned) as T;
   } catch (e) {
     throw new Error(
-      `Failed to parse AI response as JSON: ${(e as Error).message}\nRaw text: ${text.slice(0, 200)}`,
+      `Failed to parse AI response as JSON: ${(e as Error).message}`,
     );
   }
 }
@@ -333,19 +333,14 @@ export const generateModule = action({
       (m: Doc<"courseModules">) => m.moduleTitle,
     );
 
-    // Collect performance summaries from completed lessons
-    const performanceSummaries: string[] = [];
-    for (const mod of existingModules) {
-      const lessons: Doc<"courseLessons">[] = await ctx.runQuery(
-        internal.courseLessons.getForModuleInternal,
-        { moduleId: mod._id },
-      );
-      for (const lesson of lessons) {
-        if (lesson.summaryMarkdown) {
-          performanceSummaries.push(lesson.summaryMarkdown);
-        }
-      }
-    }
+    // Batch-fetch all lessons for the course (avoids N+1 per-module queries)
+    const allLessons: Doc<"courseLessons">[] = await ctx.runQuery(
+      internal.courseLessons.getForCourseInternal,
+      { courseId: args.courseId },
+    );
+    const performanceSummaries: string[] = allLessons
+      .filter((lesson) => lesson.summaryMarkdown)
+      .map((lesson) => lesson.summaryMarkdown!);
 
     // Collect active knowledge nodes for the course's space
     const activeNodes = await ctx.runQuery(

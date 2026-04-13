@@ -44,6 +44,7 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
   const [showChatList, setShowChatList] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Use course-scoped or space-scoped chat list depending on context
   const courseChats = useQuery(
@@ -90,6 +91,11 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
     const text = input.trim();
     if (!text || isStreaming) return;
 
+    // Abort any in-flight request
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setInput("");
     setIsStreaming(true);
     setStreamingContent("");
@@ -110,6 +116,7 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
           chatId: activeChatId ?? undefined,
           message: text,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -187,15 +194,15 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
                 return updated;
               });
             } else if (eventType === "error") {
-              console.error("Tutor error:", data.error);
+              // Error already shown via streaming UI
             }
           } catch {
             // ignore parse errors
           }
         }
       }
-    } catch (err) {
-      console.error("Tutor stream error:", err);
+    } catch {
+      // Stream aborted or network error — UI resets via finally
     } finally {
       setIsStreaming(false);
       setStreamingContent("");

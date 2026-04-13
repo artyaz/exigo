@@ -393,3 +393,13 @@ export const getForModuleInternal = internalQuery({
       .collect();
   },
 });
+
+export const getForCourseInternal = internalQuery({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("courseLessons")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .collect();
+  },
+});
