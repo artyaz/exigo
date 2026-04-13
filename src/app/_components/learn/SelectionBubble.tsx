@@ -76,6 +76,7 @@ export function SelectionBubble({
                 className="relative z-0 bg-neutral-900 border border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-xl p-2 flex flex-col gap-2 min-w-[320px] max-w-[420px]"
                 style={{ backgroundColor: "#171717" }}
                 onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
             >
                 {/* Quote preview */}

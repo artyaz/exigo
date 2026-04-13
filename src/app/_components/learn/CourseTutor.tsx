@@ -44,6 +44,7 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
   const [showChatList, setShowChatList] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Use course-scoped or space-scoped chat list depending on context
   const courseChats = useQuery(
@@ -90,6 +91,11 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
     const text = input.trim();
     if (!text || isStreaming) return;
 
+    // Abort any in-flight request
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setInput("");
     setIsStreaming(true);
     setStreamingContent("");
@@ -110,6 +116,7 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
           chatId: activeChatId ?? undefined,
           message: text,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -187,15 +194,15 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
                 return updated;
               });
             } else if (eventType === "error") {
-              console.error("Tutor error:", data.error);
+              // Error already shown via streaming UI
             }
           } catch {
             // ignore parse errors
           }
         }
       }
-    } catch (err) {
-      console.error("Tutor stream error:", err);
+    } catch {
+      // Stream aborted or network error — UI resets via finally
     } finally {
       setIsStreaming(false);
       setStreamingContent("");
@@ -299,9 +306,10 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
                 >
                   <div className="max-h-48 overflow-y-auto p-2 space-y-1">
                     {chats.map((chat: { _id: Id<"courseTutorChats">; title: string }) => (
-                      <div
+                      <button
                         key={chat._id}
-                        className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                        type="button"
+                        className={`flex items-center justify-between w-full text-left px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
                           activeChatId === chat._id
                             ? "bg-white/10 text-white"
                             : "text-white/60 hover:bg-white/5 hover:text-white/80"
@@ -317,16 +325,25 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
                           <MessageCircle className="w-3 h-3 inline mr-1.5 opacity-50" />
                           {chat.title}
                         </span>
-                        <button
+                        <span
+                          role="button"
+                          tabIndex={0}
                           onClick={(e) => {
                             e.stopPropagation();
                             void handleDeleteChat(chat._id);
                           }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              void handleDeleteChat(chat._id);
+                            }
+                          }}
                           className="p-1 rounded hover:bg-white/10 text-white/30 hover:text-red-400 transition-colors"
                         >
                           <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
+                        </span>
+                      </button>
                     ))}
                   </div>
                 </motion.div>

@@ -817,9 +817,8 @@ export async function POST(req: Request) {
         }
 
         controller.close();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        send("error", { error: msg });
+      } catch {
+        send("error", { error: "Tutor request failed" });
         controller.close();
       }
     },

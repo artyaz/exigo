@@ -97,12 +97,13 @@ export function ClarificationThread({
                             {/* Existing messages */}
                             {messages.map((msg, i) => {
                                 const isUser = msg.role === "user";
+                                const msgKey = `${msg.role}-${i}-${msg.content.slice(0, 20)}`;
                                 // Teacher messages must NOT animate in (no opacity:0→1)
                                 // because they replace the live streaming bubble.
                                 // Animating them in causes a visible flash/blink.
                                 return isUser ? (
                                     <motion.div
-                                        key={i}
+                                        key={msgKey}
                                         initial={{ opacity: 0, y: 6 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: i * 0.05, ...THREAD_SPRING }}
@@ -116,7 +117,7 @@ export function ClarificationThread({
                                         </div>
                                     </motion.div>
                                 ) : (
-                                    <div key={i} className="flex gap-2.5">
+                                    <div key={msgKey} className="flex gap-2.5">
                                         <div className="w-6 h-6 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0 mt-0.5">
                                             <span className="text-[10px] text-white/50">AI</span>
                                         </div>
