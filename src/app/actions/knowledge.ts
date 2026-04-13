@@ -21,7 +21,6 @@ export async function addKnowledgePieceAction(spaceId: string, content: string, 
         source,
     });
 
-
     return pieceId;
 }
 
@@ -43,7 +42,6 @@ export async function bulkImportKnowledgeAction(spaceId: string, pieces: { title
         spaceId: spaceId as Id<"spaces">,
         pieces: filteredPieces,
     });
-
 
     return ids;
 }

@@ -4,14 +4,18 @@ import { auth } from "@clerk/nextjs/server";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { createAuthedConvexClient } from "../../lib/convexClientAuth";
+import { getErrorAttributes, logError } from "../../lib/otlpLogger";
 
 type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string };
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return "Unexpected error";
+function failWithLog(error: unknown, source: string, userMessage: string): { ok: false; error: string } {
+  logError(userMessage, {
+    source,
+    ...getErrorAttributes(error),
+  });
+  return { ok: false, error: userMessage };
 }
 
 export async function normalizeTopicAction(
@@ -27,7 +31,7 @@ export async function normalizeTopicAction(
     });
     return { ok: true, data: result };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.normalizeTopicAction", "Failed to process topic. Please try again.");
   }
 }
 
@@ -50,7 +54,7 @@ export async function createCourseAction(
     });
     return { ok: true, data: { courseId } };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.createCourseAction", "Failed to create course. Please try again.");
   }
 }
 
@@ -69,7 +73,7 @@ export async function startCourseAction(
     });
     return { ok: true, data: result };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.startCourseAction", "Failed to start course. Please try again.");
   }
 }
 
@@ -99,7 +103,7 @@ export async function generateBaselineQuestionAction(
     });
     return { ok: true, data: result };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.generateBaselineQuestionAction", "Failed to generate question. Please try again.");
   }
 }
 
@@ -118,7 +122,7 @@ export async function submitBaselineAction(
     });
     return { ok: true, data: undefined };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.submitBaselineAction", "Failed to save baseline. Please try again.");
   }
 }
 
@@ -141,7 +145,7 @@ export async function evaluateBaselineAnswerAction(
     });
     return { ok: true, data: result };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.evaluateBaselineAnswerAction", "Failed to evaluate answer. Please try again.");
   }
 }
 
@@ -158,7 +162,7 @@ export async function advanceCourseAction(
     });
     return { ok: true, data: result };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.advanceCourseAction", "Failed to advance course. Please try again.");
   }
 }
 
@@ -181,7 +185,7 @@ export async function teachLessonAction(
     });
     return { ok: true, data: result };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.teachLessonAction", "Failed to load lesson content. Please try again.");
   }
 }
 
@@ -210,7 +214,7 @@ export async function verifyInputAction(
     // Strip internal_reasoning — don't expose AI reasoning to client
     return { ok: true, data: { is_correct: result.is_correct, feedback_block: result.feedback_block } };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.verifyInputAction", "Failed to verify answer. Please try again.");
   }
 }
 
@@ -227,7 +231,7 @@ export async function completeLessonAction(
     });
     return { ok: true, data: undefined };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.completeLessonAction", "Failed to complete lesson. Please try again.");
   }
 }
 
@@ -244,9 +248,10 @@ export async function summarizeLessonAction(
     });
     return { ok: true, data: { summaryMarkdown: result.summaryMarkdown, knowledgePieceId: result.knowledgePieceId } };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.summarizeLessonAction", "Failed to generate summary. Please try again.");
   }
 }
+
 export async function clarifyConceptAction(
   lessonId: string,
   quote: string,
@@ -266,6 +271,6 @@ export async function clarifyConceptAction(
     });
     return { ok: true, data: result };
   } catch (error) {
-    return { ok: false, error: getErrorMessage(error) };
+    return failWithLog(error, "actions.learn.clarifyConceptAction", "Failed to clarify concept. Please try again.");
   }
 }

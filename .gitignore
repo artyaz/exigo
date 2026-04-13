@@ -52,4 +52,7 @@ yarn-error.log*
 # clerk configuration (can include secrets)
 /.clerk/
 lint-output*.txt
+
+# maintenance agent logs
+.maintenance/logs/
 AGENTS.md
