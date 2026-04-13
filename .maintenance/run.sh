@@ -206,7 +206,7 @@ COMMENTS=$(gh pr view "$PR_NUMBER" --json reviews,comments --jq '
   [.reviews[].body // empty, .comments[].body // empty] | join("\n---\n")
 ' 2>/dev/null || echo "")
 
-REPO_SLUG=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || git remote get-url origin | sed 's|.*github.com[:/]\(.*\)\.git|\1|;s|.*github.com[:/]\(.*\)|\1|')
+REPO_SLUG=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null || git remote get-url origin | sed 's|.*github\.com[:/]\(.*\)\.git$|\1|;t;s|.*github\.com[:/]\(.*\)$|\1|')
 
 REVIEW_COMMENTS=$(gh api "repos/$REPO_SLUG/pulls/$PR_NUMBER/comments" --jq '
   [.[] | "\(.path):\(.line // .original_line): \(.body)"] | join("\n---\n")
