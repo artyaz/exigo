@@ -55,3 +55,4 @@ lint-output*.txt
 
 # maintenance agent logs
 .maintenance/logs/
+AGENTS.md

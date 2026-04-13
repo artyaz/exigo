@@ -74,8 +74,7 @@ export async function POST(req: Request) {
         status: 401,
       });
     }
-    const msg = error instanceof Error ? error.message : "Unauthorized";
-    return new Response(JSON.stringify({ error: msg }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
   }
 
   try {
@@ -138,75 +137,71 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
     const aiTraceId = createAiTraceId();
 
-    // Use TransformStream for proper streaming with explicit flush per chunk
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-
-    // Fire-and-forget the streaming generation
-    void (async () => {
-      try {
-        const requestStartedAt = Date.now();
-        const stream = await ai.models.generateContentStream({
-          model,
-          contents: prompt,
-        });
-        let fullText = "";
-
-        for await (const chunk of stream) {
-          const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (part) {
-            fullText += part;
-            await writer.write(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "delta", text: part })}\n\n`,
-              ),
-            );
-          }
-        }
-
-        captureAiGenerationEvent({
-          distinctId: userId,
-          traceId: aiTraceId,
-          provider: "google",
-          model,
-          input: [{ role: "user", content: prompt }],
-          response: undefined,
-          outputChoices: [{ role: "assistant", content: fullText }],
-          latencySeconds: (Date.now() - requestStartedAt) / 1000,
-          stream: true,
-        });
-
-        // Save AI response
-        await convex.mutation(api.courseLessonMessages.send, {
-          courseId,
-          lessonId: lessonIdTyped,
-          role: "teacher",
-          content: fullText,
-          messageType: "clarification",
-          clarificationQuote: quote,
-          threadId,
-        });
-
-        await writer.write(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "done", fullText })}\n\n`,
-          ),
-        );
-        await writer.close();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
+    const readable = new ReadableStream({
+      async start(controller) {
         try {
-          await writer.write(
+          const requestStartedAt = Date.now();
+          const stream = await ai.models.generateContentStream({
+            model,
+            contents: prompt,
+          });
+          let fullText = "";
+
+          for await (const chunk of stream) {
+            const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (part) {
+              fullText += part;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "delta", text: part })}\n\n`,
+                ),
+              );
+            }
+          }
+
+          captureAiGenerationEvent({
+            distinctId: userId,
+            traceId: aiTraceId,
+            provider: "google",
+            model,
+            input: [{ role: "user", content: prompt }],
+            response: undefined,
+            outputChoices: [{ role: "assistant", content: fullText }],
+            latencySeconds: (Date.now() - requestStartedAt) / 1000,
+            stream: true,
+          });
+
+          // Save AI response
+          await convex.mutation(api.courseLessonMessages.send, {
+            courseId,
+            lessonId: lessonIdTyped,
+            role: "teacher",
+            content: fullText,
+            messageType: "clarification",
+            clarificationQuote: quote,
+            threadId,
+          });
+
+          controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: "error", error: msg })}\n\n`,
+              `data: ${JSON.stringify({ type: "done", fullText })}\n\n`,
             ),
           );
-          await writer.close();
-        } catch {
-          // Writer may already be closed
+          controller.close();
+        } catch (err) {
+          try {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "error", error: "Clarification failed" })}\n\n`,
+              ),
+            );
+            controller.close();
+          } catch {
+            // Controller may already be closed
+          }
         }
-      }
-    })();
+      },
+    });
 
     return new Response(readable, {
       headers: {
@@ -216,8 +211,7 @@ export async function POST(req: Request) {
         "X-Accel-Buffering": "no",
       },
     });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), { status: 500 });
+  } catch {
+    return new Response(JSON.stringify({ error: "Clarification request failed" }), { status: 500 });
   }
 }

@@ -198,7 +198,6 @@ export async function verifyInputAction(
 ): Promise<ActionResult<{
   is_correct: boolean;
   feedback_block: string;
-  internal_reasoning: string;
 }>> {
   const { userId, getToken } = await auth();
   if (!userId) return { ok: false, error: "Unauthorized" };
@@ -212,7 +211,8 @@ export async function verifyInputAction(
       expectedAnswer,
       userAnswer,
     });
-    return { ok: true, data: result };
+    // Strip internal_reasoning — don't expose AI reasoning to client
+    return { ok: true, data: { is_correct: result.is_correct, feedback_block: result.feedback_block } };
   } catch (error) {
     return failWithLog(error, "actions.learn.verifyInputAction", "Failed to verify answer. Please try again.");
   }

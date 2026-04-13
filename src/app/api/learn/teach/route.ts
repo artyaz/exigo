@@ -84,8 +84,7 @@ export async function POST(req: Request) {
         { status: 401 },
       );
     }
-    const msg = error instanceof Error ? error.message : "Unauthorized";
-    return new Response(JSON.stringify({ error: msg }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
   }
 
   try {
@@ -295,10 +294,9 @@ export async function POST(req: Request) {
             duration_ms: Date.now() - startedAt,
             ...getErrorAttributes(err),
           });
-          const msg = err instanceof Error ? err.message : "Unknown error";
           controller.enqueue(
             encoder.encode(
-              `data: ${JSON.stringify({ type: "error", error: msg })}\n\n`,
+              `data: ${JSON.stringify({ type: "error", error: "Teaching failed" })}\n\n`,
             ),
           );
           controller.close();
@@ -322,7 +320,6 @@ export async function POST(req: Request) {
       duration_ms: Date.now() - startedAt,
       ...getErrorAttributes(err),
     });
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return new Response(JSON.stringify({ error: msg }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Teaching request failed" }), { status: 500 });
   }
 }
