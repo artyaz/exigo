@@ -103,6 +103,17 @@ describe("planCurrentModuleLessonInsertion", () => {
       summary: 'before "Routing basics" in the current module',
     });
   });
+
+  it("throws when reference lesson is not found", () => {
+    expect(() =>
+      planCurrentModuleLessonInsertion({
+        lessons: LESSONS,
+        currentLessonIndex: 0,
+        placement: "before_lesson",
+        referenceLessonTitle: "Nonexistent lesson",
+      }),
+    ).toThrow(/Couldn't find a lesson titled "Nonexistent lesson"/);
+  });
 });
 
 describe("getCurrentLessonIndexAfterInsertion", () => {
