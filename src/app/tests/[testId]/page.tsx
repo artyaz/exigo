@@ -134,15 +134,11 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, string>>({});
-    const [, setLocalCorrectness] = useState<Record<string, boolean>>({});
     const localCorrectnessRef = useRef<Record<string, boolean>>({});
     const [isEvaluating, setIsEvaluating] = useState<Record<string, boolean>>({});
     const [isGeneratingNext, setIsGeneratingNext] = useState(false);
-    const [, setStreamingText] = useState(""); // value unused; only setter needed
     const [genError, setGenError] = useState<string | null>(null);
     const [retryNonce, setRetryNonce] = useState(0);
-    const [, setDirection] = useState(1); // value unused; only setter needed
-    const [prevQuestionsLength, setPrevQuestionsLength] = useState(0);
 
     // Chat State
     const [chatInput, setChatInput] = useState("");
@@ -174,14 +170,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         api.testMessages.getForQuestion,
         currentQuestionId && userId ? { questionId: currentQuestionId, userId } : "skip"
     );
-
-    // Detect new question appearing (for animation)
-    useEffect(() => {
-        if (questions && questions.length > prevQuestionsLength) {
-            setPrevQuestionsLength(questions.length);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [questions?.length, prevQuestionsLength]);
 
     // Track arena size
     useEffect(() => {
@@ -215,24 +203,15 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
     useEffect(() => {
         if (!questions) return;
-        setLocalCorrectness((prev) => {
-            let changed = false;
-            let next: Record<string, boolean> | null = null;
-            for (const q of questions) {
-                if (q.isCorrect !== undefined && prev[q._id] !== q.isCorrect) {
-                    next ??= { ...prev };
-                    next[q._id] = q.isCorrect;
-                    changed = true;
-                }
+        const prev = localCorrectnessRef.current;
+        let next: Record<string, boolean> | null = null;
+        for (const q of questions) {
+            if (q.isCorrect !== undefined && prev[q._id] !== q.isCorrect) {
+                next ??= { ...prev };
+                next[q._id] = q.isCorrect;
             }
-
-            if (!changed || !next) {
-                return prev;
-            }
-
-            localCorrectnessRef.current = next;
-            return next;
-        });
+        }
+        if (next) localCorrectnessRef.current = next;
     }, [questions]);
 
     useEffect(() => {
@@ -250,7 +229,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
         lastGeneratedForCount.current = questions.length;
         setIsGeneratingNext(true);
-        setStreamingText("");
         setGenError(null);
 
         const abortController = new AbortController();
@@ -297,9 +275,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         if (!line.startsWith("data: ")) continue;
                         try {
                             const payload = JSON.parse(line.slice(6)) as { type: string; text?: string; error?: string };
-                            if (payload.type === "delta") {
-                                setStreamingText(prev => prev + (payload.text ?? ""));
-                            } else if (payload.type === "error") {
+                            if (payload.type === "error") {
                                 hadError = true;
                                 const msg = payload.error ?? "Generation failed";
                                 if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
@@ -320,7 +296,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 }
             } finally {
                 setIsGeneratingNext(false);
-                setStreamingText("");
             }
         })();
 
@@ -339,11 +314,9 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             // Arrow keys for navigation in review
             if (e.key === "ArrowLeft" && currentIndex > 0) {
                 e.preventDefault();
-                setDirection(-1);
                 setCurrentIndex(currentIndex - 1);
             } else if (e.key === "ArrowRight" && currentIndex < questions.length - 1) {
                 e.preventDefault();
-                setDirection(1);
                 setCurrentIndex(currentIndex + 1);
             }
 
@@ -390,11 +363,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             }
             const data = await res.json() as { isCorrect?: boolean };
             isCorrect = !!data.isCorrect;
-            setLocalCorrectness((prev) => {
-                const next = { ...prev, [questionId]: isCorrect };
-                localCorrectnessRef.current = next;
-                return next;
-            });
+            localCorrectnessRef.current = { ...localCorrectnessRef.current, [questionId]: isCorrect };
         } catch (e) {
             requestFailed = true;
             console.error("Answer validation failed", e);
@@ -418,7 +387,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         const scheduledIndex = currentIndex;
         setTimeout(() => {
             if (questions && scheduledIndex === currentIndex && scheduledIndex < questions.length - 1) {
-                setDirection(1);
                 setCurrentIndex(prev => prev + 1);
             } else if (questions && scheduledIndex === questions.length - 1 && scheduledIndex === targetQuestionCount - 1) {
                 // Last question answered! Let's compute score.
@@ -696,7 +664,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     : 'border-white/[0.08] bg-[#0D0D0D] shadow-[0_2px_12px_rgba(0,0,0,0.4)] cursor-pointer hover:bg-white/[0.04]'
                                     }`}
                                 style={{ top: '50%', left: '50%' }}
-                                onClick={!isActive ? () => { setDirection(offset > 0 ? 1 : -1); setCurrentIndex(idx); } : undefined}
+                                onClick={!isActive ? () => setCurrentIndex(idx) : undefined}
                             >
                                 {/* Stack preview — fades out when active */}
                                 <motion.div
@@ -817,13 +785,13 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
                                     </div>
                                     <div className="shrink-0 px-8 py-3 border-t border-white/[0.04] flex items-center justify-between">
-                                        <button aria-label="Previous question" onClick={() => { setDirection(-1); setCurrentIndex(Math.max(0, currentIndex - 1)); }} disabled={currentIndex === 0} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
+                                        <button aria-label="Previous question" onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))} disabled={currentIndex === 0} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
                                             <ChevronLeft className="w-3.5 h-3.5" /><span className="hidden md:inline">Prev</span><kbd className="hidden md:inline px-1 py-0.5 bg-white/5 rounded text-[9px] font-mono text-white/20 border border-white/[0.06]">←</kbd>
                                         </button>
                                         <div className="flex items-center gap-1">
-                                            {questions.map((_, i) => (<button key={i} onClick={() => { setDirection(i > currentIndex ? 1 : -1); setCurrentIndex(i); }} className={`w-1.5 h-1.5 rounded-full transition-all spring-interact ${i === currentIndex ? 'bg-white/80 w-3' : i < currentIndex ? 'bg-white/25' : 'bg-white/10'}`} />))}
+                                            {questions.map((_, i) => (<button key={i} onClick={() => setCurrentIndex(i)} className={`w-1.5 h-1.5 rounded-full transition-all spring-interact ${i === currentIndex ? 'bg-white/80 w-3' : i < currentIndex ? 'bg-white/25' : 'bg-white/10'}`} />))}
                                         </div>
-                                        <button aria-label="Next question" onClick={() => { setDirection(1); setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1)); }} disabled={currentIndex >= questions.length - 1} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
+                                        <button aria-label="Next question" onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))} disabled={currentIndex >= questions.length - 1} className="flex items-center gap-2 text-white/40 hover:text-white/80 disabled:text-white/10 text-xs font-medium spring-interact disabled:pointer-events-none">
                                             <kbd className="hidden md:inline px-1 py-0.5 bg-white/5 rounded text-[9px] font-mono text-white/20 border border-white/[0.06]">→</kbd><span className="hidden md:inline">Next</span><ChevronRight className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
