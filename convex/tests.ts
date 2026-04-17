@@ -5,11 +5,36 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 const QUESTION_TYPE = v.union(v.literal("select"), v.literal("write"));
+
+export function sortTestsByCreationDesc<T extends { _creationTime: number }>(
+  tests: T[],
+): T[] {
+  return [...tests].sort((a, b) => b._creationTime - a._creationTime);
+}
+
+export function countAnsweredQuestions(
+  questions: { userAnswer?: string }[],
+): number {
+  return questions.filter((q) => q.userAnswer).length;
+}
+
+export function enrichTestForList(
+  test: Doc<"tests">,
+  space: { name: string } | undefined,
+  questions: { userAnswer?: string }[],
+) {
+  return {
+    ...test,
+    spaceName: space?.name ?? "Unknown",
+    questionCount: questions.length,
+    answeredCount: countAnsweredQuestions(questions),
+  };
+}
 
 function getStartOfMonthMs() {
   const now = new Date();
@@ -244,9 +269,7 @@ export const listAll = query({
           .collect(),
       ),
     );
-    const tests = testsBySpace
-      .flat()
-      .sort((a, b) => b._creationTime - a._creationTime);
+    const tests = sortTestsByCreationDesc(testsBySpace.flat());
 
     return await Promise.all(
       tests.map(async (test) => {
@@ -254,13 +277,7 @@ export const listAll = query({
           .query("questions")
           .withIndex("by_test", (q) => q.eq("testId", test._id))
           .collect();
-        const answeredCount = questions.filter((q) => q.userAnswer).length;
-        return {
-          ...test,
-          spaceName: spaceById.get(test.spaceId)?.name ?? "Unknown",
-          questionCount: questions.length,
-          answeredCount,
-        };
+        return enrichTestForList(test, spaceById.get(test.spaceId), questions);
       }),
     );
   },

@@ -1,4 +1,58 @@
 import { describe, it, expect, vi } from 'vitest';
+import {
+  countAnsweredQuestions,
+  enrichTestForList,
+  listAll,
+  sortTestsByCreationDesc,
+} from './tests';
+
+// Convex's mutation/query wrappers keep the original async handler on `_handler`;
+// this gives us a way to unit-test the real body by injecting a mocked ctx.
+type ConvexHandlerFn = (ctx: unknown, args: unknown) => Promise<unknown>;
+const listAllHandlerFn = (listAll as unknown as { _handler: ConvexHandlerFn })
+  ._handler;
+
+type StubTest = { _id: string; _creationTime: number; spaceId: string; [key: string]: unknown };
+type StubSpace = { _id: string; userId: string; name: string };
+type StubQuestion = { _id: string; testId: string; userAnswer?: string };
+
+function buildListAllCtx(data: {
+  identitySubject: string | null;
+  spaces: StubSpace[];
+  tests: StubTest[];
+  questions: StubQuestion[];
+}) {
+  return {
+    auth: {
+      getUserIdentity: async () =>
+        data.identitySubject ? { subject: data.identitySubject } : null,
+    },
+    db: {
+      query: (table: 'spaces' | 'tests' | 'questions') => ({
+        withIndex: (_name: string, cb: (q: any) => any) => {
+          const captured: Record<string, unknown> = {};
+          cb({
+            eq: (field: string, value: unknown) => {
+              captured[field] = value;
+              return { eq: () => ({}) };
+            },
+          });
+          return {
+            collect: async () => {
+              if (table === 'spaces') {
+                return data.spaces.filter((s) => s.userId === captured.userId);
+              }
+              if (table === 'tests') {
+                return data.tests.filter((t) => t.spaceId === captured.spaceId);
+              }
+              return data.questions.filter((q) => q.testId === captured.testId);
+            },
+          };
+        },
+      }),
+    },
+  };
+}
 
 /**
  * Unit tests for convex/tests.ts
@@ -76,81 +130,6 @@ const getForSpaceHandler = async (db: MockDbContext, args: { spaceId: string }) 
 
 const getHandler = async (db: MockDbContext, args: { testId: string }) => {
   return await (db.get as any)(args.testId);
-};
-
-type SpaceRecord = { _id: string; userId: string; name: string };
-type QuestionRecord = { _id: string; testId: string; userAnswer?: string };
-
-// Mirrors convex/tests.ts listAll handler logic: fetch user's spaces via
-// the by_user index, fan out over tests.by_space, then enrich with question
-// counts. Mocks return the same shape the real convex db API yields.
-const listAllHandler = async (
-  db: MockDbContext,
-  args: { userId: string },
-  data: {
-    spaces: SpaceRecord[];
-    testsBySpaceId: Record<string, TestRecord[]>;
-    questionsByTestId: Record<string, QuestionRecord[]>;
-  },
-) => {
-  (db.query as any).mockImplementation((table: string) => ({
-    withIndex: (_name: string, cb: (q: any) => any) => {
-      const captured: Record<string, unknown> = {};
-      cb({
-        eq: (field: string, value: unknown) => {
-          captured[field] = value;
-          return { eq: () => ({}) };
-        },
-      });
-      return {
-        collect: async () => {
-          if (table === 'spaces') {
-            return data.spaces.filter((s) => s.userId === captured.userId);
-          }
-          if (table === 'tests') {
-            return data.testsBySpaceId[captured.spaceId as string] ?? [];
-          }
-          if (table === 'questions') {
-            return data.questionsByTestId[captured.testId as string] ?? [];
-          }
-          return [];
-        },
-      };
-    },
-  }));
-
-  const spaces = await (db.query as any)('spaces')
-    .withIndex('by_user', (q: any) => q.eq('userId', args.userId))
-    .collect();
-  if (spaces.length === 0) return [];
-
-  const spaceById = new Map(spaces.map((s: SpaceRecord) => [s._id, s]));
-
-  const testsBySpace = await Promise.all(
-    spaces.map((space: SpaceRecord) =>
-      (db.query as any)('tests')
-        .withIndex('by_space', (q: any) => q.eq('spaceId', space._id))
-        .collect(),
-    ),
-  );
-  const tests = (testsBySpace.flat() as (TestRecord & { _creationTime: number })[]).sort(
-    (a, b) => b._creationTime - a._creationTime,
-  );
-
-  return await Promise.all(
-    tests.map(async (test) => {
-      const questions = await (db.query as any)('questions')
-        .withIndex('by_test', (q: any) => q.eq('testId', test._id))
-        .collect();
-      const answeredCount = questions.filter((q: QuestionRecord) => q.userAnswer).length;
-      return {
-        ...test,
-        spaceName: (spaceById.get(test.spaceId) as SpaceRecord | undefined)?.name ?? 'Unknown',
-        questionCount: questions.length,
-        answeredCount,
-      };
-    }),
-  );
 };
 
 describe('convex/tests - create mutation logic', () => {
@@ -654,60 +633,172 @@ describe('convex/tests - get query logic', () => {
   });
 });
 
-describe('convex/tests - listAll query logic', () => {
-  const baseSpaces: SpaceRecord[] = [
+describe('convex/tests - listAll helper functions', () => {
+  describe('sortTestsByCreationDesc', () => {
+    it('sorts tests by _creationTime descending', () => {
+      const tests = [
+        { _id: 'a', _creationTime: 100 },
+        { _id: 'b', _creationTime: 300 },
+        { _id: 'c', _creationTime: 200 },
+      ];
+      expect(sortTestsByCreationDesc(tests).map((t) => t._id)).toEqual(['b', 'c', 'a']);
+    });
+
+    it('does not mutate the input array', () => {
+      const tests = [
+        { _id: 'a', _creationTime: 100 },
+        { _id: 'b', _creationTime: 300 },
+      ];
+      const original = [...tests];
+      sortTestsByCreationDesc(tests);
+      expect(tests).toEqual(original);
+    });
+
+    it('handles empty input', () => {
+      expect(sortTestsByCreationDesc([])).toEqual([]);
+    });
+
+    it('preserves order for equal _creationTime values', () => {
+      const tests = [
+        { _id: 'a', _creationTime: 100 },
+        { _id: 'b', _creationTime: 100 },
+        { _id: 'c', _creationTime: 100 },
+      ];
+      const result = sortTestsByCreationDesc(tests);
+      expect(result.map((t) => t._id)).toEqual(['a', 'b', 'c']);
+    });
+  });
+
+  describe('countAnsweredQuestions', () => {
+    it('counts questions with a truthy userAnswer', () => {
+      expect(
+        countAnsweredQuestions([
+          { userAnswer: 'yes' },
+          { userAnswer: '' },
+          {},
+          { userAnswer: 'no' },
+        ]),
+      ).toBe(2);
+    });
+
+    it('returns 0 for empty list', () => {
+      expect(countAnsweredQuestions([])).toBe(0);
+    });
+
+    it('returns 0 when no questions have answers', () => {
+      expect(countAnsweredQuestions([{}, { userAnswer: '' }, {}])).toBe(0);
+    });
+  });
+
+  describe('enrichTestForList', () => {
+    const baseTest = {
+      _id: 't1',
+      _creationTime: 1,
+      spaceId: 'space_a',
+      status: 'active',
+      config: { type: 'quiz' },
+    } as any;
+
+    it('attaches spaceName and question counts', () => {
+      const result = enrichTestForList(baseTest, { name: 'Alpha' }, [
+        { userAnswer: 'a' },
+        {},
+      ]);
+      expect(result).toMatchObject({
+        _id: 't1',
+        spaceName: 'Alpha',
+        questionCount: 2,
+        answeredCount: 1,
+      });
+    });
+
+    it('falls back to "Unknown" when space is undefined', () => {
+      const result = enrichTestForList(baseTest, undefined, []);
+      expect(result.spaceName).toBe('Unknown');
+      expect(result.questionCount).toBe(0);
+      expect(result.answeredCount).toBe(0);
+    });
+
+    it('preserves original test fields in the result', () => {
+      const result = enrichTestForList(baseTest, { name: 'Alpha' }, []);
+      expect(result._id).toBe(baseTest._id);
+      expect(result._creationTime).toBe(baseTest._creationTime);
+      expect(result.status).toBe('active');
+      expect(result.config).toEqual({ type: 'quiz' });
+    });
+  });
+});
+
+describe('convex/tests - listAll handler', () => {
+  const baseSpaces: StubSpace[] = [
     { _id: 'space_a', userId: 'user_id', name: 'Alpha' },
     { _id: 'space_b', userId: 'user_id', name: 'Beta' },
     { _id: 'space_other', userId: 'other_user', name: 'Other' },
   ];
 
-  it('returns empty array when user has no spaces', async () => {
-    const db = createMockDb();
-    const result = await listAllHandler(db, { userId: 'user_id' }, {
-      spaces: [{ _id: 'space_other', userId: 'other_user', name: 'Other' }],
-      testsBySpaceId: {},
-      questionsByTestId: {},
+  it('throws when identity is missing', async () => {
+    const ctx = buildListAllCtx({
+      identitySubject: null,
+      spaces: [],
+      tests: [],
+      questions: [],
     });
+    await expect(listAllHandlerFn(ctx, { userId: 'user_id' })).rejects.toThrow('Unauthorized');
+  });
+
+  it('throws when identity subject does not match args.userId', async () => {
+    const ctx = buildListAllCtx({
+      identitySubject: 'other_user',
+      spaces: baseSpaces,
+      tests: [],
+      questions: [],
+    });
+    await expect(listAllHandlerFn(ctx, { userId: 'user_id' })).rejects.toThrow('Unauthorized');
+  });
+
+  it('returns empty array when user has no spaces', async () => {
+    const ctx = buildListAllCtx({
+      identitySubject: 'user_id',
+      spaces: [{ _id: 'space_other', userId: 'other_user', name: 'Other' }],
+      tests: [],
+      questions: [],
+    });
+    const result = (await listAllHandlerFn(ctx, { userId: 'user_id' })) as unknown[];
     expect(result).toEqual([]);
   });
 
   it('returns tests sorted by _creationTime desc across all user spaces', async () => {
-    const db = createMockDb();
-    const result = await listAllHandler(db, { userId: 'user_id' }, {
+    const ctx = buildListAllCtx({
+      identitySubject: 'user_id',
       spaces: baseSpaces,
-      testsBySpaceId: {
-        space_a: [
-          { _id: 't1', spaceId: 'space_a', status: 'active', _creationTime: 100 } as any,
-          { _id: 't2', spaceId: 'space_a', status: 'active', _creationTime: 300 } as any,
-        ],
-        space_b: [
-          { _id: 't3', spaceId: 'space_b', status: 'active', _creationTime: 200 } as any,
-        ],
-      },
-      questionsByTestId: {
-        t1: [{ _id: 'q1', testId: 't1' }],
-        t2: [{ _id: 'q2', testId: 't2', userAnswer: 'yes' }],
-        t3: [],
-      },
+      tests: [
+        { _id: 't1', spaceId: 'space_a', _creationTime: 100 },
+        { _id: 't2', spaceId: 'space_a', _creationTime: 300 },
+        { _id: 't3', spaceId: 'space_b', _creationTime: 200 },
+      ],
+      questions: [
+        { _id: 'q1', testId: 't1' },
+        { _id: 'q2', testId: 't2', userAnswer: 'yes' },
+      ],
     });
-    expect(result.map((t: any) => t._id)).toEqual(['t2', 't3', 't1']);
+    const result = (await listAllHandlerFn(ctx, { userId: 'user_id' })) as {
+      _id: string;
+    }[];
+    expect(result.map((t) => t._id)).toEqual(['t2', 't3', 't1']);
   });
 
   it('enriches each test with spaceName, questionCount, and answeredCount', async () => {
-    const db = createMockDb();
-    const result = await listAllHandler(db, { userId: 'user_id' }, {
+    const ctx = buildListAllCtx({
+      identitySubject: 'user_id',
       spaces: baseSpaces,
-      testsBySpaceId: {
-        space_a: [{ _id: 't1', spaceId: 'space_a', status: 'active', _creationTime: 100 } as any],
-      },
-      questionsByTestId: {
-        t1: [
-          { _id: 'q1', testId: 't1', userAnswer: 'a' },
-          { _id: 'q2', testId: 't1' },
-          { _id: 'q3', testId: 't1', userAnswer: 'b' },
-        ],
-      },
+      tests: [{ _id: 't1', spaceId: 'space_a', _creationTime: 100 }],
+      questions: [
+        { _id: 'q1', testId: 't1', userAnswer: 'a' },
+        { _id: 'q2', testId: 't1' },
+        { _id: 'q3', testId: 't1', userAnswer: 'b' },
+      ],
     });
+    const result = (await listAllHandlerFn(ctx, { userId: 'user_id' })) as any[];
     expect(result[0]).toMatchObject({
       _id: 't1',
       spaceName: 'Alpha',
@@ -717,42 +808,29 @@ describe('convex/tests - listAll query logic', () => {
   });
 
   it('excludes tests from spaces owned by other users', async () => {
-    const db = createMockDb();
-    const result = await listAllHandler(db, { userId: 'user_id' }, {
+    const ctx = buildListAllCtx({
+      identitySubject: 'user_id',
       spaces: baseSpaces,
-      testsBySpaceId: {
-        space_a: [{ _id: 't1', spaceId: 'space_a', status: 'active', _creationTime: 100 } as any],
-        space_other: [
-          { _id: 't_other', spaceId: 'space_other', status: 'active', _creationTime: 500 } as any,
-        ],
-      },
-      questionsByTestId: {},
+      tests: [
+        { _id: 't1', spaceId: 'space_a', _creationTime: 100 },
+        { _id: 't_other', spaceId: 'space_other', _creationTime: 500 },
+      ],
+      questions: [],
     });
-    expect(result.map((t: any) => t._id)).toEqual(['t1']);
-  });
-
-  it('falls back to "Unknown" when space is missing', async () => {
-    const db = createMockDb();
-    // Simulate orphaned test whose spaceId does not match any fetched space
-    const result = await listAllHandler(db, { userId: 'user_id' }, {
-      spaces: [{ _id: 'space_a', userId: 'user_id', name: 'Alpha' }],
-      testsBySpaceId: {
-        space_a: [
-          { _id: 't1', spaceId: 'space_ghost', status: 'active', _creationTime: 100 } as any,
-        ],
-      },
-      questionsByTestId: { t1: [] },
-    });
-    expect(result[0]?.spaceName).toBe('Unknown');
+    const result = (await listAllHandlerFn(ctx, { userId: 'user_id' })) as {
+      _id: string;
+    }[];
+    expect(result.map((t) => t._id)).toEqual(['t1']);
   });
 
   it('handles users with zero tests across their spaces', async () => {
-    const db = createMockDb();
-    const result = await listAllHandler(db, { userId: 'user_id' }, {
+    const ctx = buildListAllCtx({
+      identitySubject: 'user_id',
       spaces: [{ _id: 'space_a', userId: 'user_id', name: 'Alpha' }],
-      testsBySpaceId: { space_a: [] },
-      questionsByTestId: {},
+      tests: [],
+      questions: [],
     });
+    const result = (await listAllHandlerFn(ctx, { userId: 'user_id' })) as unknown[];
     expect(result).toEqual([]);
   });
 });
