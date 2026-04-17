@@ -54,7 +54,7 @@ export const create = mutation({
         .withIndex("by_user", (q) =>
           q.eq("userId", userId).gte("_creationTime", startOfMonth),
         )
-        .collect();
+        .take(maxDives);
 
       if (dives.length >= maxDives) {
         throw new Error(
