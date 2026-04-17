@@ -228,11 +228,30 @@ export const listAll = query({
       throw new Error("Unauthorized");
     }
 
-    const tests = await ctx.db.query("tests").order("desc").collect();
-    const enriched = await Promise.all(
+    const spaces = await ctx.db
+      .query("spaces")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    if (spaces.length === 0) return [];
+
+    const spaceById = new Map(spaces.map((s) => [s._id, s]));
+
+    const testsBySpace = await Promise.all(
+      spaces.map((space) =>
+        ctx.db
+          .query("tests")
+          .withIndex("by_space", (q) => q.eq("spaceId", space._id))
+          .collect(),
+      ),
+    );
+
+    const tests = testsBySpace
+      .flat()
+      .sort((a, b) => b._creationTime - a._creationTime);
+
+    return await Promise.all(
       tests.map(async (test) => {
-        const space = await ctx.db.get(test.spaceId);
-        if (!space || space.userId !== args.userId) return null;
         const questions = await ctx.db
           .query("questions")
           .withIndex("by_test", (q) => q.eq("testId", test._id))
@@ -240,13 +259,12 @@ export const listAll = query({
         const answeredCount = questions.filter((q) => q.userAnswer).length;
         return {
           ...test,
-          spaceName: space?.name ?? "Unknown",
+          spaceName: spaceById.get(test.spaceId)?.name ?? "Unknown",
           questionCount: questions.length,
           answeredCount,
         };
       }),
     );
-    return enriched.filter((t): t is NonNullable<typeof t> => t !== null);
   },
 });
 
