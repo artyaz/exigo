@@ -63,14 +63,18 @@ export async function POST(req: NextRequest) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    let body: { content?: unknown };
+    let parsed: unknown;
     try {
-        body = (await req.json()) as { content?: unknown };
+        parsed = await req.json();
     } catch {
         return Response.json({ error: "Malformed JSON" }, { status: 400 });
     }
 
-    const content = body.content;
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return Response.json({ error: "Malformed JSON" }, { status: 400 });
+    }
+
+    const content = (parsed as { content?: unknown }).content;
     if (typeof content !== "string" || !content.trim()) {
         return Response.json({ error: "Missing content" }, { status: 400 });
     }
