@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { NextRequest } from "next/server";
 
-const authMock = vi.fn();
+type AuthResult = { userId: string | null };
+const authMock = vi.fn<() => Promise<AuthResult>>();
 vi.mock("@clerk/nextjs/server", () => ({
     auth: () => authMock(),
 }));
@@ -33,7 +35,7 @@ function makeRequest(body: unknown, opts?: { malformed?: boolean }) {
     const init = opts?.malformed
         ? { method: "POST", body: "{not-json" }
         : { method: "POST", body: JSON.stringify(body) };
-    return new Request("http://localhost/api/knowledge/title", init) as unknown as import("next/server").NextRequest;
+    return new Request("http://localhost/api/knowledge/title", init) as unknown as NextRequest;
 }
 
 async function loadRoute() {
