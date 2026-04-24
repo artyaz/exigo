@@ -50,6 +50,7 @@ export const getPlan = query({
 
     const auth = await getAuthedContext(ctx);
     const { accessLevel, limits } = auth;
+    const subscription = await getActiveSubscription(ctx, auth.userId);
 
     const isPro = accessLevel >= ACCESS_LEVELS.PRO_SCHOLAR;
 
@@ -63,6 +64,7 @@ export const getPlan = query({
     return {
       tier,
       limits,
+      hasActiveSubscription: subscription !== null,
       features: {
         conversational_ai: isPro,
         deep_dive_limit: limits.deepDiveLimit,

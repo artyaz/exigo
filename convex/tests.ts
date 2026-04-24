@@ -5,11 +5,36 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 const QUESTION_TYPE = v.union(v.literal("select"), v.literal("write"));
+
+export function sortTestsByCreationDesc<T extends { _creationTime: number }>(
+  tests: T[],
+): T[] {
+  return [...tests].sort((a, b) => b._creationTime - a._creationTime);
+}
+
+export function countAnsweredQuestions(
+  questions: { userAnswer?: string }[],
+): number {
+  return questions.filter((q) => q.userAnswer).length;
+}
+
+export function enrichTestForList(
+  test: Doc<"tests">,
+  space: { name: string } | undefined,
+  questions: { userAnswer?: string }[],
+) {
+  return {
+    ...test,
+    spaceName: space?.name ?? "Unknown",
+    questionCount: questions.length,
+    answeredCount: countAnsweredQuestions(questions),
+  };
+}
 
 function getStartOfMonthMs() {
   const now = new Date();
@@ -228,25 +253,33 @@ export const listAll = query({
       throw new Error("Unauthorized");
     }
 
-    const tests = await ctx.db.query("tests").order("desc").collect();
-    const enriched = await Promise.all(
+    const spaces = await ctx.db
+      .query("spaces")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    if (spaces.length === 0) return [];
+
+    const spaceById = new Map(spaces.map((space) => [space._id, space]));
+
+    const testsBySpace = await Promise.all(
+      spaces.map((space) =>
+        ctx.db
+          .query("tests")
+          .withIndex("by_space", (q) => q.eq("spaceId", space._id))
+          .collect(),
+      ),
+    );
+    const tests = sortTestsByCreationDesc(testsBySpace.flat());
+
+    return await Promise.all(
       tests.map(async (test) => {
-        const space = await ctx.db.get(test.spaceId);
-        if (!space || space.userId !== args.userId) return null;
         const questions = await ctx.db
           .query("questions")
           .withIndex("by_test", (q) => q.eq("testId", test._id))
           .collect();
-        const answeredCount = questions.filter((q) => q.userAnswer).length;
-        return {
-          ...test,
-          spaceName: space?.name ?? "Unknown",
-          questionCount: questions.length,
-          answeredCount,
-        };
+        return enrichTestForList(test, spaceById.get(test.spaceId), questions);
       }),
     );
-    return enriched.filter((t): t is NonNullable<typeof t> => t !== null);
   },
 });
 

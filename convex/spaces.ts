@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthedContext } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
+import { isUint16Array } from "node:util/types";
 
 export const list = query({
   args: { userId: v.string() },
@@ -60,22 +61,19 @@ export const create = mutation({
       throw new Error("Unauthorized: identity mismatch");
     }
 
-    const spaces = await ctx.db
-      .query("spaces")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    const currentCount = spaces.length;
-
     const serverLimit = auth.limits.maxSpaces;
 
-    console.log(
-      `[Space Creation] Tier Limit: ${serverLimit}, Current Count: ${currentCount}`,
-    );
+    if (serverLimit !== UNLIMITED_LIMIT) {
+      const spaces = await ctx.db
+        .query("spaces")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .take(serverLimit);
 
-    if (serverLimit !== UNLIMITED_LIMIT && currentCount >= serverLimit) {
-      throw new Error(
-        `Limit reached: You can only have ${serverLimit} spaces on your current plan.`,
-      );
+      if (spaces.length >= serverLimit) {
+        throw new Error(
+          `Limit reached: You can only have ${serverLimit} spaces on your current plan.`,
+        );
+      }
     }
 
     return await ctx.db.insert("spaces", {

@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
+import { api } from "../../../../../convex/_generated/api";
 import {
     captureAiGenerationEvent,
     createAiTraceId,
@@ -12,6 +13,8 @@ import {
     logInfo,
     logWarn,
 } from "../../../../lib/otlpLogger";
+import { renderPrompt } from "../../../../../convex/coursePrompts";
+import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 
 let aiInstance: GoogleGenAI | null = null;
 function getGoogleAI() {
@@ -57,7 +60,7 @@ function fallbackTitleFromContent(content: string): string {
 export async function POST(req: NextRequest) {
     const requestId = createRequestId(req.headers);
     const startedAt = Date.now();
-    const { userId } = await auth();
+    const { userId, getToken } = await auth();
 
     if (!userId) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -94,7 +97,16 @@ export async function POST(req: NextRequest) {
     try {
         const ai = getGoogleAI();
         const aiTraceId = createAiTraceId();
-        const titlePrompt = `Generate a concise title (2-5 words, no quotes) for this knowledge note.\n\n${content.slice(0, 2000)}`;
+
+        // Try to fetch prompt from DB, fall back to inline if no convex client
+        let titlePrompt: string;
+        try {
+            const convex = await createAuthedConvexClient(getToken, "api.knowledge.title");
+            const promptDoc = await convex.query(api.coursePrompts.getPrompt, { name: "knowledge_title_generator" });
+            titlePrompt = renderPrompt(promptDoc.content, { content: content.slice(0, 2000) });
+        } catch {
+            titlePrompt = `Generate a concise title (2-5 words, no quotes) for this knowledge note.\n\n${content.slice(0, 2000)}`;
+        }
 
         for (const model of modelCandidates) {
             const modelStartedAt = Date.now();
