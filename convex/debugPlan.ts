@@ -54,7 +54,9 @@ export const debugPlan = query({
         ? {
             planSlug: subscription.planSlug,
             status: subscription.status,
-            paddleSubscriptionId: hashId(subscription.paddleSubscriptionId),
+            paddleSubscriptionId: subscription.paddleSubscriptionId
+              ? hashId(subscription.paddleSubscriptionId)
+              : null,
             currentPeriodEnd: subscription.currentPeriodEnd,
           }
         : null,
