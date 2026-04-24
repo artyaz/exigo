@@ -283,11 +283,14 @@ export const searchMemories = internalAction({
     const memories = memoriesRaw.filter(
       (m): m is NonNullable<typeof m> => m !== null,
     );
-    return memories.map((m, i) => ({
+    // Resolve scores by memory id, not array index — filtering out nulls
+    // above can shift positional indices and misalign scores.
+    const scoreById = new Map(results.map((r) => [r._id, r._score]));
+    return memories.map((m) => ({
       content: m.content,
       category: m.category,
       _id: m._id,
-      _score: results[i]?._score ?? 0,
+      _score: scoreById.get(m._id) ?? 0,
     }));
   },
 });

@@ -90,7 +90,6 @@ export async function POST(req: Request) {
 
     // Save user question
     await convex.mutation(api.courseLessonMessages.send, {
-      courseId,
       lessonId: lessonIdTyped,
       role: "user",
       content: question,
@@ -173,7 +172,6 @@ export async function POST(req: Request) {
 
           // Save AI response
           await convex.mutation(api.courseLessonMessages.send, {
-            courseId,
             lessonId: lessonIdTyped,
             role: "teacher",
             content: fullText,

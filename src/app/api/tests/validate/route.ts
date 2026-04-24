@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
 
       // Enhanced model selection with fallback strategy
       const primaryModel = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
-      const fallbackModel = "gemini-3-flash-preview";
+      const fallbackModel = "gemini-2.5-flash";
       let modelUsed = primaryModel;
       let response;
 

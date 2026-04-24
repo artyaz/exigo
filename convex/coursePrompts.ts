@@ -48,21 +48,29 @@ function sanitizePromptVariable(value: string | number | boolean, key: string): 
   return `<user_input>\n${truncated}\n</user_input>`;
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Replace placeholders like {{variable}} with values from the variables object.
- * User-provided values are sanitized to reduce prompt injection risk.
+ * Uses a single-pass regex with a function replacement so that:
+ *   - keys containing regex metacharacters are safe
+ *   - replacement values containing `$` are not interpreted as backreferences
+ *   - replacements cannot leak across keys (values never get re-matched)
+ * User-provided values are sanitized via sanitizePromptVariable.
  */
 export function renderPrompt(
   template: string,
   variables: Record<string, string | number | boolean>,
 ): string {
-  let rendered = template;
-  for (const [key, value] of Object.entries(variables)) {
-    const sanitized = sanitizePromptVariable(value, key);
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g");
-    rendered = rendered.replace(regex, sanitized);
-  }
-  return rendered;
+  const keys = Object.keys(variables);
+  if (keys.length === 0) return template;
+  const alternation = keys.map(escapeRegex).join("|");
+  const regex = new RegExp(`\\{\\{(${alternation})\\}\\}`, "g");
+  return template.replace(regex, (_match, key: string) =>
+    sanitizePromptVariable(variables[key]!, key),
+  );
 }
 
 /**

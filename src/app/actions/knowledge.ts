@@ -51,7 +51,7 @@ export async function queueFeelsHardNodeAction(
     content: string,
 ) {
     const { userId, getToken } = await auth();
-    if (!userId) throw new Error("Unauthorized");
+    if (!userId) throw new Error("Unauthorized: Please sign in.");
 
     const convex = await createAuthedConvexClient(getToken, "actions.knowledge.queueFeelsHardNodeAction");
     await convex.mutation(api.courseLessons.addPendingFeelsHard, {
