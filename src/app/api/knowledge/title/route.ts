@@ -10,6 +10,7 @@ import {
     getErrorAttributes,
     logError,
     logInfo,
+    logWarn,
 } from "../../../../lib/otlpLogger";
 
 let aiInstance: GoogleGenAI | null = null;
@@ -58,16 +59,30 @@ export async function POST(req: NextRequest) {
     const startedAt = Date.now();
     const { userId } = await auth();
 
-    const { content } = await req.json() as { content: string };
+    if (!userId) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
+    let parsed: unknown;
+    try {
+        parsed = await req.json();
+    } catch {
+        return Response.json({ error: "Malformed JSON" }, { status: 400 });
+    }
+
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return Response.json({ error: "Malformed JSON" }, { status: 400 });
+    }
+
+    const content = (parsed as { content?: unknown }).content;
     if (typeof content !== "string" || !content.trim()) {
-        return new Response(JSON.stringify({ error: "Missing content" }), { status: 400 });
+        return Response.json({ error: "Missing content" }, { status: 400 });
     }
 
     const fallbackTitle = fallbackTitleFromContent(content);
 
     if (!process.env.GOOGLE_GEMINI_API_KEY) {
-        return new Response(JSON.stringify({ title: fallbackTitle }));
+        return Response.json({ title: fallbackTitle });
     }
 
     const modelCandidates = [
@@ -82,16 +97,16 @@ export async function POST(req: NextRequest) {
         const titlePrompt = `Generate a concise title (2-5 words, no quotes) for this knowledge note.\n\n${content.slice(0, 2000)}`;
 
         for (const model of modelCandidates) {
+            const modelStartedAt = Date.now();
             try {
                 logInfo("Knowledge title generation started", {
                     source: "api.knowledge.title",
                     requestId,
                     route: "/api/knowledge/title",
-                    userId: userId ?? undefined,
+                    userId,
                     ai_provider: "google",
                     ai_model: model,
                 });
-                const startedAt = Date.now();
                 const result = await ai.models.generateContent({
                     model,
                     contents: titlePrompt,
@@ -100,25 +115,23 @@ export async function POST(req: NextRequest) {
                         temperature: 0.2,
                     },
                 });
-                if (userId) {
-                    captureAiGenerationEvent({
-                        distinctId: userId,
-                        traceId: aiTraceId,
-                        provider: "google",
-                        model,
-                        input: [{ role: "user", content: titlePrompt }],
-                        response: result,
-                        latencySeconds: (Date.now() - startedAt) / 1000,
-                    });
-                }
+                captureAiGenerationEvent({
+                    distinctId: userId,
+                    traceId: aiTraceId,
+                    provider: "google",
+                    model,
+                    input: [{ role: "user", content: titlePrompt }],
+                    response: result,
+                    latencySeconds: (Date.now() - modelStartedAt) / 1000,
+                });
                 logInfo("Knowledge title generation succeeded", {
                     source: "api.knowledge.title",
                     requestId,
                     route: "/api/knowledge/title",
-                    userId: userId ?? undefined,
+                    userId,
                     ai_provider: "google",
                     ai_model: model,
-                    duration_ms: Date.now() - startedAt,
+                    duration_ms: Date.now() - modelStartedAt,
                 });
 
                 const candidate = normalizeTitle(result.text ?? "");
@@ -128,23 +141,32 @@ export async function POST(req: NextRequest) {
 
                 const words = candidate.split(/\s+/).filter(Boolean);
                 if (words.length >= 2 && words.length <= 8) {
-                    return new Response(JSON.stringify({ title: candidate }));
+                    return Response.json({ title: candidate });
                 }
-            } catch {
-                // Try next model.
+            } catch (modelErr) {
+                logWarn("Knowledge title model failed, trying next", {
+                    source: "api.knowledge.title",
+                    requestId,
+                    route: "/api/knowledge/title",
+                    userId,
+                    ai_provider: "google",
+                    ai_model: model,
+                    duration_ms: Date.now() - modelStartedAt,
+                    ...getErrorAttributes(modelErr),
+                });
             }
         }
 
-        return new Response(JSON.stringify({ title: fallbackTitle }));
+        return Response.json({ title: fallbackTitle });
     } catch (err) {
         logError("Knowledge title request failed", {
             source: "api.knowledge.title",
             requestId,
             route: "/api/knowledge/title",
-            userId: userId ?? undefined,
+            userId,
             duration_ms: Date.now() - startedAt,
             ...getErrorAttributes(err),
         });
-        return new Response(JSON.stringify({ title: fallbackTitle }));
+        return Response.json({ title: fallbackTitle });
     }
 }
