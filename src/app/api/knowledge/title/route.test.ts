@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
+vi.mock("server-only", () => ({}));
+
 type AuthResult = { userId: string | null };
 const authMock = vi.fn<() => Promise<AuthResult>>();
 vi.mock("@clerk/nextjs/server", () => ({
