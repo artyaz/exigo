@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
@@ -164,6 +164,23 @@ export const appendContent = mutation({
 
     await ctx.db.patch(args.id, {
       content: piece.content + "\n\n" + args.content,
+    });
+  },
+});
+
+export const addInternal = internalMutation({
+  args: {
+    spaceId: v.id("spaces"),
+    title: v.optional(v.string()),
+    content: v.string(),
+    source: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("knowledgePieces", {
+      spaceId: args.spaceId,
+      title: args.title,
+      content: args.content,
+      source: args.source,
     });
   },
 });

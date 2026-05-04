@@ -145,7 +145,7 @@ export function createAiTraceId(): string {
 const MAX_AI_TEXT_LENGTH = 500;
 
 function truncateForAnalytics(value: unknown): string {
-  const text = typeof value === "string" ? value : JSON.stringify(value);
+  const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "");
   if (text.length <= MAX_AI_TEXT_LENGTH) return text;
   return text.slice(0, MAX_AI_TEXT_LENGTH) + "…";
 }

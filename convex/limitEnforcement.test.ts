@@ -67,17 +67,18 @@ async function createSpaceHandler(
     throw new Error("Unauthorized");
   }
 
-  const mockSpaces = (await ctx.db
-    .query("spaces")
-    .withIndex("by_user", (q) => q.eq("userId", args.userId))
-    .collect()) as unknown[];
-  const currentCount = mockSpaces.length;
-
   const serverLimit = getLimitsForPlan(args.plan).maxSpaces;
-  if (serverLimit !== UNLIMITED_LIMIT && currentCount >= serverLimit) {
-    throw new Error(
-      `Limit reached: You can only have ${serverLimit} spaces on your current plan.`,
-    );
+
+  if (serverLimit !== UNLIMITED_LIMIT) {
+    const mockSpaces = (await ctx.db
+      .query("spaces")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect()) as unknown[];
+    if (mockSpaces.length >= serverLimit) {
+      throw new Error(
+        `Limit reached: You can only have ${serverLimit} spaces on your current plan.`,
+      );
+    }
   }
 
   return await ctx.db.insert("spaces", {
@@ -270,6 +271,23 @@ describe("Convex Limit Enforcement & Security", () => {
 
       await createSpaceHandler(ctx, { name: "Pro Space", userId: "user_pro", plan: "pro-monthly" });
       expect(ctx.db.insert).toHaveBeenCalled();
+    });
+
+    it("skips the existing-space scan entirely on unlimited plans", async () => {
+      const ctx = createMockCtx("user_pro", "pro-monthly");
+      const mockCollect = vi.fn().mockResolvedValue([]);
+      ctx.db.query.mockReturnValue({
+        withIndex: () => ({ collect: mockCollect }),
+      });
+
+      await createSpaceHandler(ctx, {
+        name: "Pro Space",
+        userId: "user_pro",
+        plan: "pro-monthly",
+      });
+
+      expect(ctx.db.query).not.toHaveBeenCalled();
+      expect(mockCollect).not.toHaveBeenCalled();
     });
   });
 
