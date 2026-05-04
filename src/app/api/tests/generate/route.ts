@@ -235,14 +235,32 @@ function buildContextPrompt(
 export async function POST(req: NextRequest) {
   const requestId = createRequestId(req.headers);
   const startedAt = Date.now();
-  const rawBody = (await req.json()) as Record<string, unknown>;
+  let rawBody: Record<string, unknown>;
+  try {
+    rawBody = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return new Response(JSON.stringify({ error: "Malformed JSON" }), {
+      status: 400,
+    });
+  }
   const { spaceId, testType, testId, knowledgePieceId } =
     parseGenerateBody(rawBody);
 
-  if (!spaceId || !testType || !process.env.GOOGLE_GEMINI_API_KEY) {
+  if (!spaceId || !testType) {
+    return new Response(JSON.stringify({ error: "Missing params" }), {
+      status: 400,
+    });
+  }
+
+  if (!process.env.GOOGLE_GEMINI_API_KEY) {
+    logError("Test generation missing GOOGLE_GEMINI_API_KEY", {
+      source: "api.tests.generate",
+      requestId,
+      route: "/api/tests/generate",
+    });
     return new Response(
-      JSON.stringify({ error: "Missing params or API key" }),
-      { status: 400 },
+      JSON.stringify({ error: "Server configuration error" }),
+      { status: 500 },
     );
   }
 
@@ -291,8 +309,10 @@ export async function POST(req: NextRequest) {
         { status: 401 },
       );
     }
-    const msg = error instanceof Error ? error.message : "Unauthorized";
-    return new Response(JSON.stringify({ error: msg }), { status: 500 });
+    return new Response(
+      JSON.stringify({ error: "Internal server error", requestId }),
+      { status: 500 },
+    );
   }
 
   const planStatus = await convex.query(api.planLimits.getPlan, {});

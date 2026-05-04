@@ -3,16 +3,11 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import type { GenericQueryCtx } from "convex/server";
 import type { DataModel } from "./_generated/dataModel";
 import { SUBSCRIPTION_STATUSES } from "../shared/subscriptionStatuses";
+import { hashId } from "../shared/hashId";
 
 const vSubscriptionStatus = v.union(
   ...SUBSCRIPTION_STATUSES.map((s) => v.literal(s)),
 );
-
-function hashId(id: string): string {
-  if (id.length > 8) return `${id.slice(0, 4)}...${id.slice(-4)}`;
-  if (id.length >= 4) return `${id.slice(0, 2)}...${id.slice(-2)}`;
-  return "*".repeat(id.length);
-}
 
 async function findByPaddleSubId(
   ctx: GenericQueryCtx<DataModel>,

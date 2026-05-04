@@ -4,16 +4,11 @@ import {
   getLimitsForAccessLevel,
   getAccessLevelName,
 } from "./subscriptionService";
+import { hashId } from "../shared/hashId";
 
 const isDebugEnabled =
   process.env.ENABLE_DEBUG_PLAN === "true" ||
   process.env.NODE_ENV !== "production";
-
-function hashId(id: string): string {
-  if (id.length > 8) return `${id.slice(0, 4)}...${id.slice(-4)}`;
-  if (id.length >= 4) return `${id.slice(0, 2)}...${id.slice(-2)}`;
-  return "*".repeat(id.length);
-}
 
 export const debugPlan = query({
   args: {},
@@ -59,7 +54,9 @@ export const debugPlan = query({
         ? {
             planSlug: subscription.planSlug,
             status: subscription.status,
-            paddleSubscriptionId: subscription.paddleSubscriptionId,
+            paddleSubscriptionId: subscription.paddleSubscriptionId
+              ? hashId(subscription.paddleSubscriptionId)
+              : null,
             currentPeriodEnd: subscription.currentPeriodEnd,
           }
         : null,

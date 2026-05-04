@@ -86,6 +86,7 @@ export function SelectionBubble({
                     </p>
                     <button
                         type="button"
+                        aria-label="Close"
                         onClick={onClose}
                         className="text-white/20 hover:text-white/60 transition-colors shrink-0"
                     >
@@ -114,6 +115,7 @@ export function SelectionBubble({
                     />
                     <button
                         type="submit"
+                        aria-label="Send"
                         disabled={isSubmitting}
                         className="shrink-0 w-7 h-7 rounded-md bg-white/[0.08] text-white/60 flex items-center justify-center hover:bg-white/[0.12] hover:text-white/80 disabled:opacity-30 transition-all mr-1 mb-1"
                     >

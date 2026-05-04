@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { SUBSCRIPTION_STATUSES } from "../shared/subscriptionStatuses";
 import type { SubscriptionStatus } from "../shared/subscriptionStatuses";
+import { hashId } from "../shared/hashId";
 
 const MAX_ACCESS_LEVEL = 2;
 
@@ -21,12 +22,6 @@ function isValidAccessLevel(value: unknown): value is number {
     value >= 0 &&
     value <= MAX_ACCESS_LEVEL
   );
-}
-
-function hashId(id: string): string {
-  if (id.length > 8) return `${id.slice(0, 4)}...${id.slice(-4)}`;
-  if (id.length >= 4) return `${id.slice(0, 2)}...${id.slice(-2)}`;
-  return "*".repeat(id.length);
 }
 
 const paddleWebhook = httpAction(async (ctx, request) => {

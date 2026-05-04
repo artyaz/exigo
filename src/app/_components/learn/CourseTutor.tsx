@@ -306,44 +306,39 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
                 >
                   <div className="max-h-48 overflow-y-auto p-2 space-y-1">
                     {chats.map((chat: { _id: Id<"courseTutorChats">; title: string }) => (
-                      <button
+                      <div
                         key={chat._id}
-                        type="button"
-                        className={`flex items-center justify-between w-full text-left px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                        className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm transition-colors ${
                           activeChatId === chat._id
                             ? "bg-white/10 text-white"
                             : "text-white/60 hover:bg-white/5 hover:text-white/80"
                         }`}
-                        onClick={() => {
-                          setActiveChatId(chat._id);
-                          setShowChatList(false);
-                          setToolActions([]);
-                          setStreamingContent("");
-                        }}
                       >
-                        <span className="truncate flex-1 mr-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveChatId(chat._id);
+                            setShowChatList(false);
+                            setToolActions([]);
+                            setStreamingContent("");
+                          }}
+                          className="truncate flex-1 mr-2 text-left cursor-pointer"
+                        >
                           <MessageCircle className="w-3 h-3 inline mr-1.5 opacity-50" />
                           {chat.title}
-                        </span>
-                        <span
-                          role="button"
-                          tabIndex={0}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Delete chat"
                           onClick={(e) => {
                             e.stopPropagation();
                             void handleDeleteChat(chat._id);
                           }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              void handleDeleteChat(chat._id);
-                            }
-                          }}
                           className="p-1 rounded hover:bg-white/10 text-white/30 hover:text-red-400 transition-colors"
                         >
                           <Trash2 className="w-3 h-3" />
-                        </span>
-                      </button>
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </motion.div>

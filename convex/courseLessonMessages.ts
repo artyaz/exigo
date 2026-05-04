@@ -4,7 +4,6 @@ import { getAuthenticatedUserId } from "./authDecorators";
 
 export const send = mutation({
   args: {
-    courseId: v.id("courses"),
     lessonId: v.id("courseLessons"),
     role: v.union(v.literal("teacher"), v.literal("user"), v.literal("system")),
     content: v.string(),
@@ -16,13 +15,17 @@ export const send = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx);
-    const course = await ctx.db.get(args.courseId);
+    const lesson = await ctx.db.get(args.lessonId);
+    if (!lesson) {
+      throw new Error("Lesson not found");
+    }
+    const course = await ctx.db.get(lesson.courseId);
     if (!course || course.userId !== userId) {
       throw new Error("Unauthorized");
     }
 
     return await ctx.db.insert("courseLessonMessages", {
-      courseId: args.courseId,
+      courseId: lesson.courseId,
       lessonId: args.lessonId,
       role: args.role,
       content: args.content,
