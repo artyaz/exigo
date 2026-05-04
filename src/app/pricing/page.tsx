@@ -5,7 +5,7 @@ import { ArrowLeft, Check, Loader2 } from "lucide-react";
 import { SignedIn, SignedOut, useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { slugToTier } from "../../../shared/planConfig";
 
 type BillingPeriod = "month" | "annual";
@@ -342,7 +342,7 @@ export default function PricingPage() {
     const [billingCycle, setBillingCycle] = useState<BillingPeriod>("month");
     const [paddlePrices, setPaddlePrices] = useState<Record<string, number>>({});
 
-    const rawPlans = useQuery(api.plans.list) ?? [];
+    const rawPlans = useQuery(api.plans.list);
     useEffect(() => {
         let cancelled = false;
         void (async () => {
@@ -362,11 +362,15 @@ export default function PricingPage() {
         };
     }, []);
 
-    const plans = groupPlans(
-        rawPlans.map((plan) => ({
-            ...plan,
-            basePrice: paddlePrices[plan.slug] ?? plan.basePrice,
-        })),
+    const plans = useMemo(
+        () =>
+            groupPlans(
+                (rawPlans ?? []).map((plan) => ({
+                    ...plan,
+                    basePrice: paddlePrices[plan.slug] ?? plan.basePrice,
+                })),
+            ),
+        [rawPlans, paddlePrices],
     );
     const subscription = useQuery(api.planLimits.getSubscriptionInfo);
 
@@ -474,15 +478,19 @@ function BillingToggle({
     onChange: (v: BillingPeriod) => void;
 }) {
     return (
-        <div className="mx-auto flex w-fit items-center rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <div role="group" aria-label="Billing period" className="mx-auto flex w-fit items-center rounded-xl border border-white/10 bg-white/[0.03] p-1">
             <button
+                type="button"
                 onClick={() => onChange("month")}
+                aria-pressed={value === "month"}
                 className={`rounded-lg px-4 py-1.5 text-sm spring-interact ${value === "month" ? "bg-white text-black" : "text-white/70 hover:text-white"}`}
             >
                 Monthly
             </button>
             <button
+                type="button"
                 onClick={() => onChange("annual")}
+                aria-pressed={value === "annual"}
                 className={`rounded-lg px-4 py-1.5 text-sm spring-interact ${value === "annual" ? "bg-white text-black" : "text-white/70 hover:text-white"}`}
             >
                 Yearly
