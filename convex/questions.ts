@@ -107,16 +107,18 @@ export const getIncorrectForTopic = query({
             .filter((q) => q.eq(q.field("topicTitle"), args.topicTitle))
             .collect();
 
-        const allQuestions = await Promise.all(
+        const perTest = await Promise.all(
             tests.map((test) =>
                 ctx.db.query("questions")
                     .withIndex("by_test", (q) => q.eq("testId", test._id))
+                    .filter((q) => q.eq(q.field("isCorrect"), false))
                     .collect()
             )
         );
 
-        const incorrect = allQuestions.flat().filter(q => q.isCorrect === false);
-        incorrect.sort((a, b) => b._creationTime - a._creationTime);
-        return incorrect.slice(0, 10);
+        return perTest
+            .flat()
+            .sort((a, b) => b._creationTime - a._creationTime)
+            .slice(0, 10);
     },
 });
