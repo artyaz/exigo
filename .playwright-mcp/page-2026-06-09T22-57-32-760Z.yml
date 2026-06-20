@@ -1,0 +1,109 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Exigo Playground
+      - generic [ref=e5]: Reactive VM · live spec editor
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - button "Counter" [ref=e9] [cursor=pointer]
+          - button "Turing tape" [ref=e10] [cursor=pointer]
+          - button "Tick + scene" [ref=e11] [cursor=pointer]
+          - button "Code probe" [ref=e12] [cursor=pointer]
+          - button "Functions → curve" [ref=e13] [cursor=pointer]
+          - button "Recursion → stack" [ref=e14] [cursor=pointer]
+          - button "Recursion (observed)" [ref=e15] [cursor=pointer]
+          - button "Free editor (IDE)" [ref=e16] [cursor=pointer]
+          - button "pmr arena → spill" [ref=e17] [cursor=pointer]
+          - button "Sorting → bars" [ref=e18] [cursor=pointer]
+          - button "Binary search" [ref=e19] [cursor=pointer]
+        - textbox "spec editor" [ref=e20]: "{ \"type\": \"reactive\", \"accent\": \"azure\", \"prompt\": \"This JS models a `std::pmr::monotonic_buffer_resource` of **128 B** — it bumps a pointer and **never frees**. The doubling vector spills to the heap. **Hold all 128 B in the buffer with no heap spill.**\", \"hook\": \"Same primitive, any domain: declare regions + sized blocks; the **arena** packs them, draws the capacity gauge, and routes the overflow arrow. You never write a coordinate.\", \"state\": { \"obs\": [], \"blocks\": [], \"bufUsed\": 0, \"heapCount\": 0, \"runId\": 0 }, \"reactions\": [ { \"on\": \"ran\", \"do\": [ { \"set\": \"obs\", \"to\": \"event.observations\" }, { \"set\": \"blocks\", \"to\": \"[]\" }, { \"set\": \"bufUsed\", \"to\": \"0\" }, { \"set\": \"heapCount\", \"to\": \"0\" }, { \"set\": \"runId\", \"to\": \"runId + 1\" } ] }, { \"on\": \"obs:alloc\", \"when\": \"event.region == \\\"buf\\\"\", \"allowSequentialWrite\": true, \"do\": [ { \"set\": \"blocks\", \"to\": \"push(blocks, record(\\\"id\\\", event.id, \\\"size\\\", event.size, \\\"region\\\", event.region, \\\"label\\\", event.label))\" }, { \"set\": \"bufUsed\", \"to\": \"bufUsed + event.size\" } ] }, { \"on\": \"obs:alloc\", \"when\": \"event.region == \\\"heap\\\"\", \"allowSequentialWrite\": true, \"do\": [ { \"set\": \"blocks\", \"to\": \"push(blocks, record(\\\"id\\\", event.id, \\\"size\\\", event.size, \\\"region\\\", event.region, \\\"label\\\", event.label))\" }, { \"set\": \"heapCount\", \"to\": \"heapCount + 1\" } ] }, { \"on\": \"play:reset\", \"allowSequentialWrite\": true, \"do\": [ { \"set\": \"blocks\", \"to\": \"[]\" }, { \"set\": \"bufUsed\", \"to\": \"0\" }, { \"set\": \"heapCount\", \"to\": \"0\" } ] } ], \"evaluator\": { \"ok\": \"heapCount == 0 && bufUsed >= 128\", \"msgOk\": \"No spill — the live data sits entirely in the buffer. Reserve once, churn never.\", \"msgNo\": \"Something escaped to the heap. Doubling reallocations leave dead blocks the monotonic buffer can't reclaim — reserve the final size up front.\", \"proximity\": \"1 - heapCount / 4\" }, \"evaluatePolicy\": { \"onEvent\": true, \"onSubmit\": false }, \"display\": [ { \"type\": \"codeProbe\", \"language\": \"javascript\", \"harness\": { \"id\": \"js-observation\" }, \"editMode\": \"multiRegionFreeText\", \"runMode\": \"manualRun\", \"event\": \"ran\", \"source\": [ { \"kind\": \"locked\", \"id\": \"alloc\", \"text\": \"// monotonic_buffer_resource: bump a pointer, NEVER free.\\nconst CAP = 128;\\nlet used = 0;\\nfunction reserve(name, bytes) {\\n if (used + bytes <= CAP) {\\n used += bytes;\\n alloc(name, bytes, \\\"buf\\\", name);\\n } else {\\n alloc(name, bytes, \\\"heap\\\", name);\\n }\\n}\\n\" }, { \"kind\": \"editableText\", \"id\": \"body\", \"maxChars\": 1200, \"initial\": \"// std::pmr::vector<int> growing by doubling.\\n// Every growth reallocates; the old block is never reclaimed.\\nreserve(\\\"cap=2\\\", 8);\\nreserve(\\\"cap=4\\\", 16);\\nreserve(\\\"cap=8\\\", 32);\\nreserve(\\\"cap=16\\\", 64);\\nreserve(\\\"cap=32\\\", 128);\\n\" } ] }, { \"type\": \"arena\", \"label\": \"std::pmr::monotonic_buffer_resource\", \"regions\": [ { \"id\": \"buf\", \"label\": \"buffer\", \"capacity\": 128, \"unit\": \"B\", \"tone\": \"azure\" }, { \"id\": \"heap\", \"label\": \"system heap\", \"unit\": \"B\", \"tone\": \"no\" } ], \"blocks\": \"blocks\", \"overflow\": { \"from\": \"buf\", \"to\": \"heap\", \"label\": \"overflow → operator new\" } }, { \"type\": \"stateBadge\", \"label\": \"buffer used\", \"value\": \"concat(bufUsed, \\\" / 128 B\\\")\" }, { \"type\": \"observationPlayer\", \"source\": \"obs\", \"version\": \"runId\", \"label\": \"allocations\", \"playback\": { \"mode\": \"auto\", \"fps\": 2 } } ] }"
+        - generic [ref=e21]: valid spec
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]: Try it
+          - generic [ref=e67]: reactive
+          - generic [ref=e68]:
+            - img [ref=e69]
+            - text: 0 in a row
+        - generic [ref=e71]:
+          - img [ref=e72]
+          - generic [ref=e74]: "Same primitive, any domain: declare regions + sized blocks; the **arena** packs them, draws the capacity gauge, and routes the overflow arrow. You never write a coordinate."
+        - generic [ref=e75]: "This JS models a `std::pmr::monotonic_buffer_resource` of **128 B** — it bumps a pointer and **never frees**. The doubling vector spills to the heap. **Hold all 128 B in the buffer with no heap spill.**"
+        - generic [ref=e76]:
+          - generic [ref=e77]:
+            - generic [ref=e78]:
+              - generic [ref=e79]:
+                - generic [ref=e80]: source
+                - generic [ref=e81]: javascript
+              - generic [ref=e82]:
+                - generic [ref=e84]: "// monotonic_buffer_resource: bump a pointer, NEVER free. const CAP = 128; let used = 0; function reserve(name, bytes) { if (used + bytes <= CAP) { used += bytes; alloc(name, bytes, \"buf\", name); } else { alloc(name, bytes, \"heap\", name); } }"
+                - generic [ref=e85]:
+                  - generic [ref=e86]:
+                    - generic:
+                      - generic: // std::pmr::vector<int> growing by doubling.// Every growth reallocates; the old block is never reclaimed.reserve("cap=2", 8);reserve("cap=4", 16);reserve("cap=8", 32);reserve("cap=16", 64);reserve("cap=32", 128);
+                    - textbox "code editor" [ref=e87]: // std::pmr::vector<int> growing by doubling. // Every growth reallocates; the old block is never reclaimed. reserve("cap=2", 8); reserve("cap=4", 16); reserve("cap=8", 32); reserve("cap=16", 64); reserve("cap=32", 128);
+                  - generic: javascript
+            - button "Run" [ref=e89] [cursor=pointer]:
+              - img [ref=e91]
+              - text: Run
+            - generic [ref=e122]:
+              - generic [ref=e123]:
+                - generic [ref=e124]: alloc
+                - generic [ref=e126]: id=cap=2 size=8 region=buf label=cap=2
+              - generic [ref=e127]:
+                - generic [ref=e128]: alloc
+                - generic [ref=e130]: id=cap=4 size=16 region=buf label=cap=4
+              - generic [ref=e131]:
+                - generic [ref=e132]: alloc
+                - generic [ref=e134]: id=cap=8 size=32 region=buf label=cap=8
+              - generic [ref=e135]:
+                - generic [ref=e136]: alloc
+                - generic [ref=e138]: id=cap=16 size=64 region=buf label=cap=16
+              - generic [ref=e139]:
+                - generic [ref=e140]: alloc
+                - generic [ref=e142]: id=cap=32 size=128 region=heap label=cap=32
+          - generic [ref=e93]:
+            - generic [ref=e94]: std::pmr::monotonic_buffer_resource
+            - generic [ref=e95]:
+              - generic [ref=e96]:
+                - generic [ref=e97]:
+                  - generic [ref=e98]: buffer
+                  - generic [ref=e99]: 56 / 128 B
+                - generic [ref=e101]:
+                  - generic "cap=2 · 8 B" [ref=e144]:
+                    - generic [ref=e145]: cap=2
+                    - generic [ref=e146]: "8"
+                  - generic "cap=4 · 16 B" [ref=e147]:
+                    - generic [ref=e148]: cap=4
+                    - generic [ref=e149]: "16"
+                  - generic "cap=8 · 32 B" [ref=e150]:
+                    - generic [ref=e151]: cap=8
+                    - generic [ref=e152]: "32"
+              - generic [ref=e103]:
+                - generic [ref=e104]:
+                  - generic [ref=e105]: system heap
+                  - generic [ref=e106]: 0 B
+                - generic [ref=e108]: free
+          - generic [ref=e109]:
+            - generic [ref=e110]: buffer used
+            - generic [ref=e111]: 56 / 128 B
+          - generic [ref=e112]:
+            - generic [ref=e113]: allocations
+            - generic [ref=e114]:
+              - button "to start" [ref=e153] [cursor=pointer]: ⏮
+              - button "step back" [ref=e154] [cursor=pointer]: ◀
+              - button "pause" [ref=e155] [cursor=pointer]: ❚❚
+              - button "step forward" [ref=e156] [cursor=pointer]: ▶
+              - button "to end" [ref=e157] [cursor=pointer]: ⏭
+              - slider "scrub observations" [ref=e115]: "3"
+              - generic [ref=e116]: 3 / 5
+        - generic [ref=e117]:
+          - button "Reset" [ref=e118] [cursor=pointer]:
+            - img [ref=e119]
+          - status [ref=e158]:
+            - img [ref=e160]
+            - text: Something escaped to the heap. Doubling reallocations leave dead blocks the monotonic buffer can't reclaim — reserve the final size up front.
+  - button "Open Next.js Dev Tools" [ref=e59] [cursor=pointer]:
+    - img [ref=e60]
+  - alert [ref=e63]

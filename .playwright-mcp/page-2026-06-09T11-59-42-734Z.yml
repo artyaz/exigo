@@ -1,0 +1,37 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Exigo Playground
+      - generic [ref=e5]: Reactive VM · live spec editor
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - button "Counter" [ref=e9] [cursor=pointer]
+          - button "Turing tape" [ref=e10] [cursor=pointer]
+          - button "Tick + scene" [active] [ref=e11] [cursor=pointer]
+          - button "Code probe" [ref=e12] [cursor=pointer]
+        - textbox "spec editor" [ref=e13]: "{ \"type\": \"reactive\", \"prompt\": \"A dot sweeps the track. **Time enters as state**, never as `time()`.\", \"hook\": \"The **tick** payload writes `t`; a **binding** derives the position. Bindings may not read `event` or call `time()` — edit one to watch §11 fire.\", \"accent\": \"violet\", \"state\": { \"t\": 0 }, \"bindings\": { \"phase\": \"mod(t, 60)\", \"px\": \"abs(phase / 30 - 1)\" }, \"tick\": { \"enabled\": true, \"fps\": 15, \"pauseWhenHidden\": true }, \"reactions\": [ { \"on\": \"tick\", \"do\": [ { \"set\": \"t\", \"to\": \"t + 1\" } ] } ], \"display\": [ { \"type\": \"stateBadge\", \"label\": \"t\", \"value\": \"t\" }, { \"type\": \"diagramScene\", \"scene\": { \"coordinateSystem\": \"unit\", \"width\": 100, \"height\": 40, \"shapes\": [ { \"type\": \"line\", \"x1\": \"0.05\", \"y1\": \"0.5\", \"x2\": \"0.95\", \"y2\": \"0.5\", \"tone\": \"ghost\" }, { \"type\": \"circle\", \"cx\": \"0.05 + px * 0.9\", \"cy\": \"0.5\", \"r\": \"0.06\", \"tone\": \"violet\" } ] } } ] }"
+        - generic [ref=e14]: valid spec
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - generic [ref=e64]: Try it
+          - generic [ref=e65]: reactive
+          - generic [ref=e66]:
+            - img [ref=e67]
+            - text: 1 in a row
+        - generic [ref=e69]:
+          - img [ref=e70]
+          - generic [ref=e72]: "The **tick** payload writes `t`; a **binding** derives the position. Bindings may not read `event` or call `time()` — edit one to watch §11 fire."
+        - generic [ref=e73]: "A dot sweeps the track. **Time enters as state**, never as `time()`."
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e76]: t
+            - generic [ref=e77]: "15"
+          - img [ref=e78]
+        - generic [ref=e80]:
+          - button "Reset" [ref=e81] [cursor=pointer]:
+            - img [ref=e82]
+          - status
+  - button "Open Next.js Dev Tools" [ref=e52] [cursor=pointer]:
+    - img [ref=e53]
+  - alert [ref=e56]

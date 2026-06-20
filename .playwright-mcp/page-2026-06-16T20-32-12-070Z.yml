@@ -1,0 +1,67 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Generate
+      - generic [ref=e5]: exercise constructor
+      - generic [ref=e6]:
+        - button "brief → exercise" [ref=e7] [cursor=pointer]
+        - button "topic → lesson" [ref=e8] [cursor=pointer]
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - generic [ref=e12]: concept
+          - textbox [ref=e13]: A monotonic buffer allocator bumps a pointer and never frees
+        - generic [ref=e14]:
+          - generic [ref=e15]: misconception
+          - textbox [ref=e16]: Reallocating to grow a vector is cheap and reclaims the old block
+        - generic [ref=e17]:
+          - generic [ref=e18]: archetype
+          - combobox [ref=e19]:
+            - option "auto"
+            - option "arena" [selected]
+            - option "plot"
+            - option "graph"
+        - generic [ref=e20]:
+          - generic [ref=e21]: data model
+          - textbox [ref=e22]: blocks list (id, size, region), bufUsed counter, heapCount counter; a 128B buffer that overflows to the heap
+        - generic [ref=e23]:
+          - generic [ref=e24]: code intent
+          - textbox [ref=e25]: Learner edits JS that calls reserve(name, bytes); each reserve emits alloc(id, size, region) — hold all 128B with no heap spill
+        - generic [ref=e26]:
+          - generic [ref=e27]: goal
+          - textbox [ref=e28]: no allocation escapes to the heap and the buffer holds at least 128B
+        - generic [ref=e29]:
+          - generic [ref=e30]: critical thinking
+          - textbox [ref=e31]: When is 'waste memory, never free' the right trade — and when would it bite you?
+        - button "Construct" [ref=e47] [cursor=pointer]
+        - generic [ref=e33]: The constructor emits markup, which is parsed + validated; on failure the exact errors feed a repair turn.
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]: openai
+          - generic [ref=e51]: antigravity_strong
+          - generic [ref=e52]: failed
+          - generic [ref=e53]: 3 attempts
+        - generic [ref=e54]:
+          - generic [ref=e56]: attempt 1 · 1 error
+          - generic [ref=e57]:
+            - generic [ref=e58]: •
+            - generic [ref=e59]: "spec.criticalThinking: Structured specs require `criticalThinking` — one question that pushes past the mechanics."
+          - group [ref=e60]:
+            - generic "markup" [ref=e61] [cursor=pointer]
+        - generic [ref=e62]:
+          - generic [ref=e64]: attempt 2 · 1 error
+          - generic [ref=e65]:
+            - generic [ref=e66]: •
+            - generic [ref=e67]: "spec.criticalThinking: Structured specs require `criticalThinking` — one question that pushes past the mechanics."
+          - group [ref=e68]:
+            - generic "markup" [ref=e69] [cursor=pointer]
+        - generic [ref=e70]:
+          - generic [ref=e72]: attempt 3 · 1 error
+          - generic [ref=e73]:
+            - generic [ref=e74]: •
+            - generic [ref=e75]: "spec.criticalThinking: Structured specs require `criticalThinking` — one question that pushes past the mechanics."
+          - group [ref=e76]:
+            - generic "markup" [ref=e77] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=e41] [cursor=pointer]:
+    - img [ref=e42]
+  - alert [ref=e45]

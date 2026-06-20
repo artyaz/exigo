@@ -1,0 +1,49 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Exigo Playground
+      - generic [ref=e5]: Reactive VM · live spec editor
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - button "Counter" [ref=e9] [cursor=pointer]
+          - button "Turing tape" [ref=e10] [cursor=pointer]
+          - button "Tick + scene" [ref=e11] [cursor=pointer]
+          - button "Code probe" [ref=e12] [cursor=pointer]
+          - button "Functions → curve" [ref=e13] [cursor=pointer]
+          - button "Recursion → stack" [ref=e14] [cursor=pointer]
+          - button "Recursion (observed)" [ref=e15] [cursor=pointer]
+          - button "Free editor (IDE)" [ref=e16] [cursor=pointer]
+          - button "pmr arena → spill" [ref=e17] [cursor=pointer]
+          - button "Cost curve → budget" [ref=e18] [cursor=pointer]
+          - button "Recursion → call tree" [ref=e19] [cursor=pointer]
+          - button "Sorting → bars" [ref=e20] [cursor=pointer]
+          - button "Binary search" [ref=e21] [cursor=pointer]
+        - textbox "spec editor" [ref=e22]: "{ \"type\": \"reactive\", \"prompt\": \"Drive the counter to **5**.\", \"criticalThinking\": \"When does state live in UI controls vs. elsewhere, and why does the split matter?\", \"accent\": \"emerald\", \"state\": { \"n\": 0 }, \"bindings\": { \"remaining\": \"5 - n\" }, \"reactions\": [ { \"on\": \"inc\", \"do\": [ { \"set\": \"n\", \"to\": \"min(n + 1, 9)\" } ] }, { \"on\": \"dec\", \"allowSequentialWrite\": true, \"do\": [ { \"set\": \"n\", \"to\": \"max(n - 1, 0)\" } ] } ], \"evaluator\": { \"ok\": \"n == 5\", \"msgOk\": \"Exactly five.\", \"proximity\": \"1 - abs(5 - n) / 5\" }, \"evaluatePolicy\": { \"onEvent\": true, \"onSubmit\": false }, \"stage\": { \"type\": \"numberLine\", \"value\": \"n\", \"target\": \"5\", \"min\": 0, \"max\": 9 }, \"readouts\": [ { \"type\": \"stateBadge\", \"label\": \"n\", \"value\": \"n\" }, { \"type\": \"stateBadge\", \"label\": \"remaining\", \"value\": \"remaining\" } ], \"controls\": { \"type\": \"controls\", \"controls\": [ { \"type\": \"button\", \"label\": \"− 1\", \"event\": \"dec\", \"disabledWhen\": \"n <= 0\" }, { \"type\": \"button\", \"label\": \"+ 1\", \"event\": \"inc\", \"disabledWhen\": \"n >= 9\" } ] } }"
+        - generic [ref=e23]: valid spec
+        - generic [ref=e25]: "visualDensity: stage \"numberLine\" is a low-density visual — prefer arena, plot, graph, or diagramScene when the model allows."
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - generic [ref=e29]: Try it
+          - generic [ref=e30]: reactive
+          - generic [ref=e31]:
+            - img [ref=e32]
+            - text: 0 in a row
+        - generic [ref=e34]: Drive the counter to **5**.
+        - generic [ref=e35]:
+          - generic [ref=e40]:
+            - generic [ref=e41]: "n"
+            - generic [ref=e42]: "0"
+          - generic [ref=e43]:
+            - generic [ref=e44]: remaining
+            - generic [ref=e45]: "5"
+          - generic [ref=e46]:
+            - button "− 1" [disabled]
+            - button "+ 1" [ref=e47] [cursor=pointer]
+        - generic [ref=e48]:
+          - button "Reset" [ref=e49] [cursor=pointer]:
+            - img [ref=e50]
+          - status
+  - button "Open Next.js Dev Tools" [ref=e58] [cursor=pointer]:
+    - img [ref=e59]
+  - alert [ref=e62]

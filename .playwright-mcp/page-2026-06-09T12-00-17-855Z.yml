@@ -1,0 +1,63 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Exigo Playground
+      - generic [ref=e5]: Reactive VM · live spec editor
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - button "Counter" [ref=e9] [cursor=pointer]
+          - button "Turing tape" [ref=e10] [cursor=pointer]
+          - button "Tick + scene" [ref=e11] [cursor=pointer]
+          - button "Code probe" [ref=e12] [cursor=pointer]
+        - textbox "spec editor" [ref=e13]: "{ \"type\": \"reactive\", \"prompt\": \"Fill the holes so the program logs **3**, then a doubled **6**.\", \"hook\": \"A **real-execution** harness — the JS actually runs. `trace(label, value)` and `result(...)` surface rows; the run dispatches `{ ok }` back into state.\", \"accent\": \"amber\", \"state\": { \"passed\": false }, \"reactions\": [ { \"on\": \"ran\", \"do\": [ { \"set\": \"passed\", \"to\": \"event.ok\" } ] } ], \"evaluator\": { \"ok\": \"passed\", \"msgOk\": \"It ran clean.\" }, \"evaluatePolicy\": { \"onEvent\": true, \"onSubmit\": false }, \"display\": [ { \"type\": \"codeProbe\", \"language\": \"javascript\", \"harness\": { \"id\": \"js-real-execution\" }, \"editMode\": \"holes\", \"runMode\": \"manualRun\", \"event\": \"ran\", \"source\": [ { \"kind\": \"locked\", \"id\": \"l1\", \"text\": \"const x = \" }, { \"kind\": \"blankHole\", \"id\": \"a\", \"placeholder\": \"3\", \"maxChars\": 4 }, { \"kind\": \"locked\", \"id\": \"l2\", \"text\": \";\\ntrace(\\\"x\\\", x);\\nresult(\\\"2x\\\", x * \" }, { \"kind\": \"blankHole\", \"id\": \"b\", \"placeholder\": \"2\", \"maxChars\": 4 }, { \"kind\": \"locked\", \"id\": \"l3\", \"text\": \");\" } ] }, { \"type\": \"stateBadge\", \"label\": \"passed\", \"value\": \"if(passed, \\\"yes\\\", \\\"no\\\")\" } ] }"
+        - generic [ref=e14]: valid spec
+      - generic [ref=e85]:
+        - generic [ref=e86]:
+          - generic [ref=e87]: Try it
+          - generic [ref=e88]: reactive
+          - generic [ref=e89]:
+            - img [ref=e90]
+            - text: 2 in a row
+        - generic [ref=e92]:
+          - img [ref=e93]
+          - generic [ref=e95]: "A **real-execution** harness — the JS actually runs. `trace(label, value)` and `result(...)` surface rows; the run dispatches `{ ok }` back into state."
+        - generic [ref=e96]: Fill the holes so the program logs **3**, then a doubled **6**.
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - generic [ref=e100]:
+                - generic [ref=e101]: source
+                - generic [ref=e102]: javascript
+              - generic [ref=e103]:
+                - text: const x =
+                - textbox "edit code" [ref=e104]:
+                  - /placeholder: "3"
+                  - text: "3"
+                - text: ; trace("x", x); result("2x", x *
+                - textbox "edit code" [ref=e105]:
+                  - /placeholder: "2"
+                  - text: "2"
+                - text: );
+            - button "Run" [active] [ref=e107] [cursor=pointer]:
+              - img [ref=e109]
+              - text: Run
+            - generic [ref=e119]:
+              - generic [ref=e120]:
+                - generic [ref=e121]: x
+                - generic [ref=e123]: "3"
+              - generic [ref=e124]:
+                - generic [ref=e125]: 2x
+                - generic [ref=e127]: "6"
+          - generic [ref=e111]:
+            - generic [ref=e112]: passed
+            - generic [ref=e113]: "yes"
+        - generic [ref=e114]:
+          - button "Reset" [ref=e115] [cursor=pointer]:
+            - img [ref=e116]
+          - status [ref=e128]:
+            - img [ref=e130]
+            - text: It ran clean.
+  - button "Open Next.js Dev Tools" [ref=e52] [cursor=pointer]:
+    - img [ref=e53]
+  - alert [ref=e56]

@@ -1,0 +1,39 @@
+[     447ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/d0fd8_next_dist_compiled_react-dom_371aacc7._.js:14537
+[     624ms] [WARNING] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview @ https://amusing-orca-68.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:18
+[     624ms] [WARNING] Clerk: The prop "afterSignInUrl" is deprecated and should be replaced with the new "fallbackRedirectUrl" or "forceRedirectUrl" props instead. Learn more: https://clerk.com/docs/guides/custom-redirects#redirect-url-props @ https://amusing-orca-68.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:18
+[  343158ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  343185ms] [LOG] [Fast Refresh] done in 62ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  345252ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  345279ms] [LOG] [Fast Refresh] done in 55ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  353689ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  353715ms] [LOG] [Fast Refresh] done in 43ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  362597ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  362622ms] [LOG] [Fast Refresh] done in 60ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  905698ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  905723ms] [LOG] [Fast Refresh] done in 60ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  912841ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  912864ms] [LOG] [Fast Refresh] done in 72ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  920053ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  920076ms] [LOG] [Fast Refresh] done in 55ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  928587ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  928610ms] [LOG] [Fast Refresh] done in 58ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  939273ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  939298ms] [LOG] [Fast Refresh] done in 57ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  950069ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  950091ms] [LOG] [Fast Refresh] done in 63ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  962305ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  962330ms] [LOG] [Fast Refresh] done in 59ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  970860ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  970884ms] [LOG] [Fast Refresh] done in 57ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  985813ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  985837ms] [LOG] [Fast Refresh] done in 63ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1001700ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1001725ms] [LOG] [Fast Refresh] done in 73ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1018120ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1018145ms] [LOG] [Fast Refresh] done in 62ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1021374ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1021398ms] [LOG] [Fast Refresh] done in 58ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1024077ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1024103ms] [LOG] [Fast Refresh] done in 64ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1027154ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[ 1027177ms] [LOG] [Fast Refresh] done in 64ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0

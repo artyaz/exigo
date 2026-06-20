@@ -66,7 +66,9 @@ export default defineSchema({
     userId: v.string(),
     spaceId: v.id("spaces"),
     questionId: v.id("questions"),
-  }).index("by_user", ["userId", "_creationTime"]),
+    // `_creationTime` is auto-appended to every index; listing it explicitly
+    // is redundant and rejected by Convex, so the index is just ["userId"].
+  }).index("by_user", ["userId"]),
   subscriptions: defineTable({
     userId: v.string(),
     accessLevel: v.number(),
@@ -80,6 +82,14 @@ export default defineSchema({
     ),
     periodEnd: v.optional(v.number()),
     canceledAt: v.optional(v.number()),
+    // Legacy Paddle-shaped documents exist in the deployment from an earlier
+    // billing integration that no current code writes. Tolerated as optional
+    // so schema validation passes; current code reads the fields above.
+    currentPeriodStart: v.optional(v.number()),
+    currentPeriodEnd: v.optional(v.number()),
+    paddleCustomerId: v.optional(v.string()),
+    paddleSubscriptionId: v.optional(v.string()),
+    planSlug: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"]),
@@ -88,4 +98,17 @@ export default defineSchema({
     month: v.string(),
     count: v.number(),
   }).index("by_user_month", ["userId", "month"]),
+  // Per-user AI routing. `provider` selects the default Google key vs. a
+  // custom OpenAI-compatible endpoint. The custom key is stored ONLY as
+  // opaque AES-GCM ciphertext (keyCipher/keyIv); the symmetric secret
+  // never lives in Convex. See src/server/ai/secrets.ts.
+  userSettings: defineTable({
+    userId: v.string(),
+    provider: v.union(v.literal("gemini"), v.literal("openai")),
+    model: v.optional(v.string()),
+    baseUrl: v.optional(v.string()),
+    keyCipher: v.optional(v.string()),
+    keyIv: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

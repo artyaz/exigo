@@ -1,0 +1,67 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Exigo Playground
+      - generic [ref=e5]: Reactive VM · live spec editor
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - button "Counter" [ref=e9] [cursor=pointer]
+          - button "Turing tape" [ref=e10] [cursor=pointer]
+          - button "Tick + scene" [ref=e11] [cursor=pointer]
+          - button "Code probe" [ref=e12] [cursor=pointer]
+          - button "Functions → curve" [ref=e13] [cursor=pointer]
+          - button "Recursion → stack" [ref=e14] [cursor=pointer]
+          - button "Recursion (observed)" [ref=e15] [cursor=pointer]
+          - button "Free editor (IDE)" [ref=e16] [cursor=pointer]
+          - button "Sorting → bars" [ref=e17] [cursor=pointer]
+          - button "Binary search" [ref=e18] [cursor=pointer]
+        - textbox "spec editor" [ref=e19]: "{ \"type\": \"reactive\", \"prompt\": \"Write `fact(n)` so it records each call. Use `enter(name, …args)` and `exit(name, value)` — type `en` and press Tab.\", \"hook\": \"A **full editor** — real JS, real execution. Autocomplete is fed by the harness symbol table; every `enter`/`exit` becomes an observation the player replays.\", \"accent\": \"azure\", \"state\": { \"obs\": [], \"runId\": 0 }, \"reactions\": [ { \"on\": \"ran\", \"do\": [ { \"set\": \"obs\", \"to\": \"event.observations\" }, { \"set\": \"runId\", \"to\": \"runId + 1\" } ] } ], \"evaluator\": { \"ok\": \"obsCount(obs, \\\"enter\\\") >= 3\", \"msgOk\": \"Calls recorded.\", \"msgNo\": \"Record at least three calls with enter().\" }, \"evaluatePolicy\": { \"onEvent\": true, \"onSubmit\": false }, \"display\": [ { \"type\": \"codeProbe\", \"language\": \"javascript\", \"harness\": { \"id\": \"js-observation\" }, \"editMode\": \"multiRegionFreeText\", \"runMode\": \"manualRun\", \"event\": \"ran\", \"source\": [ { \"kind\": \"editableText\", \"id\": \"code\", \"maxChars\": 2000, \"initial\": \"function fact(n) {\\n enter(\\\"fact\\\", n);\\n if (n <= 1) {\\n exit(\\\"fact\\\", 1);\\n return 1;\\n }\\n const r = n * fact(n - 1);\\n exit(\\\"fact\\\", r);\\n return r;\\n}\\nfact(4);\" } ] }, { \"type\": \"observationPlayer\", \"source\": \"obs\", \"version\": \"runId\", \"label\": \"replay\", \"playback\": { \"mode\": \"auto\", \"fps\": 3 } } ] }"
+        - generic [ref=e20]: valid spec
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - generic [ref=e65]: Try it
+          - generic [ref=e66]: reactive
+          - generic [ref=e67]:
+            - img [ref=e68]
+            - text: 0 in a row
+        - generic [ref=e70]:
+          - img [ref=e71]
+          - generic [ref=e73]: "A **full editor** — real JS, real execution. Autocomplete is fed by the harness symbol table; every `enter`/`exit` becomes an observation the player replays."
+        - generic [ref=e74]: "Write `fact(n)` so it records each call. Use `enter(name, …args)` and `exit(name, value)` — type `en` and press Tab."
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]:
+              - generic [ref=e78]:
+                - generic [ref=e79]: source
+                - generic [ref=e80]: javascript
+              - generic [ref=e82]:
+                - generic [ref=e83]:
+                  - generic:
+                    - generic: "function fact(n) { enter(\"fact\", n); if (n <= 1) { exit(\"fact\", 1); return 1; } const r = n * fact(n - 1); exit(\"fact\", r); return r;}fact(4);en"
+                  - textbox "code editor" [active] [ref=e84]: "function fact(n) { enter(\"fact\", n); if (n <= 1) { exit(\"fact\", 1); return 1; } const r = n * fact(n - 1); exit(\"fact\", r); return r; } fact(4); en"
+                  - listbox [ref=e100]:
+                    - option "enter(name, ...args) Record entering a call frame." [selected] [ref=e101] [cursor=pointer]:
+                      - generic [ref=e102]: enter(name, ...args)
+                      - generic [ref=e103]: Record entering a call frame.
+                - generic: javascript
+            - button "Run" [ref=e86] [cursor=pointer]:
+              - img [ref=e88]
+              - text: Run
+          - generic [ref=e90]:
+            - generic [ref=e91]: replay
+            - generic [ref=e92]:
+              - button "to start" [disabled]: ⏮
+              - button "step back" [disabled]: ◀
+              - button "play" [disabled]: ▶
+              - button "step forward" [disabled]: ▶
+              - button "to end" [disabled]: ⏭
+              - slider "scrub observations" [disabled] [ref=e93]: "0"
+              - generic [ref=e94]: 0 / 0
+        - generic [ref=e95]:
+          - button "Reset" [ref=e96] [cursor=pointer]:
+            - img [ref=e97]
+          - status
+  - button "Open Next.js Dev Tools" [ref=e58] [cursor=pointer]:
+    - img [ref=e59]
+  - alert [ref=e62]

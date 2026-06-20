@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { GoogleGenAI } from "@google/genai";
+import { resolveAiProvider, type AiProvider, type AiChunk } from "../../../../server/ai";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
@@ -58,32 +58,39 @@ const writeQuestionSchema = z.object({
  * The endpoint also returns 400 responses(JSON error body) when required parameters or knowledge pieces are missing.
  */
 
-async function fetchGeminiStream<T extends z.ZodSchema>(
-    ai: GoogleGenAI,
+async function fetchAiStream<T extends z.ZodSchema>(
+    provider: AiProvider,
     prompt: string,
     schema: T,
     model: string,
     context: { requestId: string; userId: string; route: string; }
-) {
+): Promise<AsyncIterable<AiChunk>> {
     for (let attempt = 0; attempt < 3; attempt++) {
+        // The request fires on the first `.next()`, so we prime it here to keep
+        // the original retry-on-429 semantics (errors would otherwise surface
+        // only once the caller starts iterating).
+        const iterator = provider
+            .stream({ prompt, jsonSchema: zodToJsonSchema(schema), model })
+            [Symbol.asyncIterator]();
         try {
-            return await ai.models.generateContentStream({
-                model,
-                contents: prompt,
-                config: {
-                    responseMimeType: "application/json",
-                    responseJsonSchema: zodToJsonSchema(schema),
+            const first = await iterator.next();
+            return (async function* () {
+                if (!first.done) yield first.value;
+                let n = await iterator.next();
+                while (!n.done) {
+                    yield n.value;
+                    n = await iterator.next();
                 }
-            });
+            })();
         } catch (retryErr: unknown) {
             const apiErr = retryErr as { status?: number };
             if (apiErr.status === 429 && attempt < 2) {
-                logWarn("Gemini stream rate-limited, retrying", {
+                logWarn("AI stream rate-limited, retrying", {
                     source: "api.tests.generate",
                     requestId: context.requestId,
                     route: context.route,
                     userId: context.userId,
-                    ai_provider: "google",
+                    ai_provider: provider.config.label,
                     ai_model: model,
                     attempt: attempt + 1,
                     http_status: 429,
@@ -258,7 +265,7 @@ export async function POST(req: NextRequest) {
         }), { status: 403 });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
+    const provider = await resolveAiProvider(convex, userId);
 
     // Verify space ownership before accessing data
     const space = await convex.query(api.spaces.get, { spaceId: spaceId as Id<"spaces">, userId });
@@ -337,7 +344,7 @@ Knowledge:
 ${knowledgeText}`;
 
     const schema = testType === "select" ? selectQuestionSchema : writeQuestionSchema;
-    const model = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+    const model = provider.config.model;
     const aiTraceId = createAiTraceId();
 
     // Create a streaming response back to the client
@@ -347,16 +354,16 @@ ${knowledgeText}`;
         async start(controller) {
             try {
                 const requestStartedAt = Date.now();
-                logInfo("Gemini stream generation started", {
+                logInfo("AI stream generation started", {
                     source: "api.tests.generate",
                     requestId,
                     route: "/api/tests/generate",
                     userId,
-                    ai_provider: "google",
+                    ai_provider: provider.config.label,
                     ai_model: model,
                     testId: String(activeTestId),
                 });
-                const stream = await fetchGeminiStream(ai, prompt, schema, model, {
+                const stream = await fetchAiStream(provider, prompt, schema, model, {
                     requestId,
                     userId,
                     route: "/api/tests/generate",
@@ -364,11 +371,11 @@ ${knowledgeText}`;
 
                 let fullText = "";
                 let firstTokenAt: number | undefined;
-                let lastChunk: unknown;
+                let lastChunk: AiChunk | undefined;
 
                 for await (const chunk of stream) {
                     lastChunk = chunk;
-                    const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
+                    const part = chunk.text;
                     if (part) {
                         firstTokenAt ??= Date.now();
                         fullText += part;
@@ -380,10 +387,10 @@ ${knowledgeText}`;
                 captureAiGenerationEvent({
                     distinctId: userId,
                     traceId: aiTraceId,
-                    provider: "google",
+                    provider: provider.config.label,
                     model,
                     input: [{ role: "user", content: prompt }],
-                    response: lastChunk,
+                    response: lastChunk?.raw,
                     outputChoices: [{ role: "assistant", content: fullText }],
                     latencySeconds: (Date.now() - requestStartedAt) / 1000,
                     stream: true,
@@ -391,12 +398,12 @@ ${knowledgeText}`;
                         ? (firstTokenAt - requestStartedAt) / 1000
                         : undefined,
                 });
-                logInfo("Gemini stream generation succeeded", {
+                logInfo("AI stream generation succeeded", {
                     source: "api.tests.generate",
                     requestId,
                     route: "/api/tests/generate",
                     userId,
-                    ai_provider: "google",
+                    ai_provider: provider.config.label,
                     ai_model: model,
                     duration_ms: Date.now() - requestStartedAt,
                     testId: String(activeTestId),

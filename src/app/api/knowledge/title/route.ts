@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { GoogleGenAI } from "@google/genai";
+import { resolveAiProvider, defaultGeminiProvider, type AiProvider } from "../../../../server/ai";
+import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
 import {
     captureAiGenerationEvent,
     createAiTraceId,
@@ -11,17 +12,6 @@ import {
     logError,
     logInfo,
 } from "../../../../lib/otlpLogger";
-
-let aiInstance: GoogleGenAI | null = null;
-function getGoogleAI() {
-    if (!aiInstance) {
-        if (!process.env.GOOGLE_GEMINI_API_KEY) {
-            throw new Error("Missing API Key");
-        }
-        aiInstance = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
-    }
-    return aiInstance;
-}
 
 function normalizeTitle(raw: string): string {
     return raw
@@ -56,7 +46,7 @@ function fallbackTitleFromContent(content: string): string {
 export async function POST(req: NextRequest) {
     const requestId = createRequestId(req.headers);
     const startedAt = Date.now();
-    const { userId } = await auth();
+    const { userId, getToken } = await auth();
 
     const { content } = await req.json() as { content: string };
 
@@ -66,18 +56,30 @@ export async function POST(req: NextRequest) {
 
     const fallbackTitle = fallbackTitleFromContent(content);
 
-    if (!process.env.GOOGLE_GEMINI_API_KEY) {
+    // Route through the AI middleware: honour the user's provider preference
+    // when we can identify them, else fall back to the default Gemini provider.
+    let provider: AiProvider;
+    try {
+        if (userId && getToken) {
+            const convex = await createAuthedConvexClient(getToken, "api.knowledge.title");
+            provider = await resolveAiProvider(convex, userId);
+        } else {
+            provider = defaultGeminiProvider();
+        }
+    } catch {
+        provider = defaultGeminiProvider();
+    }
+
+    if (provider.config.kind === "gemini" && !process.env.GOOGLE_GEMINI_API_KEY) {
         return new Response(JSON.stringify({ title: fallbackTitle }));
     }
 
-    const modelCandidates = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-    ] as const;
+    const modelCandidates =
+        provider.config.kind === "gemini"
+            ? (["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"] as const)
+            : ([provider.config.model] as const);
 
     try {
-        const ai = getGoogleAI();
         const aiTraceId = createAiTraceId();
         const titlePrompt = `Generate a concise title (2-5 words, no quotes) for this knowledge note.\n\n${content.slice(0, 2000)}`;
 
@@ -88,26 +90,24 @@ export async function POST(req: NextRequest) {
                     requestId,
                     route: "/api/knowledge/title",
                     userId: userId ?? undefined,
-                    ai_provider: "google",
+                    ai_provider: provider.config.label,
                     ai_model: model,
                 });
                 const startedAt = Date.now();
-                const result = await ai.models.generateContent({
+                const result = await provider.generate({
+                    prompt: titlePrompt,
                     model,
-                    contents: titlePrompt,
-                    config: {
-                        maxOutputTokens: 20,
-                        temperature: 0.2,
-                    },
+                    maxOutputTokens: 20,
+                    temperature: 0.2,
                 });
                 if (userId) {
                     captureAiGenerationEvent({
                         distinctId: userId,
                         traceId: aiTraceId,
-                        provider: "google",
+                        provider: provider.config.label,
                         model,
                         input: [{ role: "user", content: titlePrompt }],
-                        response: result,
+                        response: result.raw,
                         latencySeconds: (Date.now() - startedAt) / 1000,
                     });
                 }
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
                     requestId,
                     route: "/api/knowledge/title",
                     userId: userId ?? undefined,
-                    ai_provider: "google",
+                    ai_provider: provider.config.label,
                     ai_model: model,
                     duration_ms: Date.now() - startedAt,
                 });

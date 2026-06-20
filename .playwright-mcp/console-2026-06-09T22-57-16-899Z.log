@@ -1,0 +1,17 @@
+[     295ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/d0fd8_next_dist_compiled_react-dom_371aacc7._.js:14537
+[     519ms] [WARNING] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[     519ms] [WARNING] Clerk: The prop "afterSignInUrl" is deprecated and should be replaced with the new "fallbackRedirectUrl" or "forceRedirectUrl" props instead. Learn more: https://clerk.com/docs/guides/custom-redirects#redirect-url-props @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  317241ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  317271ms] [LOG] [Fast Refresh] done in 34ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  327673ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  327703ms] [LOG] [Fast Refresh] done in 36ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  331908ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  331928ms] [LOG] [Fast Refresh] done in 47ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  363289ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  363318ms] [LOG] [Fast Refresh] done in 43ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  394513ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  394539ms] [LOG] [Fast Refresh] done in 36ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  537005ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  537032ms] [LOG] [Fast Refresh] done in 41ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  542112ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0
+[  542139ms] [LOG] [Fast Refresh] done in 43ms @ https://eu-assets.i.posthog.com/static/logs.js?v=1.356.1:0

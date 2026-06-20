@@ -1,0 +1,90 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Exigo Playground
+      - generic [ref=e5]: Reactive VM · live spec editor
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - button "Counter" [ref=e9] [cursor=pointer]
+          - button "Turing tape" [ref=e10] [cursor=pointer]
+          - button "Tick + scene" [ref=e11] [cursor=pointer]
+          - button "Code probe" [ref=e12] [cursor=pointer]
+          - button "Functions → curve" [ref=e13] [cursor=pointer]
+          - button "Recursion → stack" [ref=e14] [cursor=pointer]
+          - button "Recursion (observed)" [ref=e15] [cursor=pointer]
+          - button "Free editor (IDE)" [ref=e16] [cursor=pointer]
+          - button "Sorting → bars" [ref=e17] [cursor=pointer]
+          - button "Binary search" [ref=e18] [cursor=pointer]
+        - textbox "spec editor" [ref=e19]: "{ \"type\": \"reactive\", \"prompt\": \"Write `fact(n)` so it records each call. Use `enter(name, …args)` and `exit(name, value)` — type `en` and press Tab.\", \"hook\": \"A **full editor** — real JS, real execution. Autocomplete is fed by the harness symbol table; every `enter`/`exit` becomes an observation the player replays.\", \"accent\": \"azure\", \"state\": { \"obs\": [], \"runId\": 0 }, \"reactions\": [ { \"on\": \"ran\", \"do\": [ { \"set\": \"obs\", \"to\": \"event.observations\" }, { \"set\": \"runId\", \"to\": \"runId + 1\" } ] } ], \"evaluator\": { \"ok\": \"obsCount(obs, \\\"enter\\\") >= 3\", \"msgOk\": \"Calls recorded.\", \"msgNo\": \"Record at least three calls with enter().\" }, \"evaluatePolicy\": { \"onEvent\": true, \"onSubmit\": false }, \"display\": [ { \"type\": \"codeProbe\", \"language\": \"javascript\", \"harness\": { \"id\": \"js-observation\" }, \"editMode\": \"multiRegionFreeText\", \"runMode\": \"manualRun\", \"event\": \"ran\", \"source\": [ { \"kind\": \"editableText\", \"id\": \"code\", \"maxChars\": 2000, \"initial\": \"function fact(n) {\\n enter(\\\"fact\\\", n);\\n if (n <= 1) {\\n exit(\\\"fact\\\", 1);\\n return 1;\\n }\\n const r = n * fact(n - 1);\\n exit(\\\"fact\\\", r);\\n return r;\\n}\\nfact(4);\" } ] }, { \"type\": \"observationPlayer\", \"source\": \"obs\", \"version\": \"runId\", \"label\": \"replay\", \"playback\": { \"mode\": \"auto\", \"fps\": 3 } } ] }"
+        - generic [ref=e20]: valid spec
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - generic [ref=e65]: Try it
+          - generic [ref=e66]: reactive
+          - generic [ref=e67]:
+            - img [ref=e68]
+            - text: 1 in a row
+        - generic [ref=e70]:
+          - img [ref=e71]
+          - generic [ref=e73]: "A **full editor** — real JS, real execution. Autocomplete is fed by the harness symbol table; every `enter`/`exit` becomes an observation the player replays."
+        - generic [ref=e74]: "Write `fact(n)` so it records each call. Use `enter(name, …args)` and `exit(name, value)` — type `en` and press Tab."
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]:
+              - generic [ref=e78]:
+                - generic [ref=e79]: source
+                - generic [ref=e80]: javascript
+              - generic [ref=e82]:
+                - generic [ref=e83]:
+                  - generic:
+                    - generic: "function fact(n) { enter(\"fact\", n); if (n <= 1) { exit(\"fact\", 1); return 1; } const r = n * fact(n - 1); exit(\"fact\", r); return r;}fact(4);"
+                  - textbox "code editor" [ref=e84]: "function fact(n) { enter(\"fact\", n); if (n <= 1) { exit(\"fact\", 1); return 1; } const r = n * fact(n - 1); exit(\"fact\", r); return r; } fact(4);"
+                - generic: javascript
+            - button "Run" [ref=e86] [cursor=pointer]:
+              - img [ref=e88]
+              - text: Run
+            - generic [ref=e111]:
+              - generic [ref=e112]:
+                - generic [ref=e113]: enter
+                - generic [ref=e115]: name=fact args=[4] depth=1
+              - generic [ref=e116]:
+                - generic [ref=e117]: enter
+                - generic [ref=e119]: name=fact args=[3] depth=2
+              - generic [ref=e120]:
+                - generic [ref=e121]: enter
+                - generic [ref=e123]: name=fact args=[2] depth=3
+              - generic [ref=e124]:
+                - generic [ref=e125]: enter
+                - generic [ref=e127]: name=fact args=[1] depth=4
+              - generic [ref=e128]:
+                - generic [ref=e129]: exit
+                - generic [ref=e131]: name=fact value=1 depth=4
+              - generic [ref=e132]:
+                - generic [ref=e133]: exit
+                - generic [ref=e135]: name=fact value=2 depth=3
+              - generic [ref=e136]:
+                - generic [ref=e137]: exit
+                - generic [ref=e139]: name=fact value=6 depth=2
+              - generic [ref=e140]:
+                - generic [ref=e141]: exit
+                - generic [ref=e143]: name=fact value=24 depth=1
+          - generic [ref=e90]:
+            - generic [ref=e91]: replay
+            - generic [ref=e92]:
+              - button "to start" [ref=e144] [cursor=pointer]: ⏮
+              - button "step back" [ref=e145] [cursor=pointer]: ◀
+              - button "pause" [ref=e146] [cursor=pointer]: ❚❚
+              - button "step forward" [ref=e147] [cursor=pointer]: ▶
+              - button "to end" [ref=e148] [cursor=pointer]: ⏭
+              - slider "scrub observations" [ref=e93]: "5"
+              - generic [ref=e94]: 5 / 8
+        - generic [ref=e95]:
+          - button "Reset" [ref=e96] [cursor=pointer]:
+            - img [ref=e97]
+          - status [ref=e149]:
+            - img [ref=e151]
+            - text: Calls recorded.
+  - button "Open Next.js Dev Tools" [ref=e58] [cursor=pointer]:
+    - img [ref=e59]
+  - alert [ref=e62]
