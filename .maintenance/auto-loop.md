@@ -6,10 +6,29 @@ this is your project now." Re-entered each wakeup via ScheduleWakeup with the
 autonomous-loop-dynamic sentinel. THIS FILE IS THE MEMORY — read it first each
 wakeup, then do exactly one iteration, update it, reschedule.
 
-## North star
-AI-generated exercises (open path = sandboxed iframe; markup path = Plot/Arena/
-Graph) should feel hand-crafted: right-sized elements, comfortable reading
-measure, zero truncation, clean alignment, consistent type scale. Pleasant to use.
+## ⚑ PIVOT (2026-06-20) — free-HTML embedded lessons
+Owner decided to ABANDON the strict declarative/markup path (it fought the model:
+chunky sizing, playability rejections like the pressure-curve card failing 3×).
+New direction: a separate agent gets ONLY an exercise description and writes a
+full self-contained HTML exercise — NO design system, NO components, NO grammar,
+NO playability gate. We give it a curated CDN library stage + one tiny
+postMessage contract, nothing else. Old path committed at 43e273b (recoverable).
+
+New module: src/app/_components/exercises/embed/
+  • runtime.ts — STAGE (Motion via importmap + GSAP/canvas-confetti UMD +
+    Tailwind Play CDN), HOST_BRIDGE (Exigo.complete/progress + height + error),
+    buildEmbedDoc(bodyHtml). STAGE_MANIFEST documents libs to the agent.
+  • EmbedExercise.tsx — sandboxed iframe host (allow-scripts), listens to bridge.
+  • prompts.ts — description-only system + manifest + contract; zero design rules.
+  • constructor.ts — authorEmbedExercise(provider, description) → {html, raw}.
+  • embed.test.ts — 6 tests (doc assembly, stage present, bridge, extraction).
+Libraries chosen: Motion (= vanilla Framer Motion, springs), GSAP, canvas-
+confetti, Tailwind. Optional later: React+Framer Motion (esm.sh), D3, Matter.js.
+
+## North star (OLD strict-path goal — superseded by pivot, kept for history)
+AI-generated exercises should feel hand-crafted: right-sized, no truncation,
+clean alignment, consistent type scale. (Iters 1-13 fixed these in the now-
+deprecated markup path.)
 
 ## Guardrails (do not break these)
 1. **One iteration per wakeup.** Small, coherent, reversible. No big rewrites.
@@ -137,7 +156,35 @@ unverified by me (auth wall).
 OPEN owner-gated items (do NOT touch blind): crossover slider lag (needs profile),
 graph row-width→tiny-text (needs visual call), project-wide eslint debt.
 
-## Next action — SCALED BACK (owner said "never stop", so keep looping, lighter)
+## ⚑ ATLAS playground (2026-06-21) — parallel knowledge pyramid
+New feature alongside embed. src/app/_components/exercises/atlas/ + route
+api/generate/atlas (NDJSON stream) + page /playground/atlas.
+Pyramid: 1 agent→10 sciences → 10 agents→3 subtopics each → 30 agents→1 lesson
+each (content + 2-3 exercise briefs) → ~75 agents→ per brief brainstorm 5 → random
+pick 1 → build HTML (reuses embed STAGE_MANIFEST/DESIGN_SYSTEM + extractEmbedHtml).
+concurrency.ts = global limiter + withRetry (tested). prompts.ts parsers tested.
+generate.ts (server-only) orchestrates, emits AtlasEvent per node; errors per node
+don't sink the tree. AtlasExplorer.tsx = Apple-Finder miller columns (Science |
+Subtopic | Lesson w/ inline EmbedExercise), reads the stream live. Config:
+ATLAS_DEFAULT (spec) vs ATLAS_QUICK (2×1×1 ≈ 2 exercises) via {quick} body — UI
+has a "quick run" toggle. FULL run ≈ 140-220 LLM calls (cost!). 11 tests, green.
+LIVE run is owner-only (Clerk auth + endpoint). NOT teardown-blocking.
+
+## Next action — BUILD OUT THE PIVOT (free-HTML path)
+DONE: foundation (embed/ runtime+host+prompt+constructor, 6 tests, tsc clean).
+DONE #1: API route src/app/api/generate/embed/route.ts ({ description } in).
+DONE #2: playground "describe → exercise" tab (now DEFAULT) + .exg-embed CSS +
+  EmbedView. All 6 CDN stage URLs verified 200 (motion, gsap, confetti, tailwind, d3).
+PENDING #3: LIVE smoke test — OWNER-ONLY (route is Clerk-auth'd; preview is
+  auth-walled for the loop). Owner opens /playground/generate → describe tab →
+  Describe & build → confirm libs load + Exigo.complete fires + it looks good.
+  WAIT for owner's screenshot/verdict before #4.
+PENDING #4: Teardown ("nuke") — ONLY after owner confirms #3 works. Remove strict
+  markup path (markup/, runtime/ validate+simulate, display/ primitives, generate/
+  markup bits) + open/ toolkit, rewire lesson/spaces to embed. Big delete; keep
+  tests green; old code at 43e273b. Do NOT start this blind / before #3 confirmed.
+
+## (superseded) earlier scaled-back note
 All owner defects fixed + verified. Remaining work is owner-gated:
   • visual polish (old #5 type-scale, leftover #3 spacing) — needs owner pixels.
   • project-wide eslint debt — needs owner go-ahead (out of scope, risky).

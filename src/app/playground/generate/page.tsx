@@ -12,8 +12,18 @@
 import React from "react";
 import { ReactiveExercise, type ReactiveSpec } from "../../_components/exercises";
 import { OpenExercise } from "../../_components/exercises/open";
+import { EmbedExercise } from "../../_components/exercises/embed";
 
 interface OpenResult {
+  provider?: string;
+  model?: string;
+  plan?: string;
+  html?: string;
+  raw?: string;
+  error?: string;
+}
+
+interface EmbedResult {
   provider?: string;
   model?: string;
   plan?: string;
@@ -94,6 +104,12 @@ details summary{ cursor:pointer; font-family:var(--font-mono); font-size:11px; c
 .exg-open__frame{ width:100%; border:1px solid var(--border-faint); border-radius:var(--radius-xl); background:var(--surface-sunken); }
 .exg-open__done{ font-family:var(--font-mono); font-size:11.5px; letter-spacing:.06em; color:var(--emerald-400); }
 .exg-open__done--no{ color:var(--rose-400); }
+.exg-embed{ display:flex; flex-direction:column; gap:8px; }
+.exg-embed__prox{ height:3px; border-radius:99px; background:var(--white-08); overflow:hidden; }
+.exg-embed__prox i{ display:block; height:100%; background:var(--emerald-400); transition:width .35s var(--ease-spring); }
+.exg-embed__frame{ display:block; border:1px solid var(--border); border-radius:var(--radius-2xl); background:#000; box-shadow:var(--shadow-card); overflow:hidden; }
+.exg-embed__done{ font-family:var(--font-mono); font-size:11.5px; letter-spacing:.06em; color:var(--emerald-400); }
+.exg-embed__done--no{ color:var(--rose-400); }
 `;
 
 const SAMPLE_BRIEF = {
@@ -199,14 +215,51 @@ function OpenView({ r }: { r: OpenResult }): React.JSX.Element {
   );
 }
 
+function EmbedView({ r }: { r: EmbedResult }): React.JSX.Element {
+  if (r.error) {
+    return (
+      <div>
+        <div className="gn__err-m" style={{ color: "var(--rose-400)" }}>{r.error}</div>
+        {r.raw && (
+          <details>
+            <summary>raw model output</summary>
+            <pre className="gn__code">{r.raw}</pre>
+          </details>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="gn__meta">
+        {r.provider && <span className="gn__pill">{r.provider}</span>}
+        {r.model && <span className="gn__pill">{r.model}</span>}
+        <span className="gn__pill gn__pill--ok">free html</span>
+      </div>
+      {r.plan && <div className="gn__plan">{r.plan}</div>}
+      {r.html ? <EmbedExercise html={r.html} /> : <div className="gn__hint">No HTML was produced.</div>}
+      {r.html && (
+        <details>
+          <summary>authored html</summary>
+          <pre className="gn__code">{r.html}</pre>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export default function GeneratePlayground(): React.JSX.Element {
-  const [mode, setMode] = React.useState<"brief" | "open" | "lesson">("open");
+  const [mode, setMode] = React.useState<"embed" | "brief" | "open" | "lesson">("embed");
   const [brief, setBrief] = React.useState({ ...SAMPLE_BRIEF });
   const [topic, setTopic] = React.useState("How a monotonic buffer allocator trades memory for speed");
+  const [description, setDescription] = React.useState(
+    "Teach the difference between a hard sell and a soft sell. The learner reads short buyer scenarios and chooses an approach; show, with springy feedback, how the right choice depends on the buyer's readiness — not the seller's preference.",
+  );
   const [busy, setBusy] = React.useState(false);
   const [exResult, setExResult] = React.useState<ConstructionResult | null>(null);
   const [lessonResult, setLessonResult] = React.useState<LessonResult | null>(null);
   const [openResult, setOpenResult] = React.useState<OpenResult | null>(null);
+  const [embedResult, setEmbedResult] = React.useState<EmbedResult | null>(null);
 
   React.useEffect(() => {
     const el = document.createElement("style");
@@ -256,6 +309,23 @@ export default function GeneratePlayground(): React.JSX.Element {
     }
   };
 
+  const runEmbed = async (): Promise<void> => {
+    setBusy(true);
+    setEmbedResult(null);
+    try {
+      const res = await fetch("/api/generate/embed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description }),
+      });
+      setEmbedResult((await res.json()) as EmbedResult);
+    } catch (e) {
+      setEmbedResult({ error: e instanceof Error ? e.message : "request failed" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const runLesson = async (): Promise<void> => {
     setBusy(true);
     setLessonResult(null);
@@ -279,6 +349,9 @@ export default function GeneratePlayground(): React.JSX.Element {
         <span className="gn__title">Generate</span>
         <span className="gn__sub">exercise constructor</span>
         <div className="gn__tabs">
+          <button type="button" className={`gn__tab${mode === "embed" ? " gn__tab--on" : ""}`} onClick={() => setMode("embed")}>
+            describe → exercise
+          </button>
           <button type="button" className={`gn__tab${mode === "open" ? " gn__tab--on" : ""}`} onClick={() => setMode("open")}>
             design → exercise
           </button>
@@ -288,12 +361,33 @@ export default function GeneratePlayground(): React.JSX.Element {
           <button type="button" className={`gn__tab${mode === "lesson" ? " gn__tab--on" : ""}`} onClick={() => setMode("lesson")}>
             topic → lesson
           </button>
+          <a className="gn__tab" href="/playground/atlas" style={{ textDecoration: "none" }}>
+            atlas ↗
+          </a>
         </div>
       </div>
 
       <div className="gn__grid">
         <div className="gn__pane gn__pane--edit">
-          {mode === "lesson" ? (
+          {mode === "embed" ? (
+            <>
+              <Field label="exercise description">
+                <textarea
+                  className="gn__area"
+                  style={{ minHeight: 160 }}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </Field>
+              <button className="gn__btn" type="button" onClick={runEmbed} disabled={busy}>
+                {busy ? "Building…" : "Describe & build"}
+              </button>
+              <span className="gn__hint">
+                A separate agent gets only this description + a library stage (Motion, GSAP, confetti,
+                Tailwind) and writes a self-contained HTML exercise. No components, no constraints.
+              </span>
+            </>
+          ) : mode === "lesson" ? (
             <>
               <Field label="topic"><textarea className="gn__area" value={topic} onChange={(e) => setTopic(e.target.value)} /></Field>
               <button className="gn__btn" type="button" onClick={runLesson} disabled={busy}>
@@ -336,7 +430,13 @@ export default function GeneratePlayground(): React.JSX.Element {
         </div>
 
         <div className="gn__pane">
-          {mode === "open" ? (
+          {mode === "embed" ? (
+            embedResult ? (
+              <EmbedView r={embedResult} />
+            ) : (
+              <div className="gn__hint">Describe an exercise and press Describe &amp; build — the agent writes the whole thing in HTML.</div>
+            )
+          ) : mode === "open" ? (
             openResult ? (
               <OpenView r={openResult} />
             ) : (
