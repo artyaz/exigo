@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { resolveAiProvider, type AiResult } from "../../../../server/ai";
+import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import {
@@ -20,6 +20,7 @@ import {
   logInfo,
   logWarn,
 } from "../../../../lib/otlpLogger";
+import { renderPrompt } from "../../../../../convex/coursePrompts";
 
 /**
  * Helper to securely validate incoming AI evaluation shape
@@ -175,33 +176,28 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const provider = await resolveAiProvider(convex, userId);
-      if (provider.config.kind === "gemini" && !process.env.GOOGLE_GEMINI_API_KEY) {
+      if (!process.env.GOOGLE_GEMINI_API_KEY) {
         return NextResponse.json(
           { error: "Server missing Gemini API key" },
           { status: 500 },
         );
       }
+      const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
 
-      const prompt = `
-        You are a strict but encouraging educator evaluating a student's answer.
-        
-        Question: ${question.question}
-        Perfect Answer Outline: ${question.answer}
-        
-        Student's Answer: ${answer}
-        
-        Evaluate the student's answer. Is it fundamentally correct and captures the core meaning?
-        Respond STRICTLY with a JSON object: {"isCorrect": true/false, "feedback": "Brief 1 sentence explanation of why, or praise if correct"}
-      `;
+      const promptDoc = await convex.query(api.coursePrompts.getPrompt, {
+        name: "answer_evaluator",
+      });
+      const prompt = renderPrompt(promptDoc.content, {
+        questionText: question.question,
+        questionAnswer: question.answer ?? "N/A",
+        userAnswer: answer,
+      });
 
-      // Enhanced model selection with fallback strategy. The gemini fallback
-      // only applies to the default provider; a custom endpoint uses its own model.
-      const primaryModel =
-        provider.config.kind === "gemini" ? (process.env.GEMINI_MODEL ?? "gemini-2.0-flash") : provider.config.model;
-      const fallbackModel = provider.config.kind === "gemini" ? "gemini-1.5-flash" : provider.config.model;
+      // Enhanced model selection with fallback strategy
+      const primaryModel = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+      const fallbackModel = "gemini-3-flash-preview";
       let modelUsed = primaryModel;
-      let response: AiResult | undefined;
+      let response;
 
       try {
         const aiStartedAt = Date.now();
@@ -211,17 +207,21 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: provider.config.label,
+          ai_provider: "google",
           ai_model: primaryModel,
         });
-        response = await provider.generate({ prompt, json: true, model: primaryModel });
+        response = await ai.models.generateContent({
+          model: primaryModel,
+          contents: prompt,
+          config: { responseMimeType: "application/json" },
+        });
         captureAiGenerationEvent({
           distinctId: userId,
           traceId: aiTraceId,
-          provider: provider.config.label,
+          provider: "google",
           model: primaryModel,
           input: [{ role: "user", content: prompt }],
-          response: response.raw,
+          response,
           latencySeconds: (Date.now() - aiStartedAt) / 1000,
         });
         logInfo("Answer validation AI generation succeeded", {
@@ -230,7 +230,7 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: provider.config.label,
+          ai_provider: "google",
           ai_model: primaryModel,
           duration_ms: Date.now() - aiStartedAt,
         });
@@ -241,7 +241,7 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: provider.config.label,
+          ai_provider: "google",
           ai_model: primaryModel,
           fallback_model: fallbackModel,
           ...getErrorAttributes(err),
@@ -254,17 +254,21 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: provider.config.label,
+          ai_provider: "google",
           ai_model: fallbackModel,
         });
-        response = await provider.generate({ prompt, json: true, model: fallbackModel });
+        response = await ai.models.generateContent({
+          model: fallbackModel,
+          contents: prompt,
+          config: { responseMimeType: "application/json" },
+        });
         captureAiGenerationEvent({
           distinctId: userId,
           traceId: aiTraceId,
-          provider: provider.config.label,
+          provider: "google",
           model: fallbackModel,
           input: [{ role: "user", content: prompt }],
-          response: response.raw,
+          response,
           latencySeconds: (Date.now() - aiStartedAt) / 1000,
         });
         logInfo("Fallback validation AI generation succeeded", {
@@ -273,14 +277,14 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: provider.config.label,
+          ai_provider: "google",
           ai_model: fallbackModel,
           duration_ms: Date.now() - aiStartedAt,
         });
       }
 
       try {
-        const responseText = response?.text ?? "{}";
+        const responseText = response.text ?? "{}";
         const parsed = JSON.parse(responseText) as unknown;
         const validated = validateAIResponse(parsed);
 

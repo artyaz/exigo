@@ -10,8 +10,9 @@
   :root {
     color-scheme: dark;
   }
-  
-  html, body {
+
+  html,
+  body {
     @apply bg-black text-white antialiased selection:bg-neutral-800 selection:text-white tracking-tight;
   }
 
@@ -20,12 +21,15 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-neutral-950/40 backdrop-blur-2xl border border-white/10 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.8)];
+    @apply bg-neutral-950/40 backdrop-blur-2xl border border-white/10 shadow-[0_2px_12px_-4px_#000000cc];
   }
 
   /* Snappy spring animation utility with active scale */
   .spring-interact {
-    @apply transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] active:scale-[0.98];
+    transition-property: all;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    @apply active:scale-[0.98];
   }
 
   /* Deep focus ring */
@@ -37,12 +41,370 @@
   .text-primary {
     @apply text-white font-medium;
   }
-  
+
   .text-secondary {
     @apply text-white/60 font-medium;
   }
 
   .text-tertiary {
     @apply text-white/40 font-medium text-sm;
+  }
+
+  /* ─── Lesson typography ─── */
+  .lesson-content {
+    @apply max-w-[680px] text-base leading-relaxed;
+  }
+
+  .lesson-content> :last-child {
+    @apply mb-0;
+  }
+
+  .lesson-content .lesson-heading {
+    @apply tracking-tight text-white;
+  }
+
+  .lesson-content .lesson-heading--hero {
+    @apply mb-5 mt-10 text-[28px] font-bold leading-tight;
+  }
+
+  .lesson-content .lesson-heading--section {
+    @apply mb-4 mt-8 text-[22px] font-semibold leading-snug;
+  }
+
+  .lesson-content .lesson-heading--subsection {
+    @apply mb-2 mt-6 text-lg font-semibold leading-snug;
+  }
+
+  .lesson-content .lesson-heading--minor {
+    @apply mb-1.5 mt-4 text-base font-medium leading-snug;
+  }
+
+  .lesson-content .lesson-heading-mark,
+  .lesson-content .lesson-list-item>strong:first-child,
+  .lesson-content .lesson-list-item>p:first-child>strong:first-child {
+    --lesson-marker-rgb: 254 240 138;
+    --lesson-marker-band-start: 14%;
+    --lesson-marker-band-end: 86%;
+    --lesson-marker-opacity: 0.38;
+    --lesson-marker-streak-angle: 176deg;
+    --lesson-marker-streak-width: 200px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    padding-inline: 0.24em;
+    padding-block: 0.08em 0.14em;
+    border-radius: 0;
+    background-image:
+      linear-gradient(180deg,
+        rgb(var(--lesson-marker-rgb) / 0) 0%,
+        rgb(var(--lesson-marker-rgb) / 0.12) var(--lesson-marker-band-start),
+        rgb(var(--lesson-marker-rgb) / var(--lesson-marker-opacity)) 35%,
+        rgb(var(--lesson-marker-rgb) / var(--lesson-marker-opacity)) 65%,
+        rgb(var(--lesson-marker-rgb) / 0.12) var(--lesson-marker-band-end),
+        rgb(var(--lesson-marker-rgb) / 0) 100%),
+      repeating-linear-gradient(var(--lesson-marker-streak-angle),
+        transparent 0 8px,
+        rgb(var(--lesson-marker-rgb) / 0.05) 8px 10px,
+        transparent 10px 18px);
+    background-size: 100% 100%, var(--lesson-marker-streak-width) 100%;
+    background-repeat: no-repeat, repeat-x;
+  }
+
+  .lesson-content .lesson-heading-mark {
+    @apply inline;
+    padding-inline: 0.26em;
+    padding-block: 0.10em 0.16em;
+  }
+
+  .lesson-content .lesson-heading--azure {
+    --lesson-marker-rgb: 191 219 254;
+  }
+
+  .lesson-content .lesson-heading--violet {
+    --lesson-marker-rgb: 249 168 212;
+  }
+
+  .lesson-content .lesson-heading--emerald {
+    --lesson-marker-rgb: 187 247 208;
+  }
+
+  .lesson-content .lesson-heading--amber {
+    --lesson-marker-rgb: 254 240 138;
+  }
+
+  /* Variant classes — different ink band positions and streak angles */
+  .lesson-content .lesson-marker-variant-a {
+    --lesson-marker-band-start: 14%;
+    --lesson-marker-band-end: 86%;
+    --lesson-marker-streak-angle: 176deg;
+    --lesson-marker-streak-width: 214px;
+  }
+
+  .lesson-content .lesson-marker-variant-b {
+    --lesson-marker-band-start: 18%;
+    --lesson-marker-band-end: 84%;
+    --lesson-marker-streak-angle: 173deg;
+    --lesson-marker-streak-width: 196px;
+  }
+
+  .lesson-content .lesson-marker-variant-c {
+    --lesson-marker-band-start: 11%;
+    --lesson-marker-band-end: 89%;
+    --lesson-marker-streak-angle: 179deg;
+    --lesson-marker-streak-width: 232px;
+  }
+
+  .lesson-content .lesson-marker-variant-d {
+    --lesson-marker-band-start: 16%;
+    --lesson-marker-band-end: 82%;
+    --lesson-marker-streak-angle: 171deg;
+    --lesson-marker-streak-width: 206px;
+  }
+
+  /* SVG displacement filter per variant — creates natural rough edges */
+  .lesson-content .lesson-marker-variant-a.lesson-heading-mark,
+  .lesson-content .lesson-marker-variant-a.lesson-data-pill,
+  .lesson-content .lesson-marker-variant-a>strong:first-child,
+  .lesson-content .lesson-marker-variant-a>p:first-child>strong:first-child {
+    filter: url(#marker-rough-a);
+  }
+
+  .lesson-content .lesson-marker-variant-b.lesson-heading-mark,
+  .lesson-content .lesson-marker-variant-b.lesson-data-pill,
+  .lesson-content .lesson-marker-variant-b>strong:first-child,
+  .lesson-content .lesson-marker-variant-b>p:first-child>strong:first-child {
+    filter: url(#marker-rough-b);
+  }
+
+  .lesson-content .lesson-marker-variant-c.lesson-heading-mark,
+  .lesson-content .lesson-marker-variant-c.lesson-data-pill,
+  .lesson-content .lesson-marker-variant-c>strong:first-child,
+  .lesson-content .lesson-marker-variant-c>p:first-child>strong:first-child {
+    filter: url(#marker-rough-c);
+  }
+
+  .lesson-content .lesson-marker-variant-d.lesson-heading-mark,
+  .lesson-content .lesson-marker-variant-d.lesson-data-pill,
+  .lesson-content .lesson-marker-variant-d>strong:first-child,
+  .lesson-content .lesson-marker-variant-d>p:first-child>strong:first-child {
+    filter: url(#marker-rough-d);
+  }
+
+  .lesson-content p {
+    @apply mb-4 text-white/80 leading-[1.8];
+  }
+
+  .lesson-content strong {
+    @apply font-semibold text-white;
+  }
+
+  .lesson-content em {
+    @apply italic text-violet-100/75;
+  }
+
+  .lesson-content .lesson-inline-emphasis {
+    @apply italic text-violet-100/75;
+  }
+
+  .lesson-content hr {
+    @apply border-white/[0.06] my-6;
+  }
+
+  .lesson-content a {
+    @apply text-blue-400/80 hover:text-blue-300 underline underline-offset-2 transition-colors;
+  }
+
+  .lesson-content code:not(pre code) {
+    @apply px-1.5 py-0.5 rounded bg-white/[0.08] text-[13px] font-[family-name:var(--font-geist-mono)] text-white/90 border border-white/[0.06];
+  }
+
+  .lesson-content pre {
+    @apply bg-[#0D0D0D] border border-white/[0.06] rounded-xl p-4 overflow-x-auto text-[13px] font-[family-name:var(--font-geist-mono)] text-white/80 my-4;
+  }
+
+  .lesson-content .lesson-list {
+    @apply my-4 space-y-2;
+  }
+
+  .lesson-content ul {
+    @apply list-disc;
+  }
+
+  .lesson-content ol {
+    @apply list-decimal;
+  }
+
+  .lesson-content li {
+    @apply pl-1 text-white/80 leading-[1.75];
+  }
+
+  .lesson-content .lesson-list-item>p:first-child {
+    @apply mb-0;
+  }
+
+  .lesson-content li::marker {
+    color: rgb(52 211 153 / 0.6);
+  }
+
+  .lesson-content ol li::marker {
+    color: rgb(52 211 153 / 0.6);
+    font-family: var(--font-geist-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .lesson-content blockquote {
+    @apply border-l-2 border-emerald-500/30 pl-4 my-4 text-white/70 italic;
+  }
+
+  /* Tables */
+  .lesson-content table {
+    @apply my-4 w-full border-collapse text-sm;
+  }
+
+  .lesson-content thead th {
+    @apply border-b border-white/10 pb-2 text-left text-xs font-[family-name:var(--font-geist-mono)] font-medium uppercase tracking-wider text-white/50;
+  }
+
+  .lesson-content tbody td {
+    @apply border-b border-white/[0.05] py-2.5 pr-4 text-white/75;
+  }
+
+  .lesson-content tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .lesson-parenthetical {
+    @apply font-[family-name:var(--font-geist-mono)] italic text-white/65;
+    letter-spacing: 0.01em;
+  }
+
+  .lesson-data-pill {
+    --lesson-marker-rgb: 254 240 138;
+    --lesson-marker-opacity: 0.22;
+    @apply px-[0.18em] py-[0.02em] align-baseline font-medium text-white/88 transition-colors duration-150;
+    font-variant-numeric: tabular-nums;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    border-radius: 0;
+    background-image:
+      linear-gradient(180deg,
+        rgb(var(--lesson-marker-rgb) / 0) 0%,
+        rgb(var(--lesson-marker-rgb) / 0.06) var(--lesson-marker-band-start, 16%),
+        rgb(var(--lesson-marker-rgb) / var(--lesson-marker-opacity)) 35%,
+        rgb(var(--lesson-marker-rgb) / var(--lesson-marker-opacity)) 65%,
+        rgb(var(--lesson-marker-rgb) / 0.06) var(--lesson-marker-band-end, 84%),
+        rgb(var(--lesson-marker-rgb) / 0) 100%),
+      repeating-linear-gradient(var(--lesson-marker-streak-angle, 176deg),
+        transparent 0 7px,
+        rgb(var(--lesson-marker-rgb) / 0.03) 7px 9px,
+        transparent 9px 16px);
+    background-size: 100% 100%, var(--lesson-marker-streak-width, 180px) 100%;
+    background-repeat: no-repeat, repeat-x;
+  }
+
+  .lesson-data-pill:hover {
+    @apply text-white;
+  }
+
+  .lesson-data-pill--number {
+    --lesson-marker-rgb: 254 240 138;
+  }
+
+  .lesson-data-pill--date {
+    --lesson-marker-rgb: 191 219 254;
+  }
+
+  .lesson-data-pill--price {
+    --lesson-marker-rgb: 187 247 208;
+  }
+
+  .lesson-focus-target {
+    transition: opacity 180ms ease, filter 180ms ease, transform 180ms ease;
+  }
+
+  .lesson-focus-target--active {
+    opacity: 1;
+    filter: saturate(1.06);
+    transform: translateX(2px);
+  }
+
+  .lesson-focus-target--inactive {
+    opacity: 0.42;
+    filter: saturate(0.78);
+  }
+
+  /* Eyebrow label above h2 */
+  .lesson-eyebrow {
+    @apply text-[10px] font-[family-name:var(--font-geist-mono)] font-medium uppercase tracking-[0.2em] text-white/30 mb-1;
+  }
+
+  /* Bento callout box */
+  .lesson-callout {
+    @apply border border-white/[0.08] bg-white/[0.02] rounded-xl px-5 py-4 my-5;
+  }
+
+  .lesson-callout>p:last-child {
+    @apply mb-0;
+  }
+
+  /* Kbd tag */
+  .lesson-content kbd {
+    @apply inline-block px-1.5 py-0.5 text-[11px] font-[family-name:var(--font-geist-mono)] bg-white/[0.08] border border-white/[0.12] rounded text-white/70 shadow-[0_1px_0_0_#ffffff0f];
+  }
+
+  /* ─── Clarification thread markdown ─── */
+  .clarification-markdown {
+    @apply text-sm leading-relaxed;
+  }
+
+  .clarification-markdown p {
+    @apply mb-2 last:mb-0 text-white/70;
+  }
+
+  .clarification-markdown strong {
+    @apply font-semibold text-white/90;
+  }
+
+  .clarification-markdown em {
+    @apply italic text-white/60;
+  }
+
+  .clarification-markdown ul {
+    @apply list-disc pl-5 my-2 space-y-1;
+  }
+
+  .clarification-markdown ol {
+    @apply list-decimal pl-5 my-2 space-y-1;
+  }
+
+  .clarification-markdown li {
+    @apply text-white/70;
+  }
+
+  .clarification-markdown li::marker {
+    color: rgb(52 211 153 / 0.5);
+  }
+
+  .clarification-markdown code:not(pre code) {
+    @apply px-1 py-0.5 rounded bg-white/[0.06] text-[12px] font-[family-name:var(--font-geist-mono)] text-white/80;
+  }
+
+  .clarification-markdown pre {
+    @apply bg-black/40 border border-white/[0.04] rounded-lg p-3 overflow-x-auto text-[12px] font-[family-name:var(--font-geist-mono)] text-white/75 my-2;
+  }
+
+  .clarification-markdown blockquote {
+    @apply border-l-2 border-white/10 pl-3 my-2 text-white/50 italic;
+  }
+
+  .clarification-markdown a {
+    @apply text-emerald-400/80 hover:text-emerald-300 underline underline-offset-2 transition-colors;
+  }
+
+  .clarification-markdown h1,
+  .clarification-markdown h2,
+  .clarification-markdown h3,
+  .clarification-markdown h4 {
+    @apply font-semibold text-white/90 mt-3 mb-1;
   }
 }

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { resolveAiProvider, defaultGeminiProvider, type AiProvider } from "../../../../server/ai";
-import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+import { GoogleGenAI } from "@google/genai";
+import { api } from "../../../../../convex/_generated/api";
 import {
     captureAiGenerationEvent,
     createAiTraceId,
@@ -12,6 +12,19 @@ import {
     logError,
     logInfo,
 } from "../../../../lib/otlpLogger";
+import { renderPrompt } from "../../../../../convex/coursePrompts";
+import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
+
+let aiInstance: GoogleGenAI | null = null;
+function getGoogleAI() {
+    if (!aiInstance) {
+        if (!process.env.GOOGLE_GEMINI_API_KEY) {
+            throw new Error("Missing API Key");
+        }
+        aiInstance = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
+    }
+    return aiInstance;
+}
 
 function normalizeTitle(raw: string): string {
     return raw
@@ -56,32 +69,29 @@ export async function POST(req: NextRequest) {
 
     const fallbackTitle = fallbackTitleFromContent(content);
 
-    // Route through the AI middleware: honour the user's provider preference
-    // when we can identify them, else fall back to the default Gemini provider.
-    let provider: AiProvider;
-    try {
-        if (userId && getToken) {
-            const convex = await createAuthedConvexClient(getToken, "api.knowledge.title");
-            provider = await resolveAiProvider(convex, userId);
-        } else {
-            provider = defaultGeminiProvider();
-        }
-    } catch {
-        provider = defaultGeminiProvider();
-    }
-
-    if (provider.config.kind === "gemini" && !process.env.GOOGLE_GEMINI_API_KEY) {
+    if (!process.env.GOOGLE_GEMINI_API_KEY) {
         return new Response(JSON.stringify({ title: fallbackTitle }));
     }
 
-    const modelCandidates =
-        provider.config.kind === "gemini"
-            ? (["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"] as const)
-            : ([provider.config.model] as const);
+    const modelCandidates = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+    ] as const;
 
     try {
+        const ai = getGoogleAI();
         const aiTraceId = createAiTraceId();
-        const titlePrompt = `Generate a concise title (2-5 words, no quotes) for this knowledge note.\n\n${content.slice(0, 2000)}`;
+
+        // Try to fetch prompt from DB, fall back to inline if no convex client
+        let titlePrompt: string;
+        try {
+            const convex = await createAuthedConvexClient(getToken, "api.knowledge.title");
+            const promptDoc = await convex.query(api.coursePrompts.getPrompt, { name: "knowledge_title_generator" });
+            titlePrompt = renderPrompt(promptDoc.content, { content: content.slice(0, 2000) });
+        } catch {
+            titlePrompt = `Generate a concise title (2-5 words, no quotes) for this knowledge note.\n\n${content.slice(0, 2000)}`;
+        }
 
         for (const model of modelCandidates) {
             try {
@@ -90,24 +100,26 @@ export async function POST(req: NextRequest) {
                     requestId,
                     route: "/api/knowledge/title",
                     userId: userId ?? undefined,
-                    ai_provider: provider.config.label,
+                    ai_provider: "google",
                     ai_model: model,
                 });
                 const startedAt = Date.now();
-                const result = await provider.generate({
-                    prompt: titlePrompt,
+                const result = await ai.models.generateContent({
                     model,
-                    maxOutputTokens: 20,
-                    temperature: 0.2,
+                    contents: titlePrompt,
+                    config: {
+                        maxOutputTokens: 20,
+                        temperature: 0.2,
+                    },
                 });
                 if (userId) {
                     captureAiGenerationEvent({
                         distinctId: userId,
                         traceId: aiTraceId,
-                        provider: provider.config.label,
+                        provider: "google",
                         model,
                         input: [{ role: "user", content: titlePrompt }],
-                        response: result.raw,
+                        response: result,
                         latencySeconds: (Date.now() - startedAt) / 1000,
                     });
                 }
@@ -116,7 +128,7 @@ export async function POST(req: NextRequest) {
                     requestId,
                     route: "/api/knowledge/title",
                     userId: userId ?? undefined,
-                    ai_provider: provider.config.label,
+                    ai_provider: "google",
                     ai_model: model,
                     duration_ms: Date.now() - startedAt,
                 });

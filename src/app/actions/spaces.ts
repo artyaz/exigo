@@ -3,7 +3,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
-import { getTestLimit } from "../../lib/testLimits";
 import { createAuthedConvexClient } from "../../lib/convexClientAuth";
 import { getErrorAttributes, logError, logInfo } from "../../lib/otlpLogger";
 
@@ -71,18 +70,9 @@ export async function createTestServerAction(args: {
     topicTitle: string;
     knowledgePieceId?: string;
 }): Promise<ActionResult<Id<"tests">>> {
-    const { userId, has, getToken } = await auth();
+    const { userId, getToken } = await auth();
     if (!userId) {
         return { ok: false, error: "Unauthorized", code: "UNAUTHORIZED" };
-    }
-
-    const maxTests = getTestLimit(has);
-    if (maxTests === 0) {
-        return {
-            ok: false,
-            error: "Test generation is locked on your current plan. Please upgrade to continue.",
-            code: "PLAN_LIMIT",
-        };
     }
 
     try {

@@ -47,3 +47,40 @@ export async function bulkImportKnowledgeAction(spaceId: string, pieces: { title
 
     return ids;
 }
+
+export async function queueFeelsHardNodeAction(
+    lessonId: string,
+    content: string,
+) {
+    const { userId, getToken } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    const convex = await createAuthedConvexClient(getToken, "actions.knowledge.queueFeelsHardNodeAction");
+    await convex.mutation(api.courseLessons.addPendingFeelsHard, {
+        lessonId: lessonId as Id<"courseLessons">,
+        content,
+    });
+}
+
+export async function createFeelsHardNodeAction(
+    spaceId: string,
+    knowledgePieceId: string,
+    content: string,
+) {
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+        throw new Error("Unauthorized: Please sign in.");
+    }
+
+    const convex = await createAuthedConvexClient(getToken, "actions.knowledge.createFeelsHardNodeAction");
+
+    const nodeId = await convex.mutation(api.knowledgeNodes.create, {
+        spaceId: spaceId as Id<"spaces">,
+        knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">,
+        type: "feels_hard",
+        content,
+    });
+
+    return nodeId;
+}
