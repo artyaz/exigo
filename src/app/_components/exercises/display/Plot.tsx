@@ -77,8 +77,8 @@ export function Plot({
   // (series + ghost + cursor) so nothing ever clips.
   const allX: number[] = [];
   const allY: number[] = [];
-  for (const s of series) for (const [x, y] of s.pts) (allX.push(x), allY.push(y));
-  for (const [x, y] of targetPts) (allX.push(x), allY.push(y));
+  for (const s of series) for (const [x, y] of s.pts) { allX.push(x); allY.push(y); }
+  for (const [x, y] of targetPts) { allX.push(x); allY.push(y); }
   if (cx != null) allX.push(cx);
   if (cy != null) allY.push(cy);
   const hasBar = series.some((s) => s.spec.style === "bar") || layer.target?.style === "bar";

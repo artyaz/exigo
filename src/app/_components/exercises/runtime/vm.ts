@@ -139,8 +139,7 @@ export class ReactiveVM {
   }
 
   private dispatchInternal(event: RuntimeEvent, depth: number): VMSnapshot {
-    for (let i = 0; i < this.reactionAst.length; i++) {
-      const reaction = this.reactionAst[i]!;
+    for (const reaction of this.reactionAst) {
       if (reaction.on !== event.type) continue;
       const whenEnv = makeEnv(this.state, this.bindings, event.payload);
       if (reaction.when && !truthy(evaluate(reaction.when, whenEnv))) continue;

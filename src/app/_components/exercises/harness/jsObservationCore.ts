@@ -141,8 +141,8 @@ export function runObservationsSync(source: string): ObservationRun {
       kind: "alloc",
       id: String(id),
       size: typeof size === "number" ? size : 1,
-      region: region === undefined ? "" : String(region),
-      label: label === undefined ? String(id) : String(label),
+      region: region === undefined ? "" : String(region as string),
+      label: label === undefined ? String(id) : String(label as string),
     });
   };
   const write = (id: unknown, value?: unknown): void => {
@@ -169,9 +169,9 @@ export function runObservationsSync(source: string): ObservationRun {
   const args = [...BLOCKED_GLOBALS.map(() => undefined), ...Object.values(probes)];
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const fn = new Function(...params, `"use strict";\n${source}\n`);
-    fn(...args);
+    (fn as (...a: unknown[]) => unknown)(...args);
     return { ok: true, error: null, observations, log };
   } catch (e) {
     if (e instanceof ObsLimit) {

@@ -70,8 +70,8 @@ export const HELPERS: Record<string, Helper> = {
     throw new ExprError("len: expected string or array.");
   },
   concat: (a) => a.map(toDisplay).join(""),
-  upper: (a) => String(a[0]).toUpperCase(),
-  lower: (a) => String(a[0]).toLowerCase(),
+  upper: (a) => String(a[0] as string).toUpperCase(),
+  lower: (a) => String(a[0] as string).toLowerCase(),
 
   /* ── arrays ── */
   range: (a) => {
@@ -115,7 +115,7 @@ export const HELPERS: Record<string, Helper> = {
   // are in bucket X" / "how many answered Y" for classification exercises.
   countWhere: (a) => {
     const list = arr(a[0]!, "countWhere");
-    const key = String(a[1]!);
+    const key = String(a[1] as string | number);
     const value = a[2]!;
     return list.filter((r) => r != null && typeof r === "object" && !Array.isArray(r) && (r as Record<string, unknown>)[key] === value).length;
   },
@@ -123,8 +123,8 @@ export const HELPERS: Record<string, Helper> = {
   // "placed", "correct") scores a classification without a fold.
   countMatch: (a) => {
     const list = arr(a[0]!, "countMatch");
-    const keyA = String(a[1]!);
-    const keyB = String(a[2]!);
+    const keyA = String(a[1] as string | number);
+    const keyB = String(a[2] as string | number);
     return list.filter((r) => {
       if (r == null || typeof r !== "object" || Array.isArray(r)) return false;
       const rec = r as Record<string, unknown>;
@@ -143,7 +143,7 @@ export const HELPERS: Record<string, Helper> = {
      straight from observation fields, without a lambda or a coordinate. */
   record: (a) => {
     if (a.length % 2 !== 0) throw new ExprError("record: expects alternating key, value pairs.");
-    const out: { [k: string]: Value } = {};
+    const out: Record<string, Value> = {};
     for (let i = 0; i < a.length; i += 2) {
       const k = a[i]!;
       if (typeof k !== "string") throw new ExprError("record: keys must be strings.");
@@ -162,7 +162,7 @@ export const HELPERS: Record<string, Helper> = {
     if (i < 0 || i >= list.length) throw new ExprError("setField: index out of range.");
     const it = list[i];
     if (!it || typeof it !== "object" || Array.isArray(it)) throw new ExprError("setField: list[i] must be a record.");
-    list[i] = { ...(it as { [k: string]: Value }), [key]: a[3] ?? null };
+    list[i] = { ...(it as Record<string, Value>), [key]: a[3] ?? null };
     return list;
   },
 
@@ -173,22 +173,22 @@ export const HELPERS: Record<string, Helper> = {
      `.kind` selects them. Scalar comparison is strict (`===`). */
   obsCount: (a) => {
     const list = obsList(a[0]!, "obsCount");
-    const kind = String(a[1]);
+    const kind = String(a[1] as string | number);
     return list.filter((o) => o.kind === kind).length;
   },
   obsContains: (a) => {
     const list = obsList(a[0]!, "obsContains");
-    const kind = String(a[1]);
-    const field = String(a[2]);
+    const kind = String(a[1] as string | number);
+    const field = String(a[2] as string | number);
     const value = a[3] ?? null;
     return list.some((o) => o.kind === kind && o[field] === value);
   },
   /** True iff `kinds` appears as a contiguous run in the stream's kinds. */
   obsSeq: (a) => {
     const list = obsList(a[0]!, "obsSeq");
-    const pat = arr(a[1]!, "obsSeq").map((v) => String(v));
+    const pat = arr(a[1]!, "obsSeq").map((v) => String(v as string | number));
     if (pat.length === 0) return true;
-    const kinds = list.map((o) => String(o.kind));
+    const kinds = list.map((o) => String(o.kind as string | number));
     for (let i = 0; i + pat.length <= kinds.length; i++) {
       let hit = true;
       for (let j = 0; j < pat.length; j++) {
@@ -230,8 +230,8 @@ export const HELPERS: Record<string, Helper> = {
     const r = intArg(a[1]!, "gridSet");
     const c = intArg(a[2]!, "gridSet");
     const v = num(a[3]!, "gridSet");
-    if (!g[r] || c < 0 || c >= g[r]!.length) throw new ExprError("gridSet: out of range.");
-    g[r]![c] = v;
+    if (!g[r] || c < 0 || c >= g[r].length) throw new ExprError("gridSet: out of range.");
+    g[r][c] = v;
     return g;
   },
   transpose: (a) => {

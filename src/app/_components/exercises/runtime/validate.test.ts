@@ -15,25 +15,25 @@ describe("validateSpec (§11 non-negotiables)", () => {
   it("rejects lambdas in expressions", () => {
     const r = validateSpec({ ...base(), bindings: { f: "x => x" } });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /Lambda/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('Lambda'))).toBe(true);
   });
 
   it("rejects binding cycles", () => {
     const r = validateSpec({ ...base(), bindings: { a: "b", b: "a" } });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /Binding cycle/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('Binding cycle'))).toBe(true);
   });
 
   it("forbids time() inside a binding", () => {
     const r = validateSpec({ ...base(), bindings: { t: "time()" } });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /time\(\)/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('time()'))).toBe(true);
   });
 
   it("forbids bindings reading the event payload", () => {
     const r = validateSpec({ ...base(), bindings: { x: "event.now" } });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /event payload/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('event payload'))).toBe(true);
   });
 
   it("rejects a duplicate write in one reaction", () => {
@@ -42,13 +42,13 @@ describe("validateSpec (§11 non-negotiables)", () => {
       reactions: [{ on: "x", do: [{ set: "n", to: "1" }, { set: "n", to: "2" }] }],
     });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /writes "n" twice/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('writes "n" twice'))).toBe(true);
   });
 
   it("rejects assigning an unknown state key", () => {
     const r = validateSpec({ ...base(), reactions: [{ on: "x", do: [{ set: "ghost", to: "1" }] }] });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /unknown state key "ghost"/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('unknown state key "ghost"'))).toBe(true);
   });
 
   it("rejects a slider whose value is a constant (the thumb can't be dragged)", () => {
@@ -62,7 +62,7 @@ describe("validateSpec (§11 non-negotiables)", () => {
       ],
     });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /slider's `value` must reference/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('slider\'s `value` must reference'))).toBe(true);
   });
 
   it("accepts a slider whose value is bound to state", () => {
@@ -81,7 +81,7 @@ describe("validateSpec (§11 non-negotiables)", () => {
   it("rejects the canvasScene display layer", () => {
     const r = validateSpec({ ...base(), display: [{ type: "canvasScene" }] });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /canvasScene/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('canvasScene'))).toBe(true);
   });
 
   it("rejects a codeProbe editMode incompatible with its harness kind", () => {
@@ -98,7 +98,7 @@ describe("validateSpec (§11 non-negotiables)", () => {
       ],
     });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /incompatible/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('incompatible'))).toBe(true);
   });
 
   it("accepts a codeProbe with a compatible editMode", () => {
@@ -126,7 +126,7 @@ describe("validateSpec (§11 non-negotiables)", () => {
       display: [{ type: "numberLine", value: "ghost" }],
     });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /Unknown reference `ghost`/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('Unknown reference `ghost`'))).toBe(true);
   });
 
   it("accepts display expressions over state, bindings and eval", () => {
@@ -153,7 +153,7 @@ describe("validateSpec (§11 non-negotiables)", () => {
       ],
     });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /Unknown reference `nope`/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('Unknown reference `nope`'))).toBe(true);
   });
 
   it("rejects a choiceHole with no choices", () => {
@@ -170,7 +170,7 @@ describe("validateSpec (§11 non-negotiables)", () => {
       ],
     });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /at least one choice/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('at least one choice'))).toBe(true);
   });
 
   it("rejects editMode holes with no hole regions", () => {
@@ -187,7 +187,7 @@ describe("validateSpec (§11 non-negotiables)", () => {
       ],
     });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /requires at least one hole/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('requires at least one hole'))).toBe(true);
   });
 
   it("reports time() in a binding exactly once", () => {
@@ -198,7 +198,7 @@ describe("validateSpec (§11 non-negotiables)", () => {
   it("flags evaluator reading the display-only `eval` alias", () => {
     const r = validateSpec({ ...base(), evaluator: { ok: "eval.ok" } });
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /Unknown reference `eval`/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('Unknown reference `eval`'))).toBe(true);
   });
 });
 
@@ -244,7 +244,7 @@ describe("v4 observation layers + schema check", () => {
       }),
     );
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /Unknown reference `ghost`/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('Unknown reference `ghost`'))).toBe(true);
     expect(r.errors.some((e) => /playback.mode/.test(e.path))).toBe(true);
   });
 
@@ -267,7 +267,7 @@ describe("v4 observation layers + schema check", () => {
       }),
     );
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /event\.depht/.test(e.message) && /enter/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('event.depht') && e.message.includes('enter'))).toBe(true);
   });
 });
 
@@ -294,18 +294,18 @@ describe("structured surface + §12 graphical hard gate", () => {
   it("ERRORS when the stage is a text layer — text never carries an exercise", () => {
     const r = validateSpec(staged({ stage: { type: "richText", value: "lots of prose" } }));
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => e.path === "spec.stage.type" && /rich visual/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.path === "spec.stage.type" && e.message.includes('rich visual'))).toBe(true);
   });
 
   it("ERRORS on a blown text budget (3 readouts) and a non-text readout", () => {
     const badge = { type: "stateBadge", label: "n", value: "len(blocks)" };
     const r = validateSpec(staged({ readouts: [badge, badge, badge] }));
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /Text budget/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('Text budget'))).toBe(true);
 
     const r2 = validateSpec(staged({ readouts: [{ type: "graph", nodes: "blocks" }] }));
     expect(r2.ok).toBe(false);
-    expect(r2.errors.some((e) => /quiet text layers/.test(e.message))).toBe(true);
+    expect(r2.errors.some((e) => e.message.includes('quiet text layers'))).toBe(true);
   });
 
   it("ERRORS when prompt or criticalThinking is missing", () => {
@@ -318,13 +318,13 @@ describe("structured surface + §12 graphical hard gate", () => {
   it("ERRORS when both stage and raw display[] are declared", () => {
     const r = validateSpec(staged({ display: [{ type: "stateBadge", label: "n", value: "len(blocks)" }] }));
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /not both/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('not both'))).toBe(true);
   });
 
   it("validates expressions inside structured fields with their own paths", () => {
     const r = validateSpec(staged({ stage: { type: "arena", regions: [{ id: "buf" }], blocks: "ghost" } }));
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => e.path.startsWith("spec.stage") && /Unknown reference `ghost`/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.path.startsWith("spec.stage") && e.message.includes('Unknown reference `ghost`'))).toBe(true);
   });
 
   it("checks showWhen as a display expression", () => {
@@ -332,7 +332,7 @@ describe("structured surface + §12 graphical hard gate", () => {
       staged({ readouts: [{ type: "richText", value: "after", showWhen: "ghost" }] }),
     );
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /showWhen/.test(e.path))).toBe(true);
+    expect(r.errors.some((e) => e.path.includes('showWhen'))).toBe(true);
   });
 
   it("warns (visualDensity), without rejecting, on a text-primary legacy display", () => {
@@ -346,9 +346,9 @@ describe("structured surface + §12 graphical hard gate", () => {
       ],
     });
     expect(r.ok).toBe(true);
-    expect(r.warnings.some((w) => /no rich visual/.test(w))).toBe(true);
-    expect(r.warnings.some((w) => /text is the primary display/.test(w))).toBe(true);
-    expect(r.warnings.some((w) => /3 text layers/.test(w))).toBe(true);
+    expect(r.warnings.some((w) => w.includes('no rich visual'))).toBe(true);
+    expect(r.warnings.some((w) => w.includes('text is the primary display'))).toBe(true);
+    expect(r.warnings.some((w) => w.includes('3 text layers'))).toBe(true);
   });
 
   it("ERRORS on a free-text codeProbe with nothing editable", () => {
@@ -364,6 +364,6 @@ describe("structured surface + §12 graphical hard gate", () => {
       }),
     );
     expect(r.ok).toBe(false);
-    expect(r.errors.some((e) => /editableText/.test(e.message))).toBe(true);
+    expect(r.errors.some((e) => e.message.includes('editableText'))).toBe(true);
   });
 });

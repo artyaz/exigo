@@ -26,8 +26,8 @@ function itemRecord(it: Value): Record<string, Value> | null {
 }
 function itemLabel(it: Value): string {
   const o = itemRecord(it);
-  if (o) return String(o.label ?? o.id ?? "");
-  return it == null ? "" : String(it);
+  if (o) return String((o.label ?? o.id ?? "") as string | number);
+  return it == null ? "" : String(it as string | number);
 }
 function itemTone(it: Value): ToneToken | undefined {
   const o = itemRecord(it);

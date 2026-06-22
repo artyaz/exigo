@@ -81,9 +81,9 @@ export function runJs(source: string): RunResult {
   const args = [...BLOCKED_GLOBALS.map(() => undefined), sandboxConsole, traceFn, resultFn];
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
     const fn = new Function(...params, `"use strict";\n${source}\n`);
-    fn(...args);
+    (fn as (...a: unknown[]) => unknown)(...args);
     return { ok: true, log, trace, error: null, out };
   } catch (e) {
     const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);

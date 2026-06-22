@@ -125,7 +125,7 @@ export function CodeProbe({
               error: res.error,
               log: res.log as Value[],
               trace: res.trace as unknown as Value,
-              out: (res.out ?? {}) as Record<string, Value>,
+              out: (res.out ?? {}),
             },
             timestamp: Date.now(),
           });

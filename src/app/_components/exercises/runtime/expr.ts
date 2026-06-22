@@ -207,7 +207,7 @@ class Parser {
       if (this.isPunc(".")) {
         this.p++;
         const t = this.next();
-        if (!t || t.t !== "id") throw new ExprError("Expected property name after `.`.");
+        if (t?.t !== "id") throw new ExprError("Expected property name after `.`.");
         node = { k: "member", obj: node, prop: t.v };
       } else if (this.isPunc("[")) {
         this.p++;
@@ -269,7 +269,7 @@ class Parser {
 
 export function parse(src: string): Ast {
   // hard stop on lambda arrows before tokenising context is lost
-  if (/=>/.test(src)) throw new ExprError("Lambda expressions are not supported. Use a closed helper or a template.");
+  if (src.includes('=>')) throw new ExprError("Lambda expressions are not supported. Use a closed helper or a template.");
   return new Parser(lex(src)).parse();
 }
 
@@ -388,7 +388,7 @@ export function evaluate(ast: Ast, env: Env): Value {
         return idx >= 0 && idx < obj.length ? obj[idx]! : null;
       }
       if (obj && typeof obj === "object") {
-        const key = String(idx);
+        const key = String(idx as string | number);
         return key in obj ? obj[key]! : null;
       }
       return null;

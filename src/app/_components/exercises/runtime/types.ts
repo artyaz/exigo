@@ -226,8 +226,8 @@ export interface GraphEdge {
 export type GraphLayout = "tree" | "layered" | "stack" | "row" | "ring";
 
 type DisplayLayerBase =
-  | { type: "text"; value: Expr | string; tone?: ToneToken }
-  | { type: "richText"; value: Expr | string }
+  | { type: "text"; value: Expr  ; tone?: ToneToken }
+  | { type: "richText"; value: Expr   }
   | { type: "numberLine"; value: Expr; target?: Expr; min?: number; max?: number }
   | { type: "stateBadge"; value: Expr; label?: string; tone?: ToneToken }
   | { type: "cards"; items: Expr }

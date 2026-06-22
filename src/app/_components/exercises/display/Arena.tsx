@@ -27,15 +27,15 @@ function asBlocks(v: Value | undefined): Block[] {
   for (const it of v) {
     if (!it || typeof it !== "object" || Array.isArray(it)) continue;
     const o = it as Record<string, Value>;
-    const id = o.id != null ? String(o.id) : "";
-    const region = o.region != null ? String(o.region) : "";
+    const id = o.id != null ? String(o.id as string | number) : "";
+    const region = o.region != null ? String(o.region as string | number) : "";
     if (!region) continue;
     const size = typeof o.size === "number" && o.size > 0 ? o.size : 1;
     out.push({
       id,
       region,
       size,
-      label: o.label != null ? String(o.label) : undefined,
+      label: o.label != null ? String(o.label as string | number) : undefined,
       tone: typeof o.tone === "string" ? (o.tone as ToneToken) : undefined,
     });
   }
@@ -179,7 +179,7 @@ export function Arena({
                   const w = Math.max(7, Math.min(100, (b.size / cap) * 100));
                   // Blocks that escaped into the overflow target read as the
                   // violation they are — rose by default, no words needed.
-                  const escaped = layer.overflow != null && r.id === layer.overflow.to;
+                  const escaped = r.id === layer.overflow?.to;
                   return (
                     <div
                       key={b.id || i}

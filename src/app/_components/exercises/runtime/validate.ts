@@ -182,7 +182,7 @@ export function validateSpec(input: unknown): ValidationResult {
   }
 
   const stateKeys = new Set(Object.keys(input.state));
-  const bindings = isObj(input.bindings) ? (input.bindings as Record<string, unknown>) : {};
+  const bindings = isObj(input.bindings) ? (input.bindings) : {};
   const bindingKeys = new Set(Object.keys(bindings));
 
   // state/binding key collision (§3.3)
@@ -341,13 +341,13 @@ export function validateSpec(input: unknown): ValidationResult {
     const obsMatch = typeof r.on === "string" ? /^obs:(.+)$/.exec(r.on) : null;
     const kind = obsMatch?.[1];
     if (kind && obsSchema[kind]) {
-      const allowed = new Set([...Object.keys(obsSchema[kind]!.fields), "kind", "t"]);
+      const allowed = new Set([...Object.keys(obsSchema[kind].fields), "kind", "t"]);
       const checkObsFields = (src: unknown, sub: string): void => {
         for (const f of eventFieldReads(src)) {
           if (!allowed.has(f)) {
             errors.push({
               path: sub,
-              message: `Reaction on \`${r.on}\` reads \`event.${f}\`, which the \`${kind}\` observation does not emit. Available: ${[...allowed].join(", ")}.`,
+              message: `Reaction on \`${String(r.on)}\` reads \`event.${f}\`, which the \`${kind}\` observation does not emit. Available: ${[...allowed].join(", ")}.`,
             });
           }
         }
@@ -658,7 +658,7 @@ function validateCodeProbe(layer: Record<string, unknown>, path: string, errors:
     return;
   }
   const editMode = layer.editMode;
-  const compat = HARNESS_EDIT_COMPAT[harness.kind as HarnessKind] ?? [];
+  const compat = HARNESS_EDIT_COMPAT[harness.kind] ?? [];
   if (typeof editMode === "string" && !compat.includes(editMode as never)) {
     errors.push({
       path: `${path}.editMode`,

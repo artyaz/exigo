@@ -41,8 +41,8 @@ function asNodes(v: Value | undefined): GNode[] {
     const o = it as Record<string, Value>;
     if (o.id == null) continue;
     out.push({
-      id: String(o.id),
-      label: o.label != null ? String(o.label) : String(o.id),
+      id: String(o.id as string | number),
+      label: o.label != null ? String(o.label as string | number) : String(o.id as string | number),
       tone: typeof o.tone === "string" ? (o.tone as ToneToken) : undefined,
     });
   }
@@ -57,9 +57,9 @@ function asEdges(v: Value | undefined): GEdge[] {
     const o = it as Record<string, Value>;
     if (o.from == null || o.to == null) continue;
     out.push({
-      from: String(o.from),
-      to: String(o.to),
-      label: o.label != null ? String(o.label) : undefined,
+      from: String(o.from as string | number),
+      to: String(o.to as string | number),
+      label: o.label != null ? String(o.label as string | number) : undefined,
       tone: typeof o.tone === "string" ? (o.tone as ToneToken) : undefined,
       kind: o.kind === "link" ? "link" : "pointer",
     });
@@ -70,7 +70,9 @@ function asEdges(v: Value | undefined): GEdge[] {
 /** Longest-path rank from the roots; bounded passes survive stray cycles. */
 function rankNodes(nodes: GNode[], edges: GEdge[]): Map<string, number> {
   const rank = new Map<string, number>(nodes.map((n) => [n.id, 0]));
-  for (let pass = 0; pass < nodes.length; pass++) {
+  let pass = 0;
+  while (pass < nodes.length) {
+    pass++;
     let changed = false;
     for (const e of edges) {
       const rf = rank.get(e.from);
@@ -215,7 +217,7 @@ export function Graph({
     ? asEdges(
         (() => {
           try {
-            return run(layer.edges!, env);
+            return run(layer.edges, env);
           } catch {
             return [];
           }
