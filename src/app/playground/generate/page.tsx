@@ -13,6 +13,7 @@ import React from "react";
 import { ReactiveExercise, type ReactiveSpec } from "../../_components/exercises";
 import { OpenExercise } from "../../_components/exercises/open";
 import { EmbedExercise } from "../../_components/exercises/embed";
+import { Commentable } from "../../_components/exercises/comments/Commentable";
 
 interface OpenResult {
   provider?: string;
@@ -215,7 +216,7 @@ function OpenView({ r }: { r: OpenResult }): React.JSX.Element {
   );
 }
 
-function EmbedView({ r }: { r: EmbedResult }): React.JSX.Element {
+function EmbedView({ r, desc }: { r: EmbedResult; desc: string }): React.JSX.Element {
   if (r.error) {
     return (
       <div>
@@ -237,7 +238,13 @@ function EmbedView({ r }: { r: EmbedResult }): React.JSX.Element {
         <span className="gn__pill gn__pill--ok">free html</span>
       </div>
       {r.plan && <div className="gn__plan">{r.plan}</div>}
-      {r.html ? <EmbedExercise html={r.html} /> : <div className="gn__hint">No HTML was produced.</div>}
+      {r.html ? (
+        <Commentable html={r.html} source="embed" context={desc}>
+          <EmbedExercise html={r.html} />
+        </Commentable>
+      ) : (
+        <div className="gn__hint">No HTML was produced.</div>
+      )}
       {r.html && (
         <details>
           <summary>authored html</summary>
@@ -364,6 +371,9 @@ export default function GeneratePlayground(): React.JSX.Element {
           <a className="gn__tab" href="/playground/atlas" style={{ textDecoration: "none" }}>
             atlas ↗
           </a>
+          <a className="gn__tab" href="/playground/collection" style={{ textDecoration: "none" }}>
+            collection ↗
+          </a>
         </div>
       </div>
 
@@ -432,7 +442,7 @@ export default function GeneratePlayground(): React.JSX.Element {
         <div className="gn__pane">
           {mode === "embed" ? (
             embedResult ? (
-              <EmbedView r={embedResult} />
+              <EmbedView r={embedResult} desc={description} />
             ) : (
               <div className="gn__hint">Describe an exercise and press Describe &amp; build — the agent writes the whole thing in HTML.</div>
             )

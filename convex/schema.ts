@@ -259,4 +259,16 @@ export default defineSchema({
     keyIv: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
+  // Reviewer comments left on a generated exercise. Stores the exercise's own
+  // HTML (its "code") alongside the note + where it came from, so the playground
+  // collection can list and export commented exercises.
+  exerciseComments: defineTable({
+    userId: v.string(),
+    comment: v.string(),
+    html: v.string(),
+    source: v.string(), // "atlas" | "embed" | "lesson"
+    context: v.optional(v.string()), // science/subtopic/lesson title, or the brief
+    mechanic: v.optional(v.string()), // the brainstormed mechanic chosen, if any
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

@@ -5,6 +5,7 @@
    between paragraphs, each rendered live in the embed sandbox as it arrives. */
 import React from "react";
 import { EmbedExercise } from "../embed";
+import { Commentable } from "../comments/Commentable";
 import { renderInline } from "../shell/runtimeUi";
 import { ATLAS_DEFAULT, ATLAS_QUICK, type AtlasConfig, type AtlasEvent, type BuiltExercise, type Lesson, type Science, type Subtopic } from "./types";
 
@@ -299,19 +300,23 @@ function LessonView({ lesson, built }: { lesson: Lesson; built: Record<string, B
         Array.from({ length: Math.max(paras.length, lesson.exercises.length) }).map((_, i) => (
           <React.Fragment key={i}>
             {paras[i] ? <p className="atl__p">{renderInline(paras[i])}</p> : null}
-            {lesson.exercises[i] ? <ExerciseSlot built={built[lesson.exercises[i].id]} /> : null}
+            {lesson.exercises[i] ? (
+              <ExerciseSlot built={built[lesson.exercises[i].id]} desc={lesson.exercises[i].description} title={lesson.title} />
+            ) : null}
           </React.Fragment>
         ))}
     </div>
   );
 }
 
-function ExerciseSlot({ built }: { built?: BuiltExercise }): React.JSX.Element {
+function ExerciseSlot({ built, desc, title }: { built?: BuiltExercise; desc: string; title: string }): React.JSX.Element {
   if (!built) return <div className="atl__exwait">building exercise…</div>;
   if (built.error || !built.html) return <div className="atl__exerr">exercise failed: {built.error ?? "no html"}</div>;
   return (
     <div className="atl__ex">
-      <EmbedExercise html={built.html} />
+      <Commentable html={built.html} source="atlas" context={`${title} — ${desc}`} mechanic={built.chosen}>
+        <EmbedExercise html={built.html} />
+      </Commentable>
     </div>
   );
 }

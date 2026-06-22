@@ -156,6 +156,28 @@ unverified by me (auth wall).
 OPEN owner-gated items (do NOT touch blind): crossover slider lag (needs profile),
 graph row-width→tiny-text (needs visual call), project-wide eslint debt.
 
+## ⚑ MERGED develop-unified (2026-06-22) — Learn/lessons feature restored
+Owner asked "where are the lessons" — they were on develop-unified (=origin/
+develop), 60 commits / 90 files / +15.4k, NEVER merged to main; this branch was
+off main so never had them. Merged develop-unified INTO auto/exercise-ux (commit
+a889885). Disjoint areas → only 8 conflicts (convex schema/knowledgeNodes/
+testMessages + api/tests/* + api/knowledge/title + generated). Resolution: schema
+UNION (kept develop billing/usage/courses tables + preserved our userSettings AI
+table); took develop's canonical versions for the rest; regenerated convex
+codegen; npm install (react-markdown/remark-gfm/react-syntax-highlighter). tsc 0,
+274 tests pass. Spaces now has the "learn" tab (default). Integration branch
+merge/develop-into-exercise-ux kept as a safety ref. embed/atlas committed at
+34b9986 (before merge).
+
+## DONE (post-merge feature work):
+- Comment feature: convex exerciseComments table + convex/exerciseComments.ts
+  (add/list/remove); Commentable wrapper (right-click + hover 💬 chip → popover →
+  save) wired into atlas explorer + embed playground; /playground/collection page
+  (export-all JSON, per-item render/copy/delete). Links added to generate tabs.
+- Lesson exercises: /api/generate/lesson-exercises (content → 1-3 briefs → build
+  each via embed) + LessonPractice.tsx, inserted additively at lesson-complete in
+  the Learn course page (does not touch streaming/reveal). 274 tests, tsc 0.
+
 ## ⚑ ATLAS playground (2026-06-21) — parallel knowledge pyramid
 New feature alongside embed. src/app/_components/exercises/atlas/ + route
 api/generate/atlas (NDJSON stream) + page /playground/atlas.

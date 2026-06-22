@@ -21,6 +21,7 @@ import type * as courses from "../courses.js";
 import type * as crons from "../crons.js";
 import type * as debugPlan from "../debugPlan.js";
 import type * as deepDives from "../deepDives.js";
+import type * as exerciseComments from "../exerciseComments.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as knowledgeNodes from "../knowledgeNodes.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   debugPlan: typeof debugPlan;
   deepDives: typeof deepDives;
+  exerciseComments: typeof exerciseComments;
   health: typeof health;
   http: typeof http;
   knowledgeNodes: typeof knowledgeNodes;
