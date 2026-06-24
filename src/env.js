@@ -12,6 +12,8 @@ export const env = createEnv({
       .enum(["development", "test", "production"])
       .default("development"),
     GOOGLE_GEMINI_API_KEY: z.string().optional(),
+    GEMINI_MODEL: z.string().optional(),
+    AI_SETTINGS_SECRET: z.string().optional(),
     CONVEX_DEPLOYMENT: z.string().optional(),
     POSTHOG_PERSONAL_API_KEY: z.string().optional(),
     POSTHOG_PROJECT_ID: z.string().optional(),
@@ -46,6 +48,8 @@ export const env = createEnv({
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
     GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY,
+    GEMINI_MODEL: process.env.GEMINI_MODEL,
+    AI_SETTINGS_SECRET: process.env.AI_SETTINGS_SECRET,
     CONVEX_DEPLOYMENT: process.env.CONVEX_DEPLOYMENT,
     POSTHOG_PERSONAL_API_KEY: process.env.POSTHOG_PERSONAL_API_KEY,
     POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,

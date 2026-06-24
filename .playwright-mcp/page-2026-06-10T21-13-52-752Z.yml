@@ -1,0 +1,114 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Exigo Playground
+      - generic [ref=e5]: Reactive VM · live spec editor
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - button "Counter" [ref=e9] [cursor=pointer]
+          - button "Turing tape" [ref=e10] [cursor=pointer]
+          - button "Tick + scene" [ref=e11] [cursor=pointer]
+          - button "Code probe" [ref=e12] [cursor=pointer]
+          - button "Functions → curve" [ref=e13] [cursor=pointer]
+          - button "Recursion → stack" [ref=e14] [cursor=pointer]
+          - button "Recursion (observed)" [ref=e15] [cursor=pointer]
+          - button "Free editor (IDE)" [ref=e16] [cursor=pointer]
+          - button "pmr arena → spill" [ref=e17] [cursor=pointer]
+          - button "Cost curve → budget" [ref=e18] [cursor=pointer]
+          - button "Recursion → call tree" [ref=e19] [cursor=pointer]
+          - button "Sorting → bars" [ref=e20] [cursor=pointer]
+          - button "Binary search" [ref=e21] [cursor=pointer]
+        - textbox "spec editor" [ref=e22]: "{ \"type\": \"reactive\", \"accent\": \"violet\", \"prompt\": \"Each run charges `cost(n)` operations for inputs **n = 1…8**, plotting one point per n. The dashed line is your **time budget (48 ops)**. **Keep every point on or under the budget** — pick a complexity that scales.\", \"hook\": \"Declare a data model (`[n, cost]` points); the **plot** auto-fits the axes, picks tick steps, and draws your curve, the budget ghost, and the worst-case cursor. You never place a pixel.\", \"state\": { \"obs\": [], \"samples\": [], \"peak\": 0, \"budget\": [ [ 1, 48 ], [ 8, 48 ] ], \"runId\": 0 }, \"reactions\": [ { \"on\": \"ran\", \"do\": [ { \"set\": \"obs\", \"to\": \"event.observations\" }, { \"set\": \"samples\", \"to\": \"[]\" }, { \"set\": \"peak\", \"to\": \"0\" }, { \"set\": \"runId\", \"to\": \"runId + 1\" } ] }, { \"on\": \"obs:point\", \"allowSequentialWrite\": true, \"do\": [ { \"set\": \"samples\", \"to\": \"push(samples, record(\\\"x\\\", event.x, \\\"y\\\", event.y))\" }, { \"set\": \"peak\", \"to\": \"max(peak, event.y)\" } ] }, { \"on\": \"play:reset\", \"allowSequentialWrite\": true, \"do\": [ { \"set\": \"samples\", \"to\": \"[]\" }, { \"set\": \"peak\", \"to\": \"0\" } ] } ], \"evaluator\": { \"ok\": \"len(samples) >= 8 && peak <= 48\", \"msgOk\": \"Every point sits under the budget — this complexity scales.\", \"msgNo\": \"Some n blows the budget. A quadratic cost (n*n) explodes as n grows; choose a cost that grows linearly or slower.\", \"proximity\": \"1 - clamp((peak - 48) / 64, 0, 1)\" }, \"evaluatePolicy\": { \"onEvent\": true, \"onSubmit\": false }, \"criticalThinking\": \"Your cost fits at n ≤ 8. Roughly what's the largest n the same 48-op budget allows for n*n versus 6n — and which curve would you bet on at n = 1000?\", \"code\": { \"type\": \"codeProbe\", \"language\": \"javascript\", \"harness\": { \"id\": \"js-observation\" }, \"editMode\": \"multiRegionFreeText\", \"runMode\": \"manualRun\", \"event\": \"ran\", \"source\": [ { \"kind\": \"locked\", \"id\": \"head\", \"text\": \"// We charge cost(n) operations for n = 1..8 and plot each point.\\n// The dashed budget line sits at 48 ops — stay on or under it.\\n\" }, { \"kind\": \"editableText\", \"id\": \"cost\", \"maxChars\": 400, \"initial\": \"function cost(n) {\\n // How many ops does your algorithm do for input n?\\n return n * n; // quadratic — try a cheaper growth\\n}\\n\" }, { \"kind\": \"locked\", \"id\": \"runner\", \"text\": \"\\nfor (let n = 1; n <= 8; n++) {\\n emit(\\\"point\\\", { x: n, y: cost(n) });\\n}\\n\" } ] }, \"stage\": { \"type\": \"plot\", \"label\": \"cost(n) vs budget\", \"x\": { \"label\": \"input n\", \"min\": 0, \"max\": 8 }, \"y\": { \"label\": \"operations\", \"min\": 0 }, \"series\": [ { \"id\": \"cost\", \"points\": \"samples\", \"style\": \"area\", \"tone\": \"violet\", \"label\": \"your cost\" } ], \"target\": { \"id\": \"budget\", \"points\": \"budget\", \"style\": \"line\", \"tone\": \"no\", \"label\": \"budget\" }, \"cursor\": { \"x\": \"8\", \"y\": \"peak\", \"label\": \"peak\", \"tone\": \"no\" } }, \"readouts\": [ { \"type\": \"stateBadge\", \"label\": \"peak cost\", \"value\": \"concat(peak, \\\" ops\\\")\" } ], \"player\": { \"type\": \"observationPlayer\", \"source\": \"obs\", \"version\": \"runId\", \"label\": \"samples\", \"playback\": { \"mode\": \"auto\", \"fps\": 4 } } }"
+        - generic [ref=e23]: valid spec
+      - generic [ref=e167]:
+        - generic [ref=e168]:
+          - generic [ref=e169]: Try it
+          - generic [ref=e170]: reactive
+          - generic [ref=e171]:
+            - img [ref=e172]
+            - text: 0 in a row
+        - generic [ref=e174]:
+          - img [ref=e175]
+          - generic [ref=e177]: "Declare a data model (`[n, cost]` points); the **plot** auto-fits the axes, picks tick steps, and draws your curve, the budget ghost, and the worst-case cursor. You never place a pixel."
+        - generic [ref=e178]: "Each run charges `cost(n)` operations for inputs **n = 1…8**, plotting one point per n. The dashed line is your **time budget (48 ops)**. **Keep every point on or under the budget** — pick a complexity that scales."
+        - generic [ref=e179]:
+          - generic [ref=e180]:
+            - generic [ref=e181]:
+              - generic [ref=e182]:
+                - generic [ref=e183]: source
+                - generic [ref=e184]: javascript
+              - generic [ref=e185]:
+                - generic [ref=e187]: // We charge cost(n) operations for n = 1..8 and plot each point. // The dashed budget line sits at 48 ops — stay on or under it.
+                - generic [ref=e188]:
+                  - generic [ref=e189]:
+                    - generic:
+                      - generic: "function cost(n) { // How many ops does your algorithm do for input n? return n * n; // quadratic — try a cheaper growth}"
+                    - textbox "code editor" [ref=e190]: "function cost(n) { // How many ops does your algorithm do for input n? return n * n; // quadratic — try a cheaper growth }"
+                  - generic: javascript
+                - generic [ref=e192]: "for (let n = 1; n <= 8; n++) { emit(\"point\", { x: n, y: cost(n) }); }"
+            - button "Run" [ref=e194] [cursor=pointer]:
+              - img [ref=e196]
+              - text: Run
+            - generic [ref=e230]:
+              - generic [ref=e231]:
+                - generic [ref=e232]: point
+                - generic [ref=e234]: x=1 y=1
+              - generic [ref=e235]:
+                - generic [ref=e236]: point
+                - generic [ref=e238]: x=2 y=4
+              - generic [ref=e239]:
+                - generic [ref=e240]: point
+                - generic [ref=e242]: x=3 y=9
+              - generic [ref=e243]:
+                - generic [ref=e244]: point
+                - generic [ref=e246]: x=4 y=16
+              - generic [ref=e247]:
+                - generic [ref=e248]: point
+                - generic [ref=e250]: x=5 y=25
+              - generic [ref=e251]:
+                - generic [ref=e252]: point
+                - generic [ref=e254]: x=6 y=36
+              - generic [ref=e255]:
+                - generic [ref=e256]: point
+                - generic [ref=e258]: x=7 y=49
+              - generic [ref=e259]:
+                - generic [ref=e260]: point
+                - generic [ref=e262]: x=8 y=64
+          - generic [ref=e198]:
+            - generic [ref=e199]: cost(n) vs budget
+            - img [ref=e200]:
+              - generic [ref=e202]: "0"
+              - generic [ref=e204]: "20"
+              - generic [ref=e206]: "40"
+              - generic [ref=e277]: "60"
+              - generic [ref=e207]: operations
+              - generic [ref=e208]: "0"
+              - generic [ref=e209]: "4"
+              - generic [ref=e210]: "8"
+              - generic [ref=e211]: input n
+              - generic [ref=e212]: your cost
+              - generic [ref=e266]: budget
+              - generic [ref=e216]: peak 64
+          - generic [ref=e217]:
+            - generic [ref=e218]: peak cost
+            - generic [ref=e219]: 64 ops
+          - generic [ref=e220]:
+            - generic [ref=e221]: samples
+            - generic [ref=e222]:
+              - button "to start" [ref=e267] [cursor=pointer]: ⏮
+              - button "step back" [ref=e268] [cursor=pointer]: ◀
+              - button "play" [ref=e278] [cursor=pointer]: ▶
+              - button "step forward" [disabled]: ▶
+              - button "to end" [disabled]: ⏭
+              - slider "scrub observations" [ref=e223]: "8"
+              - generic [ref=e224]: 8 / 8
+        - generic [ref=e225]:
+          - button "Reset" [ref=e226] [cursor=pointer]:
+            - img [ref=e227]
+          - status [ref=e272]:
+            - img [ref=e274]
+            - text: Some n blows the budget. A quadratic cost (n*n) explodes as n grows; choose a cost that grows linearly or slower.
+  - button "Open Next.js Dev Tools" [ref=e63] [cursor=pointer]:
+    - img [ref=e64]
+  - alert [ref=e67]

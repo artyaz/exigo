@@ -1,0 +1,31 @@
+[     168ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/d0fd8_next_dist_compiled_react-dom_371aacc7._.js:14537
+[     182ms] [WARNING] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview @ https://amusing-orca-68.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:18
+[     182ms] [WARNING] Clerk: The prop "afterSignInUrl" is deprecated and should be replaced with the new "fallbackRedirectUrl" or "forceRedirectUrl" props instead. Learn more: https://clerk.com/docs/guides/custom-redirects#redirect-url-props @ https://amusing-orca-68.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:18
+[  410245ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  410273ms] [LOG] [Fast Refresh] done in 54ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  430766ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  430797ms] [LOG] [Fast Refresh] done in 48ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  501928ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  501958ms] [LOG] [Fast Refresh] done in 38ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  570017ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  570048ms] [LOG] [Fast Refresh] done in 32ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  583123ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  583152ms] [LOG] [Fast Refresh] done in 32ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  589409ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  589437ms] [LOG] [Fast Refresh] done in 69ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  602696ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  602724ms] [LOG] [Fast Refresh] done in 39ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  617002ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  617031ms] [LOG] [Fast Refresh] done in 37ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  661476ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  661503ms] [LOG] [Fast Refresh] done in 40ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  724031ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  724062ms] [LOG] [Fast Refresh] done in 34ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  728613ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  728643ms] [LOG] [Fast Refresh] done in 31ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  732605ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  732636ms] [LOG] [Fast Refresh] done in 32ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  908900ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  908927ms] [LOG] [Fast Refresh] done in 43ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  913498ms] [LOG] [Fast Refresh] rebuilding @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0
+[  913525ms] [LOG] [Fast Refresh] done in 39ms @ https://eu-assets.i.posthog.com/static/posthog-recorder.js?v=1.356.1:0

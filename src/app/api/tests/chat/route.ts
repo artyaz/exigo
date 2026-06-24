@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await convex.action(api.testMessages.chat, {
+    const result = await convex.action(api.testMessagesActions.chat, {
       testId: parsedBody.testId as Id<"tests">,
       questionId: parsedBody.questionId as Id<"questions">,
       message: parsedBody.message,

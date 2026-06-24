@@ -1,0 +1,91 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Generate
+      - generic [ref=e5]: exercise constructor
+      - generic [ref=e6]:
+        - button "brief → exercise" [ref=e7] [cursor=pointer]
+        - button "topic → lesson" [ref=e8] [cursor=pointer]
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]:
+          - generic [ref=e12]: concept
+          - textbox [ref=e13]: A hard sale uses urgency and direct asks; a soft sale builds trust with open questions
+        - generic [ref=e14]:
+          - generic [ref=e15]: misconception
+          - textbox [ref=e16]: A friendly tone always means it's a soft sale
+        - generic [ref=e17]:
+          - generic [ref=e18]: archetype
+          - combobox [ref=e19]:
+            - option "auto"
+            - option "arena" [selected]
+            - option "plot"
+            - option "graph"
+        - generic [ref=e20]:
+          - generic [ref=e21]: data model
+          - textbox [ref=e22]: A list of sales pitches, each classified hard or soft; track how many are correct
+        - generic [ref=e23]:
+          - generic [ref=e24]: code intent
+          - textbox [ref=e25]
+        - generic [ref=e26]:
+          - generic [ref=e27]: goal
+          - textbox [ref=e28]: Every pitch is classified into the correct bucket
+        - generic [ref=e29]:
+          - generic [ref=e30]: critical thinking
+          - textbox [ref=e31]: When does a hard sale build trust rather than destroy it?
+        - button "Construct" [ref=e47] [cursor=pointer]
+        - generic [ref=e33]: The constructor emits markup, which is parsed + validated; on failure the exact errors feed a repair turn.
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]: openai
+          - generic [ref=e51]: antigravity_strong
+          - generic [ref=e52]: valid
+          - generic [ref=e53]: 2 attempts
+        - generic [ref=e54]:
+          - generic [ref=e55]:
+            - generic [ref=e56]: Try it
+            - generic [ref=e57]: reactive
+            - generic [ref=e58]:
+              - img [ref=e59]
+              - text: 0 in a row
+          - generic [ref=e61]: "Each pitch is either a **hard sale** (urgency, scarcity, direct asks) or a **soft sale** (open questions, rapport, trust-building). Sort every pitch into the correct bucket — but watch out: **a friendly tone doesn't automatically make it a soft sale**."
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - generic [ref=e64]: Sales pitch classifier
+              - generic [ref=e65]:
+                - generic [ref=e66]:
+                  - generic [ref=e67]:
+                    - generic [ref=e68]: hard sale
+                    - generic [ref=e69]: "0"
+                  - generic [ref=e71]: free
+                - generic [ref=e72]:
+                  - generic [ref=e73]:
+                    - generic [ref=e74]: soft sale
+                    - generic [ref=e75]: "0"
+                  - generic [ref=e77]: free
+            - generic [ref=e78]:
+              - generic [ref=e79]: Now classifying
+              - generic [ref=e80]: Act now — this offer expires in 24 hours!
+            - generic [ref=e81]:
+              - generic [ref=e82]: Correct
+              - generic [ref=e83]: 0 / 8
+            - generic [ref=e84]:
+              - button "Hard sale" [ref=e85] [cursor=pointer]
+              - button "Soft sale" [ref=e86] [cursor=pointer]
+          - generic [ref=e87]:
+            - button "Reset" [ref=e88] [cursor=pointer]:
+              - img [ref=e89]
+            - status
+        - generic [ref=e92]:
+          - generic [ref=e94]: attempt 1 · 1 error
+          - generic [ref=e95]:
+            - generic [ref=e96]: L8
+            - generic [ref=e97]: expected a tag or attribute name
+          - group [ref=e98]:
+            - generic "markup" [ref=e99] [cursor=pointer]
+        - generic [ref=e102]: attempt 2 · clean
+        - group [ref=e103]:
+          - generic "final markup" [ref=e104] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=e41] [cursor=pointer]:
+    - img [ref=e42]
+  - alert [ref=e45]
