@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const { userId, getToken } = await auth();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = (await req.json()) as { description?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { description?: unknown };
   const description = typeof body.description === "string" ? body.description.trim() : "";
   if (!description) {
     return Response.json({ error: "A non-empty `description` is required." }, { status: 400 });

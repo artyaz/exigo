@@ -11,7 +11,10 @@ const ALGO = "aes-256-gcm";
 function key(): Buffer {
   const secret = process.env.AI_SETTINGS_SECRET;
   if (!secret) throw new Error("AI_SETTINGS_SECRET is not set — cannot encrypt/decrypt custom API keys.");
-  // Accept any-length secret; derive a stable 32-byte key.
+  if (Buffer.byteLength(secret, "utf8") < 32) {
+    throw new Error("AI_SETTINGS_SECRET must be at least 32 bytes; generate it with crypto.randomBytes(32).");
+  }
+  // Derive a stable 32-byte key from the (sufficiently strong) secret.
   return createHash("sha256").update(secret).digest();
 }
 

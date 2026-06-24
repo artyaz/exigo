@@ -20,8 +20,8 @@ interface CommentRow {
 }
 
 export default function CollectionPage(): React.JSX.Element {
-  const { userId } = useAuth();
-  const rows = useQuery(api.exerciseComments.listForUser, userId ? { userId } : "skip") as CommentRow[] | undefined;
+  const { isSignedIn } = useAuth();
+  const rows = useQuery(api.exerciseComments.listForUser, isSignedIn ? {} : "skip") as CommentRow[] | undefined;
   const remove = useMutation(api.exerciseComments.remove);
 
   React.useEffect(() => {
@@ -62,7 +62,7 @@ export default function CollectionPage(): React.JSX.Element {
         </button>
       </div>
 
-      {!userId ? (
+      {!isSignedIn ? (
         <div className="coll__hint">Sign in to see your collection.</div>
       ) : rows === undefined ? (
         <div className="coll__hint">Loading…</div>
@@ -71,7 +71,7 @@ export default function CollectionPage(): React.JSX.Element {
       ) : (
         <div className="coll__list">
           {rows.map((r) => (
-            <Card key={r._id} row={r} onDelete={() => userId && void remove({ userId, id: r._id })} />
+            <Card key={r._id} row={r} onDelete={() => void remove({ id: r._id })} />
           ))}
         </div>
       )}

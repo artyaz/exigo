@@ -21,7 +21,7 @@ export function Commentable({
   mechanic?: string;
   children: React.ReactNode;
 }): React.JSX.Element {
-  const { userId } = useAuth();
+  const { isSignedIn } = useAuth();
   const add = useMutation(api.exerciseComments.add);
   const [at, setAt] = React.useState<{ x: number; y: number } | null>(null);
   const [text, setText] = React.useState("");
@@ -49,8 +49,8 @@ export function Commentable({
   };
 
   const save = async (): Promise<void> => {
-    if (!userId || !text.trim()) return;
-    await add({ userId, comment: text.trim(), html, source, context, mechanic });
+    if (!isSignedIn || !text.trim()) return;
+    await add({ comment: text.trim(), html, source, context, mechanic });
     setSaved(true);
     setTimeout(() => setAt(null), 850);
   };
@@ -92,8 +92,8 @@ export function Commentable({
                   }}
                 />
                 <div className="exg-cmt__row">
-                  <span className="exg-cmt__hint">⌘↵ to save{!userId ? " · sign in first" : ""}</span>
-                  <button type="button" className="exg-cmt__save" disabled={!userId || !text.trim()} onClick={() => void save()}>
+                  <span className="exg-cmt__hint">⌘↵ to save{!isSignedIn ? " · sign in first" : ""}</span>
+                  <button type="button" className="exg-cmt__save" disabled={!isSignedIn || !text.trim()} onClick={() => void save()}>
                     Save
                   </button>
                 </div>
