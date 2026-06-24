@@ -31,7 +31,7 @@ export function describeVocabulary(): string {
     ...lines,
     "",
     `Tones: ${TONES.join(", ")} ("no" = violations only).`,
-    `Expression helpers: ${[...HELPER_NAMES].sort().join(", ")}.`,
+    `Expression helpers: ${[...HELPER_NAMES].sort((a, b) => a.localeCompare(b)).join(", ")}.`,
     "In expressions write `and`/`or` (never `&&`/`||`) and build records with record(...), never { }.",
   ].join("\n");
 }

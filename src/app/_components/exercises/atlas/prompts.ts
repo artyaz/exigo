@@ -5,7 +5,7 @@ import { DESIGN_SYSTEM, STAGE_MANIFEST } from "../embed/runtime";
 import type { ExerciseSpec, Science, Subtopic } from "./types";
 
 let SEQ = 0;
-const uid = (prefix: string): string => `${prefix}-${(SEQ++).toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+const uid = (prefix: string): string => `${prefix}-${(SEQ++).toString(36)}-${crypto.randomUUID().slice(0, 5)}`;
 
 /** Pull the first JSON value out of a model reply (fenced or not). */
 export function extractJson<T>(raw: string): T {

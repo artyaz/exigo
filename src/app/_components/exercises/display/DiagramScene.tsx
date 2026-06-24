@@ -106,7 +106,7 @@ export function DiagramScene({ scene, env }: { scene: TokenizedSceneSpec; env: E
 
   return (
     <svg className="exg-scene" viewBox={`0 0 ${W} ${H}`} style={{ aspectRatio: `${W} / ${H}`, maxHeight: 320 }} role="img">
-      {scene.shapes.map(renderShape)}
+      {scene.shapes.map((shape, i) => renderShape(shape, i))}
     </svg>
   );
 }

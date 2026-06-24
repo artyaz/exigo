@@ -81,7 +81,7 @@ function checkExpr(src: unknown, path: string, opts: ExprCheck, errors: Validati
     if (!HELPER_NAMES.has(call)) {
       errors.push({
         path,
-        message: `Unknown helper \`${call}()\`. Closed helpers: ${[...HELPER_NAMES].sort().join(", ")}.`,
+        message: `Unknown helper \`${call}()\`. Closed helpers: ${[...HELPER_NAMES].sort((a, b) => a.localeCompare(b)).join(", ")}.`,
       });
     }
   }

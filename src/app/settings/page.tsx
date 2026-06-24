@@ -103,17 +103,35 @@ export default function SettingsPage(): React.JSX.Element {
           <>
             <div className="st__group">
               <span className="st__label">Provider</span>
-              <div className="st__radio">
+              <div className="st__radio" role="radiogroup" aria-label="Provider">
                 <div
                   className={`st__opt${provider === "gemini" ? " st__opt--on" : ""}`}
+                  role="radio"
+                  tabIndex={0}
+                  aria-checked={provider === "gemini"}
                   onClick={() => setProvider("gemini")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setProvider("gemini");
+                    }
+                  }}
                 >
                   <div className="st__opt-t">Default (Gemini)</div>
                   <div className="st__opt-d">Uses the app&apos;s Google key. No setup.</div>
                 </div>
                 <div
                   className={`st__opt${provider === "openai" ? " st__opt--on" : ""}`}
+                  role="radio"
+                  tabIndex={0}
+                  aria-checked={provider === "openai"}
                   onClick={() => setProvider("openai")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setProvider("openai");
+                    }
+                  }}
                 >
                   <div className="st__opt-t">Custom endpoint</div>
                   <div className="st__opt-d">Any OpenAI-compatible API (OpenAI, Together, Groq, local…).</div>
