@@ -27,6 +27,7 @@ export function LessonPractice({ content, title }: { content: string; title?: st
         body: JSON.stringify({ content, title }),
       });
       const data = (await res.json()) as { exercises?: BuiltEx[]; error?: string };
+      if (!res.ok || data.error) throw new Error(data.error ?? `Request failed (${res.status})`);
       setExercises(data.exercises ?? []);
       setState("done");
     } catch {

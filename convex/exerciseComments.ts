@@ -1,13 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getAuthedContext } from "./authDecorators";
 
-/* Reviewer comments on generated exercises. The Next.js client (which holds the
-   Clerk identity) passes `userId`, matching the convention used across this
-   app's Convex functions. */
+/* Reviewer comments on generated exercises. The authenticated user is derived
+   server-side from the Convex auth context — never trusted from the client. */
 
 export const add = mutation({
   args: {
-    userId: v.string(),
     comment: v.string(),
     html: v.string(),
     source: v.string(),
@@ -15,13 +14,15 @@ export const add = mutation({
     mechanic: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("exerciseComments", { ...args, createdAt: Date.now() });
+    const { userId } = await getAuthedContext(ctx);
+    return await ctx.db.insert("exerciseComments", { ...args, userId, createdAt: Date.now() });
   },
 });
 
 export const listForUser = query({
-  args: { userId: v.string() },
-  handler: async (ctx, { userId }) => {
+  args: {},
+  handler: async (ctx) => {
+    const { userId } = await getAuthedContext(ctx);
     return await ctx.db
       .query("exerciseComments")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -31,8 +32,9 @@ export const listForUser = query({
 });
 
 export const remove = mutation({
-  args: { userId: v.string(), id: v.id("exerciseComments") },
-  handler: async (ctx, { userId, id }) => {
+  args: { id: v.id("exerciseComments") },
+  handler: async (ctx, { id }) => {
+    const { userId } = await getAuthedContext(ctx);
     const row = await ctx.db.get(id);
     if (row?.userId === userId) await ctx.db.delete(id);
   },

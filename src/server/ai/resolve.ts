@@ -24,7 +24,7 @@ const getCipherRef = makeFunctionReference<"query", { userId: string }, CipherSe
   "userSettings:getCipher",
 );
 
-const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+const DEFAULT_GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
 
 /** The app default: Google Gemini with the server key. */
 export function defaultGeminiProvider(model?: string): AiProvider {

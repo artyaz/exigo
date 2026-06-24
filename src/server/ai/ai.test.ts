@@ -47,7 +47,7 @@ describe("OpenAI-compatible SSE parsing", () => {
 
 describe("custom-key encryption", () => {
   beforeAll(() => {
-    process.env.AI_SETTINGS_SECRET = "test-secret-value-for-aes-gcm";
+    process.env.AI_SETTINGS_SECRET = "test-secret-value-for-aes-gcm-at-least-32-bytes-long";
   });
 
   it("round-trips a secret", () => {

@@ -63,6 +63,15 @@ async function streamAtlas(config: AtlasConfig, onEvent: (e: AtlasEvent) => void
       }
     }
   }
+  // Flush a final event that arrived without a trailing newline.
+  const tail = buf.trim();
+  if (tail) {
+    try {
+      onEvent(JSON.parse(tail) as AtlasEvent);
+    } catch {
+      /* trailing partial — ignore */
+    }
+  }
 }
 
 export function AtlasExplorer(): React.JSX.Element {
