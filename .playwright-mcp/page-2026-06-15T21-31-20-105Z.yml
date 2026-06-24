@@ -1,9 +1,0 @@
-- generic [active] [ref=e1]:
-  - generic [ref=e2]:
-    - generic [ref=e3]:
-      - generic [ref=e4]: Settings
-      - generic [ref=e5]: AI provider
-    - generic [ref=e7]: Loading…
-  - button "Open Next.js Dev Tools" [ref=e13] [cursor=pointer]:
-    - img [ref=e14]
-  - alert [ref=e17]
