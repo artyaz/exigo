@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|--------|
-| **State** | in_progress (Wave 7 code done; Wave 6 PRs open; Wave 8 deferred backlog) |
-| **Branch** | `fix/wave7-product` (stacked on wave6 → develop) |
-| **Last updated** | 2026-07-18 (Wave 7 residual packs implemented + verified) |
+| **State** | paused (Waves 6–8 coded; PRs open through Wave 8) |
+| **Branch** | `fix/wave8-product` (stacked on wave7 → wave6 → develop) |
+| **Last updated** | 2026-07-18 (Wave 8 LessonPhase + geminiEnv) |
 | **Continues from** | Same calendar window as product work started 2026-07-17 (UTC/session) |
 | **RUN_ROOT** | `agents/cd-review/2026-07-18` |
 
@@ -25,7 +25,8 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | Ship | **done** | See PR list below |
 | Artifact reorg | **done** | Moved into this RUN_ROOT; LOOP.md polished |
 | Wave 6 residual | **PR open** | #77 develop, #78 main; P6-A–D |
-| Wave 7 residual | **code done / ship pending** | S-W7 audit 16 findings; P7-A–D; verify 280 tests |
+| Wave 7 residual | **PR open** | #79 develop, #80 main; P7-A–D |
+| Wave 8 residual | **code done / ship pending** | P8-A LessonPhase extract; P8-B geminiEnv; verify 280 |
 
 ## Done (chronological)
 
@@ -131,7 +132,18 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 **Verify:** `npm run check` green; `npm run test` **280** passed. See `audits/verify-wave7.md`.
 
-**Ship:** branch `fix/wave7-product` (includes wave6 commits until #77 merges).
+**Ship:** #79 → develop, #80 → main (open; stacked on wave6).
+
+### Wave 8 — readability residual
+
+| Pack | Outcome |
+|------|---------|
+| P8-A | `useFeelsHardMenu` + `LessonCompletePanel`; LessonPhase **566 → ~483** |
+| P8-B | Shared `getEnvGeminiClient` / `getEnvGeminiModel` on teach/clarify/tutor |
+
+**Verify:** check green; tests **280**. See `audits/verify-wave8.md`.
+
+**Ship:** branch `fix/wave8-product`.
 
 ### Artifact reorg (this step)
 
@@ -141,17 +153,18 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 ## In flight
 
-- Ship Wave 7 PR after Wave 6 merges (or stack).
-- Wave 8 candidates from S-W7 deferred list.
+- Merge stack: Wave 6 (#77/#78) → Wave 7 (#79/#80) → Wave 8 (to open).
+- Ops `syncPerksFromSsot` after Wave 6 deploy.
 
 ## Stopped at
 
-1. **Merge #77/#78 (Wave 6)** then open Wave 7 PR to develop/main.
-2. **Ops:** `seedPlans.syncPerksFromSsot` on Convex after Wave 6 deploys.
-3. **Wave 8 backlog** (next product wave under same RUN_ROOT unless user asks new date):
-   - Product Next routes → `resolveAiProvider` (F-W7-002, L)
-   - Tutor route split + optional dialect unify (F-W7-007/010)
-   - LessonPhase presentation extract (F-W7-009)
+1. **Merge PR stack** develop then main (wave6 → wave7 → wave8).
+2. **Ops:** `seedPlans.syncPerksFromSsot` on Convex after Wave 6 lands.
+3. **Wave 9 backlog** (same RUN_ROOT):
+   - Product Next → full `resolveAiProvider` / BYOK (F-W7-002, L)
+   - Tutor route module split + dialect unify (F-W7-007/010)
+   - courseAi further phase split (F-W7-008)
+   - LessonPhase section/checkpoint JSX if still >400 (P8-A residual)
    - `default_user` policy (F-W7-004)
    - ConvexError helpers (F-W7-012)
    - Tutor memory vector search (F-W7-013)
@@ -160,17 +173,17 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 | Priority | Item | Source | Status |
 |----------|------|--------|--------|
-| P1 | TTL / reclaim stuck generation lock | P5-C | **done** P6-A |
-| P1 | Teach/clarify sseClient regression | F-W7-001 | **done** P7-A |
+| P1 | TTL generation lock | P5-C | **done** P6-A |
+| P1 | Teach/clarify sseClient | F-W7-001 | **done** P7-A |
 | P1 | Identity-first spaces/tests | F-W7-003 | **done** P7-D |
-| P1 | Product Next → resolveAiProvider | F-W7-002 | Wave 8 |
+| P1 | Product Next → resolveAiProvider | F-W7-002 | Wave 9 |
 | P2 | Dead dual AI delete | F-W7-005/006 | **done** P7-B |
-| P2 | Secret fail-fast + shared assert | F-W7-014/015 | **done** P7-C |
-| P2 | Tutor god route / courseAi split | F-W7-007/008 | Wave 8 |
-| P2 | LessonPhase further split | F-W7-009 | Wave 8 |
-| P2 | Tutor SSE dialect unify | F-W7-010 | Wave 8 |
-| P2 | default_user tenancy policy | F-W7-004 | Wave 8 (product) |
-| P3 | CodeRabbit 100-file PR scope | ops | open |
+| P2 | Secret fail-fast | F-W7-014/015 | **done** P7-C |
+| P2 | Shared env Gemini helpers | F-W7-011 | **done** P8-B (partial) |
+| P2 | LessonPhase feels-hard + complete extract | F-W7-009 | **done** P8-A |
+| P2 | Tutor god route / dialect | F-W7-007/010 | Wave 9 |
+| P2 | default_user policy | F-W7-004 | Wave 9 (product) |
+| P3 | CodeRabbit PR scope | ops | open |
 
 ## Valuable notes
 
