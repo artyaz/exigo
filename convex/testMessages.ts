@@ -9,6 +9,7 @@ import {
 } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import { canReadSpace } from "./spaceAccess";
 
 async function getAuthenticatedUserId(
   ctx: QueryCtx | MutationCtx,
@@ -36,7 +37,7 @@ async function authorizeQuestionAccess(
   }
 
   const space = await ctx.db.get(test.spaceId);
-  if (!space || (space.userId !== userId && space.userId !== "default_user")) {
+  if (!space || (!canReadSpace(space, userId))) {
     throw new Error("Unauthorized access to this question");
   }
 
@@ -97,7 +98,7 @@ export const getQuestionDataForChat = internalQuery({
     const space = await ctx.db.get(test.spaceId);
     if (
       !space ||
-      (space.userId !== args.userId && space.userId !== "default_user")
+      (!canReadSpace(space, args.userId))
     ) {
       return null;
     }

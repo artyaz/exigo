@@ -6,6 +6,7 @@ import {
   query,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { canReadSpace } from "./spaceAccess";
 import {
   getAuthedContext,
   requireEducatorAccess,
@@ -31,7 +32,7 @@ export const create = mutation({
     const space = await ctx.db.get(args.spaceId);
     if (
       !space ||
-      (space.userId !== auth.userId && space.userId !== "default_user")
+      (!canReadSpace(space, auth.userId))
     ) {
       throw new Error("Unauthorized access to this space");
     }
@@ -71,7 +72,7 @@ export const resolve = mutation({
     const space = await ctx.db.get(node.spaceId);
     if (
       !space ||
-      (space.userId !== auth.userId && space.userId !== "default_user")
+      (!canReadSpace(space, auth.userId))
     ) {
       throw new Error("Unauthorized access to this knowledge node");
     }
@@ -107,7 +108,7 @@ export const getActiveForPiece = query({
     const space = await ctx.db.get(piece.spaceId);
     if (
       !space ||
-      (space.userId !== userId && space.userId !== "default_user")
+      (!canReadSpace(space, userId))
     ) {
       throw new Error("Unauthorized access to this knowledge piece");
     }
@@ -159,7 +160,7 @@ export const getActiveForSpace = query({
     const space = await ctx.db.get(args.spaceId);
     if (
       !space ||
-      (space.userId !== userId && space.userId !== "default_user")
+      (!canReadSpace(space, userId))
     ) {
       return [];
     }
@@ -195,7 +196,7 @@ export const getPieceDataInternal = internalQuery({
     const space = await ctx.db.get(piece.spaceId);
     if (
       !space ||
-      (space.userId !== args.userId && space.userId !== "default_user")
+      (!canReadSpace(space, args.userId))
     ) {
       return null;
     }
