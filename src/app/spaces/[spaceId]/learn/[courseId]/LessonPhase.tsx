@@ -147,11 +147,12 @@ export function LessonPhase({
     lessonMessages,
   ]);
 
-  // Bridge teach SSE → checkpoint UI without circular hook order
+  // Bridge teach SSE → checkpoint UI without circular hook order.
+  // Placeholders are replaced when useLessonCheckpoints mounts.
   const checkpointBridgeRef = useRef<LessonTeachCheckpointBridge>({
-    resetForTeach: () => {},
-    revealFirstSection: () => {},
-    applyTeachDone: () => {},
+    resetForTeach: () => undefined,
+    revealFirstSection: () => undefined,
+    applyTeachDone: () => undefined,
   });
 
   const { fullText, setFullText, isTeaching } = useLessonTeachStream({

@@ -29,7 +29,7 @@ type LessonMessageRow = {
   clarificationQuote?: string;
   clarificationSectionIndex?: number;
   clarificationBlockIndex?: number;
-  role: ClarificationMessage["role"] | string;
+  role: string;
   content: string;
 };
 
