@@ -319,7 +319,6 @@ export async function POST(req: NextRequest) {
     // Update the question
     await convex.mutation(api.questions.updateFeedback, {
       questionId: questionId as Id<"questions">,
-      userId,
       isCorrect,
       aiFeedback,
       userAnswer: answer,

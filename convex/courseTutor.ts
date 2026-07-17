@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   query,
   mutation,
@@ -9,6 +9,16 @@ import {
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
+
+function assertServerMutationSecret(serverSecret: string) {
+  const expected = process.env.EXIGO_SERVER_MUTATION_SECRET;
+  if (!expected || serverSecret !== expected) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "Server mutation secret required",
+    });
+  }
+}
 
 // ─── Chat CRUD ───
 
@@ -165,23 +175,42 @@ export const sendMessageInternal = internalMutation({
   },
 });
 
+/** Public: always inserts role "user". Clients cannot choose role. */
 export const sendMessage = mutation({
   args: {
     chatId: v.id("courseTutorChats"),
-    role: v.union(
-      v.literal("user"),
-      v.literal("tutor"),
-      v.literal("system"),
-    ),
     content: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthenticatedUserId(ctx);
+    const { userId } = await getAuthedContext(ctx);
     const chat = await ctx.db.get(args.chatId);
     if (!chat || chat.userId !== userId) throw new Error("Unauthorized");
     return await ctx.db.insert("courseTutorMessages", {
       chatId: args.chatId,
-      role: args.role,
+      role: "user",
+      content: args.content,
+    });
+  },
+});
+
+/**
+ * Tutor-role write for Next.js AI routes only.
+ * Requires EXIGO_SERVER_MUTATION_SECRET so browsers cannot forge tutor turns.
+ */
+export const sendTutorMessage = mutation({
+  args: {
+    chatId: v.id("courseTutorChats"),
+    content: v.string(),
+    serverSecret: v.string(),
+  },
+  handler: async (ctx, args) => {
+    assertServerMutationSecret(args.serverSecret);
+    const { userId } = await getAuthedContext(ctx);
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat || chat.userId !== userId) throw new Error("Unauthorized");
+    return await ctx.db.insert("courseTutorMessages", {
+      chatId: args.chatId,
+      role: "tutor",
       content: args.content,
     });
   },

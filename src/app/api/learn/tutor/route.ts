@@ -580,7 +580,6 @@ export async function POST(req: Request) {
         // Save user message
         await convex.mutation(api.courseTutor.sendMessage, {
           chatId,
-          role: "user",
           content: userMessage,
         });
 
@@ -718,10 +717,10 @@ export async function POST(req: Request) {
             latencySeconds: (Date.now() - startedAt) / 1000,
           });
 
-          await convex.mutation(api.courseTutor.sendMessage, {
+          await convex.mutation(api.courseTutor.sendTutorMessage, {
             chatId,
-            role: "tutor",
             content: fullResponse,
+            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
           });
 
           send("done", { chatId });
@@ -742,10 +741,10 @@ export async function POST(req: Request) {
             latencySeconds: (Date.now() - startedAt) / 1000,
           });
 
-          await convex.mutation(api.courseTutor.sendMessage, {
+          await convex.mutation(api.courseTutor.sendTutorMessage, {
             chatId,
-            role: "tutor",
             content: fullResponse,
+            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
           });
 
           send("done", { chatId });

@@ -528,7 +528,6 @@ export async function POST(req: NextRequest) {
             : undefined;
         const questionId = await convex.mutation(api.questions.create, {
           testId: activeTestId,
-          userId,
           type: testType,
           question: parsed.question,
           options: parsedOptions,
