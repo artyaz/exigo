@@ -5,7 +5,8 @@ import { resolveAiProvider } from "../../../../server/ai";
 import { runAtlas } from "../../../_components/exercises/atlas/generate";
 import { ATLAS_DEFAULT, ATLAS_QUICK, type AtlasConfig, type AtlasEvent } from "../../../_components/exercises/atlas/types";
 
-export const maxDuration = 800; // the pyramid is many calls deep
+// Hobby plan caps serverless maxDuration at 300s.
+export const maxDuration = 300;
 
 /* Streams the Atlas pyramid as NDJSON — one event per node as it lands, so the
    explorer fills in live while generation fans out. */
