@@ -183,7 +183,6 @@ async function resolveTestId(
     type: testType,
     questionCount: 5,
     topicTitle: topicLabel,
-    userId,
     ...(knowledgePieceId
       ? { knowledgePieceId: knowledgePieceId as Id<"knowledgePieces"> }
       : {}),
@@ -297,9 +296,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const testsThisMonth = await convex.query(api.tests.countForUserThisMonth, {
-    userId,
-  });
+  const testsThisMonth = await convex.query(api.tests.countForUserThisMonth, {});
   if (testsThisMonth >= MAX_TESTS) {
     return new Response(
       JSON.stringify({
@@ -315,7 +312,6 @@ export async function POST(req: NextRequest) {
   // Verify space ownership before accessing data
   const space = await convex.query(api.spaces.get, {
     spaceId: spaceId as Id<"spaces">,
-    userId,
   });
   if (!space) {
     return new Response(

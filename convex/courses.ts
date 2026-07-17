@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { getAuthedContext, getAuthenticatedUserId, requireEducatorAccess } from "./authDecorators";
-import { MAX_MODULES } from "../shared/courseConfig";
+import { GENERATION_LOCK_TTL_MS, MAX_MODULES } from "../shared/courseConfig";
 
 const COURSE_PHASE = v.union(
   v.literal("baseline"),
@@ -109,19 +109,25 @@ export const updateProgress = internalMutation({
       // when a later successful structural hop writes phase.
       if (updates.phase !== "module_generation") {
         patch.generationInProgress = false;
+        patch.generationClaimedAt = undefined;
       }
     }
     if (updates.generationInProgress !== undefined) {
       patch.generationInProgress = updates.generationInProgress;
+      if (updates.generationInProgress === false) {
+        patch.generationClaimedAt = undefined;
+      }
     }
     await ctx.db.patch(courseId, patch);
   },
 });
 
 /**
- * Atomic claim for module generation (P5-C).
+ * Atomic claim for module generation (P5-C + P6-A TTL).
  * Only one concurrent generateModule / advance can hold the lock.
  * Convex OCC retries the loser so it observes generationInProgress === true.
+ * Stale locks (claimedAt older than GENERATION_LOCK_TTL_MS, or missing claimedAt
+ * while locked) are stolen so a killed process cannot wedge the course forever.
  */
 export const claimModuleGeneration = internalMutation({
   args: { courseId: v.id("courses") },
@@ -136,8 +142,16 @@ export const claimModuleGeneration = internalMutation({
         phase: course.phase,
       };
     }
+
     if (course.generationInProgress === true) {
-      return { claimed: false as const, reason: "in_progress" as const };
+      const claimedAt = course.generationClaimedAt;
+      const ageMs =
+        typeof claimedAt === "number" ? Date.now() - claimedAt : Infinity;
+      const stale = ageMs >= GENERATION_LOCK_TTL_MS;
+      if (!stale) {
+        return { claimed: false as const, reason: "in_progress" as const };
+      }
+      // Fall through and steal the expired lock.
     }
 
     const modules = await ctx.db
@@ -149,7 +163,10 @@ export const claimModuleGeneration = internalMutation({
       return { claimed: false as const, reason: "at_cap" as const };
     }
 
-    await ctx.db.patch(args.courseId, { generationInProgress: true });
+    await ctx.db.patch(args.courseId, {
+      generationInProgress: true,
+      generationClaimedAt: Date.now(),
+    });
     return {
       claimed: true as const,
       moduleIndex: modules.length,
@@ -164,7 +181,10 @@ export const releaseModuleGeneration = internalMutation({
     const course = await ctx.db.get(args.courseId);
     if (!course) return;
     if (course.phase === "module_generation" && course.generationInProgress === true) {
-      await ctx.db.patch(args.courseId, { generationInProgress: false });
+      await ctx.db.patch(args.courseId, {
+        generationInProgress: false,
+        generationClaimedAt: undefined,
+      });
     }
   },
 });

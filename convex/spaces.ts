@@ -4,68 +4,57 @@ import { getAuthedContext } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 export const list = query({
-  args: { userId: v.string() },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    const authenticatedUserId = identity?.subject;
-    if (!authenticatedUserId || authenticatedUserId !== args.userId) {
-      return [];
-    }
+    const userId = identity?.subject;
+    if (!userId) return [];
 
     return await ctx.db
       .query("spaces")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
   },
 });
 
 export const countForUser = query({
-  args: { userId: v.string() },
-  handler: async (ctx, args) => {
+  args: {},
+  handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
-    const authenticatedUserId = identity?.subject;
-    if (!authenticatedUserId || authenticatedUserId !== args.userId) {
-      return 0;
-    }
+    const userId = identity?.subject;
+    if (!userId) return 0;
 
     const spaces = await ctx.db
       .query("spaces")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     return spaces.length;
   },
 });
 
 export const get = query({
-  args: { spaceId: v.id("spaces"), userId: v.string() },
+  args: { spaceId: v.id("spaces") },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    const authenticatedUserId = identity?.subject;
-    if (!authenticatedUserId || authenticatedUserId !== args.userId) {
-      return null;
-    }
+    const userId = identity?.subject;
+    if (!userId) return null;
 
     const space = await ctx.db.get(args.spaceId);
-    if (!space || space.userId !== args.userId) return null;
+    if (!space || space.userId !== userId) return null;
     return space;
   },
 });
 
 export const create = mutation({
-  args: { name: v.string(), userId: v.string() },
+  args: { name: v.string() },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-
-    if (auth.userId !== args.userId) {
-      throw new Error("Unauthorized: identity mismatch");
-    }
-
     const serverLimit = auth.limits.maxSpaces;
 
     if (serverLimit !== UNLIMITED_LIMIT) {
       const spaces = await ctx.db
         .query("spaces")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .withIndex("by_user", (q) => q.eq("userId", auth.userId))
         .take(serverLimit);
 
       if (spaces.length >= serverLimit) {
@@ -77,7 +66,7 @@ export const create = mutation({
 
     return await ctx.db.insert("spaces", {
       name: args.name,
-      userId: args.userId,
+      userId: auth.userId,
     });
   },
 });

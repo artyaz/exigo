@@ -406,9 +406,56 @@ Local skill paths when present: `~/.agents/skills/brainstorming`, `coding-guidel
 [ ] Consolidate master.md + fix packs (disjoint files)
 [ ] Wave C: dispatch fixers
 [ ] Verify (check + test) → audits/verify.md
-[ ] Ship (PRs as required)
+[ ] Ship (see §10.1 ship protocol)
 [ ] RECORD.md final: done, residual, stopped at
 ```
+
+### 10.1 Ship protocol (required after each product wave)
+
+When the user says ship / merge / continue waves, the orchestrator follows this **exactly**. Do not skip CodeRabbit wait. Do not invent a new dated run folder unless asked.
+
+```text
+1. SEED / OPS (when residual ops exist)
+   - Prefer CLI only: `npx convex run` (and `--push` only if the function is missing on that deployment).
+   - Avoid MCP `functionSpec` / bulk dumps (slow/hang-prone on this repo).
+   - Dev: `npx convex run seedPlans:syncPerksFromSsot '{}'` (push first if needed).
+   - Prod: only after the wave’s Convex code is on prod (merge + deploy), then:
+     `npx convex run --prod seedPlans:syncPerksFromSsot '{}'`
+   - Record ops result in RECORD.md.
+
+2. MERGE INTO DEVELOP
+   - Open or reuse PR: product branch → `develop`.
+   - Ensure CI green (`check` + tests).
+   - Merge into `develop` (squash or merge per repo default).
+   - If multiple stacked wave branches exist, merge bottom-up (wave N then N+1) or one cumulative PR.
+
+3. OPEN PR INTO MAIN
+   - Open PR: `develop` → `main` (or the cumulative product branch → `main` if that is the active ship path).
+   - Body: wave summary + test plan + any ops follow-ups.
+
+4. WAIT FOR CODERABBIT
+   - Poll PR reviews/comments until CodeRabbit has posted (or ~10–15 min with no bot if CI still running — recheck).
+   - Do not merge main before reviewing bot findings.
+   - Tools: GitHub API issue comments + reviews (CLI token ok if `gh` keyring is broken).
+
+5. FIX IF NEEDED
+   - Address CodeRabbit (and human) blocking findings surgically.
+   - Push fixes to the PR branch; re-run verify.
+   - Reply/resolve only when code is fixed or finding is explicitly out of scope with reason in RECORD.
+
+6. MERGE INTO MAIN
+   - Merge the main PR when CI green and CodeRabbit residual is empty or accepted.
+   - Confirm deploy health if Convex/Vercel auto-deploy.
+
+7. CONTINUE NEXT WAVE
+   - Update RECORD.md: ship links, residual, next wave id.
+   - Start next wave under the **same** RUN_ROOT unless user asked for a new date.
+   - Repeat from Wave A/C residual packs or § residual backlog — then this ship protocol again.
+```
+
+**Branch naming:** `fix/waveN-product` (or scoped fix names). Prefer stacking on `develop` after each develop merge.
+
+**PR hygiene:** product-scoped diffs; keep audits out of giant mixed PRs when CodeRabbit file limits apply.
 
 ---
 
@@ -431,6 +478,7 @@ Local skill paths when present: `~/.agents/skills/brainstorming`, `coding-guidel
 |------|------|
 | 2026-07-17 | Original loop under `loops/cb-review.md` + root `audits/` |
 | 2026-07-18 | Relocated to `agents/cd-review/`; Wave A/B separation (no nested brainstorm spawn); dated run folders + RECORD |
+| 2026-07-18 | Ship protocol §10.1: seed → merge develop → PR main → wait CodeRabbit → fix → merge main → next wave |
 
 For the first full multi-wave execution and ship history, see:
 

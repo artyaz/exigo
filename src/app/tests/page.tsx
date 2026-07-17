@@ -17,7 +17,7 @@ import {
  */
 export default function TestsPage() {
   const { userId } = useAuth();
-  const tests = useQuery(api.tests.listAll, userId ? { userId } : "skip");
+  const tests = useQuery(api.tests.listAll, userId ? {} : "skip");
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

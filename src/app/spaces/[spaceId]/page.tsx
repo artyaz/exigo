@@ -23,7 +23,7 @@ import { KnowledgeTab } from "../../_components/spaces/KnowledgeTab";
 import { KnowledgeNodeModal } from "../../_components/spaces/KnowledgeNodeModal";
 
 function useSpaceData(spaceId: Id<"spaces">, userId: string | null | undefined) {
-  const space = useQuery(api.spaces.get, userId ? { spaceId, userId } : "skip");
+  const space = useQuery(api.spaces.get, userId ? { spaceId } : "skip");
   const pieces = useQuery(
     api.knowledgePieces.getForSpace,
     userId ? { spaceId } : "skip",

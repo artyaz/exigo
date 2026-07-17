@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|--------|
-| **State** | paused (structure reorg done; product waves 0–5 already shipped earlier in session) |
-| **Branch** | `develop` / `main` (both received waves through #73/#74) |
-| **Last updated** | 2026-07-18 (artifact relocation + loop polish) |
+| **State** | paused (Waves 6–8 coded; PRs open through Wave 8) |
+| **Branch** | `fix/wave8-product` (stacked on wave7 → wave6 → develop) |
+| **Last updated** | 2026-07-18 (Wave 8 LessonPhase + geminiEnv) |
 | **Continues from** | Same calendar window as product work started 2026-07-17 (UTC/session) |
 | **RUN_ROOT** | `agents/cd-review/2026-07-18` |
 
@@ -24,6 +24,9 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | Verify | **done** per ship | tests 270–281; CI build green after lint fixes |
 | Ship | **done** | See PR list below |
 | Artifact reorg | **done** | Moved into this RUN_ROOT; LOOP.md polished |
+| Wave 6 residual | **PR open** | #77 develop, #78 main; P6-A–D |
+| Wave 7 residual | **PR open** | #79 develop, #80 main; P7-A–D |
+| Wave 8 residual | **code done / ship pending** | P8-A LessonPhase extract; P8-B geminiEnv; verify 280 |
 
 ## Done (chronological)
 
@@ -103,6 +106,45 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 **Shipped:** #72/#74 develop, #73 main.
 
+### Wave 6 — residual product (same RUN_ROOT)
+
+| Pack | Outcome |
+|------|---------|
+| P6-A | `generationClaimedAt` + `GENERATION_LOCK_TTL_MS` (15m); stale lock steal on claim; clear on release/phase leave |
+| P6-B | `useTestQuestionGeneration` on `iterateParsedSseBlocks` / majority dialect |
+| P6-C | AGENTS.md documents dual AI paths (Next `resolveAiProvider` vs Convex direct Gemini) — no runtime merge |
+| P6-D | `seedPlans.syncPerksFromSsot` internalMutation for stale free “10” perk copy |
+| P6-E | LessonPhase further split **deferred** (still ~566 lines, optional P3) |
+
+**Verify:** `npm run check` green (pre-existing warnings only); `npm run test` **281** passed. See `audits/verify-wave6.md`.
+
+**Ship:** #77 → develop, #78 → main (open).
+
+### Wave 7 — residual hostile + fix
+
+| Pack | Outcome |
+|------|---------|
+| Audit S-W7 | 16 findings (3 P1, 11 P2, 2 P3) → `audits/slices/S-W7.md` |
+| P7-A | Teach/clarify hooks back on `sseClient` (F-W7-001) |
+| P7-B | Deleted dead `teachLesson`/`clarifyConcept` + shadow `chat`/`generateImprovements` (F-W7-005/006) |
+| P7-C | Shared secret assert + Next fail-fast before AI (F-W7-014/015) |
+| P7-D | Identity-first spaces/tests; drop knowledge piece limit console.log (F-W7-003/016) |
+
+**Verify:** `npm run check` green; `npm run test` **280** passed. See `audits/verify-wave7.md`.
+
+**Ship:** #79 → develop, #80 → main (open; stacked on wave6).
+
+### Wave 8 — readability residual
+
+| Pack | Outcome |
+|------|---------|
+| P8-A | `useFeelsHardMenu` + `LessonCompletePanel`; LessonPhase **566 → ~483** |
+| P8-B | Shared `getEnvGeminiClient` / `getEnvGeminiModel` on teach/clarify/tutor |
+
+**Verify:** check green; tests **280**. See `audits/verify-wave8.md`.
+
+**Ship:** branch `fix/wave8-product`.
+
 ### Artifact reorg (this step)
 
 - Created `agents/cd-review/LOOP.md` (protocol).
@@ -111,31 +153,37 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 ## In flight
 
-- None product. Artifact layout is the current deliverable.
+- Merge stack: Wave 6 (#77/#78) → Wave 7 (#79/#80) → Wave 8 (to open).
+- Ops `syncPerksFromSsot` after Wave 6 deploy.
 
 ## Stopped at
 
-1. **Product residual backlog** (not started as Wave 6):
-   - Generation lock has no TTL if process dies mid-generate
-   - Dual AI stack consolidation (direct Gemini routes vs `resolveAiProvider`)
-   - `useTestQuestionGeneration` not yet on `sseClient`
-   - Free-plan perk **DB** rows may still say “10 AI tests” until reseed/patch (enforcement already 3)
-   - `LessonPhase` still ~565 lines (further optional split)
-2. **Process residual:**
-   - Historical brainstorm packages were produced *inline* by L1 agents (runtime lacked nested spawn). Going forward, **Wave A must not brainstorm**; Wave B is separate.
-   - Root `loops/cb-review.md` should be removed or turned into a stub pointing here (do on commit).
-3. **Next clean start:** if user asks for a new day run, create `agents/cd-review/$(date +%Y-%m-%d)/` per LOOP.md §1; set Continues from: `2026-07-18`.
+1. **Merge PR stack** develop then main (wave6 → wave7 → wave8).
+2. **Ops:** `seedPlans.syncPerksFromSsot` on Convex after Wave 6 lands.
+3. **Wave 9 backlog** (same RUN_ROOT):
+   - Product Next → full `resolveAiProvider` / BYOK (F-W7-002, L)
+   - Tutor route module split + dialect unify (F-W7-007/010)
+   - courseAi further phase split (F-W7-008)
+   - LessonPhase section/checkpoint JSX if still >400 (P8-A residual)
+   - `default_user` policy (F-W7-004)
+   - ConvexError helpers (F-W7-012)
+   - Tutor memory vector search (F-W7-013)
 
 ## Residual / backlog (priority)
 
-| Priority | Item | Source |
-|----------|------|--------|
-| P1 | TTL / reclaim for stuck `generationInProgress` | P5-C residual |
-| P2 | Dual AI stack documentation or thin shared boundary | S8/S9 |
-| P2 | Migrate test SSE generation to `sseClient` | P5-D residual |
-| P2 | Optional seed refresh for free perk strings | P3-A / P4-E |
-| P3 | Further LessonPhase JSX split | P5-A residual |
-| P3 | CodeRabbit 100-file limit → keep product PRs scoped | ops note |
+| Priority | Item | Source | Status |
+|----------|------|--------|--------|
+| P1 | TTL generation lock | P5-C | **done** P6-A |
+| P1 | Teach/clarify sseClient | F-W7-001 | **done** P7-A |
+| P1 | Identity-first spaces/tests | F-W7-003 | **done** P7-D |
+| P1 | Product Next → resolveAiProvider | F-W7-002 | Wave 9 |
+| P2 | Dead dual AI delete | F-W7-005/006 | **done** P7-B |
+| P2 | Secret fail-fast | F-W7-014/015 | **done** P7-C |
+| P2 | Shared env Gemini helpers | F-W7-011 | **done** P8-B (partial) |
+| P2 | LessonPhase feels-hard + complete extract | F-W7-009 | **done** P8-A |
+| P2 | Tutor god route / dialect | F-W7-007/010 | Wave 9 |
+| P2 | default_user policy | F-W7-004 | Wave 9 (product) |
+| P3 | CodeRabbit PR scope | ops | open |
 
 ## Valuable notes
 

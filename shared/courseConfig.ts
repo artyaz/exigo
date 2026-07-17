@@ -16,3 +16,11 @@ export const MAX_MODULES = 5;
  */
 export const MODULE_GENERATION_IN_PROGRESS_MSG =
   "Module generation already in progress";
+
+/**
+ * How long a generationInProgress claim may stick before a later claim steals it
+ * (P6-A / P5-C residual). Covers process death mid-generateModule after claim
+ * but before release/success. Gemini module gen can be slow; 15 minutes is
+ * generous vs a stuck forever lock.
+ */
+export const GENERATION_LOCK_TTL_MS = 15 * 60 * 1000;

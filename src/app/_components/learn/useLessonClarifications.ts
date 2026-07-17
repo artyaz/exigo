@@ -2,6 +2,14 @@
 
 import { useState, useEffect, useCallback, type RefObject } from "react";
 import type { ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
+import { iterateParsedSseBlocks, parseJsonData } from "~/lib/sseClient";
+
+type ClarifySsePayload = {
+  type: string;
+  text?: string;
+  fullText?: string;
+  error?: string;
+};
 
 export type ClarificationThreadState = {
   quote: string;
@@ -292,78 +300,63 @@ export function useLessonClarifications(opts: {
           throw new Error("Stream failed");
         }
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
         let accumulated = "";
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n\n");
-          buffer = lines.pop() ?? "";
+        for await (const block of iterateParsedSseBlocks(res.body)) {
+          if (block.event) continue;
+          const payload = parseJsonData<ClarifySsePayload>(block.data);
+          if (!payload) continue;
 
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const payload = JSON.parse(line.slice(6)) as {
-                type: string;
-                text?: string;
-                fullText?: string;
-                error?: string;
-              };
-
-              if (payload.type === "delta" && payload.text) {
-                accumulated += payload.text;
-                const snap = accumulated; // capture for closure
-                setClarificationThreads((prev) => {
-                  const next = new Map(prev);
-                  const t = next.get(threadId);
-                  if (t) {
-                    next.set(threadId, { ...t, streamingText: snap });
-                  }
-                  return next;
-                });
-              } else if (payload.type === "done") {
-                const finalText = payload.fullText ?? accumulated;
-                setClarificationThreads((prev) => {
-                  const next = new Map(prev);
-                  const t = next.get(threadId);
-                  if (t) {
-                    next.set(threadId, {
-                      ...t,
-                      messages: [...t.messages, { role: "teacher", content: finalText }],
-                      streamingText: undefined,
-                      isLoading: false,
-                    });
-                  }
-                  return next;
-                });
-              } else if (payload.type === "error") {
-                setClarificationThreads((prev) => {
-                  const next = new Map(prev);
-                  const t = next.get(threadId);
-                  if (t) {
-                    next.set(threadId, {
-                      ...t,
-                      messages: [
-                        ...t.messages,
-                        {
-                          role: "teacher",
-                          content: "Something went wrong. Please try again.",
-                        },
-                      ],
-                      streamingText: undefined,
-                      isLoading: false,
-                    });
-                  }
-                  return next;
+          if (payload.type === "delta" && payload.text) {
+            accumulated += payload.text;
+            const snap = accumulated;
+            setClarificationThreads((prev) => {
+              const next = new Map(prev);
+              const t = next.get(threadId);
+              if (t) {
+                next.set(threadId, { ...t, streamingText: snap });
+              }
+              return next;
+            });
+          } else if (payload.type === "done") {
+            const finalText = payload.fullText ?? accumulated;
+            setClarificationThreads((prev) => {
+              const next = new Map(prev);
+              const t = next.get(threadId);
+              if (t) {
+                next.set(threadId, {
+                  ...t,
+                  messages: [...t.messages, { role: "teacher", content: finalText }],
+                  streamingText: undefined,
+                  isLoading: false,
                 });
               }
-            } catch {
-              /* skip malformed SSE */
-            }
+              return next;
+            });
+          } else if (payload.type === "error") {
+            const errText =
+              typeof payload.error === "string" && payload.error.trim()
+                ? payload.error
+                : "Something went wrong. Please try again.";
+            setClarificationThreads((prev) => {
+              const next = new Map(prev);
+              const t = next.get(threadId);
+              if (t) {
+                next.set(threadId, {
+                  ...t,
+                  messages: [
+                    ...t.messages,
+                    {
+                      role: "teacher",
+                      content: errText,
+                    },
+                  ],
+                  streamingText: undefined,
+                  isLoading: false,
+                });
+              }
+              return next;
+            });
           }
         }
       } catch {

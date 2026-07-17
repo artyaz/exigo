@@ -3,26 +3,27 @@
 import { useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Loader2, CheckCircle2, CornerDownLeft, SkipForward,
+  Loader2, CornerDownLeft, SkipForward,
 } from "lucide-react";
 import {
   advanceCourseAction,
   completeLessonAction,
   summarizeLessonAction,
 } from "../../../../actions/learn";
-import { createFeelsHardNodeAction, queueFeelsHardNodeAction } from "../../../../actions/knowledge";
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
 import { LessonPractice } from "~/app/_components/learn/LessonPractice";
+import { LessonCompletePanel } from "~/app/_components/learn/LessonCompletePanel";
 import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
 import { ClarificationThread } from "~/app/_components/learn/ClarificationThread";
 import { FocusModeToggle, useActiveFocusTargets } from "~/app/_components/learn/course/focusMode";
 import { unwrapActionResult } from "~/app/_components/learn/course/actionResult";
 import { useLessonClarifications } from "~/app/_components/learn/useLessonClarifications";
 import { useLessonCheckpoints } from "~/app/_components/learn/useLessonCheckpoints";
+import { useFeelsHardMenu } from "~/app/_components/learn/useFeelsHardMenu";
 import {
   useLessonTeachStream,
   type LessonTeachCheckpointBridge,
@@ -67,63 +68,11 @@ export function LessonPhase({
   const lessonContentRef = useRef<HTMLDivElement>(null);
   const contentEndRef = useRef<HTMLDivElement>(null);
 
-  // ─── "Feels Hard" context menu ───
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    selectedText: string;
-  } | null>(null);
-
-  useEffect(() => {
-    const handleContextMenu = (e: MouseEvent) => {
-      const container = lessonContentRef.current;
-      if (!container) return;
-      if (!container.contains(e.target as Node)) {
-        setContextMenu(null);
-        return;
-      }
-
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) return;
-      const selectedText = selection.toString().trim();
-      if (selectedText.length < 3) return;
-
-      e.preventDefault();
-      setContextMenu({ x: e.clientX, y: e.clientY, selectedText });
-    };
-
-    const handleClick = () => setContextMenu(null);
-
-    document.addEventListener("contextmenu", handleContextMenu);
-    document.addEventListener("click", handleClick);
-    return () => {
-      document.removeEventListener("contextmenu", handleContextMenu);
-      document.removeEventListener("click", handleClick);
-    };
-  }, []);
-
-  const handleFeelsHard = useCallback(async (text: string) => {
-    setContextMenu(null);
-    const lesson = moduleLessons[currentLessonIndex];
-    const content = `Feels hard: "${text.slice(0, 200)}"`;
-
-    try {
-      if (lesson?.knowledgePieceId) {
-        await createFeelsHardNodeAction(spaceId, lesson.knowledgePieceId, content);
-      } else if (lesson?._id) {
-        await queueFeelsHardNodeAction(lesson._id, content);
-      } else {
-        return;
-      }
-      setFeelsHardFeedback("Marked as hard — we'll focus on this! 💪");
-      setTimeout(() => setFeelsHardFeedback(null), 2000);
-    } catch {
-      setFeelsHardFeedback("Failed to save, try again.");
-      setTimeout(() => setFeelsHardFeedback(null), 2000);
-    }
-  }, [spaceId, moduleLessons, currentLessonIndex]);
-
-  const [feelsHardFeedback, setFeelsHardFeedback] = useState<string | null>(null);
+  const { contextMenu, feelsHardFeedback, handleFeelsHard } = useFeelsHardMenu({
+    lessonContentRef,
+    spaceId,
+    currentLesson,
+  });
 
   const lessonMessages = useQuery(
     api.courseLessonMessages.getForLesson,
@@ -503,63 +452,31 @@ export function LessonPhase({
 
       {/* Lesson complete — show when all sections revealed and not streaming */}
       {!currentInputRequest && (hasLessonCompleteMarker || (revealedCount >= totalSections && totalSections > 0)) && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
-        currentLesson && ["summarized", "integrated"].includes(currentLesson.status) ? (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="lesson-callout text-center py-6 space-y-4"
-          >
-            <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400" />
-            <h3 className="text-base font-medium text-primary">Knowledge Piece Generated</h3>
-            <p className="text-sm text-white/40">Your knowledge piece has been saved.</p>
-            {isAdvancingCourse ? (
-              <div className="flex items-center justify-center gap-2 text-white/50 text-sm py-3">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Advancing...</span>
-              </div>
-            ) : (
-              <button
-                onClick={async () => {
-                  setIsAdvancingCourse(true);
-                  setError(null);
-                  try {
-                    const advanceResult = unwrapActionResult(
-                      await advanceCourseAction(courseId),
-                      "Failed to advance course",
-                    );
-                    if (advanceResult.nextPhase !== "lesson_summary") {
-                      onReturnToActiveLesson();
-                    }
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to advance course");
-                  } finally {
-                    setIsAdvancingCourse(false);
-                  }
-                }}
-                className="bg-white text-black font-medium px-6 py-3 rounded-xl spring-interact hover:opacity-90 text-sm"
-              >
-                Continue →
-              </button>
-            )}
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="lesson-callout text-center py-6 space-y-4"
-          >
-            <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400" />
-            <h3 className="text-base font-medium text-primary">Lesson Complete</h3>
-            <p className="text-sm text-white/40">Ready to generate your knowledge piece.</p>
-            <button
-              onClick={handleSummarize}
-              disabled={isSummarizing}
-              className="bg-white text-black font-medium px-6 py-3 rounded-xl spring-interact hover:opacity-90 disabled:opacity-50 text-sm"
-            >
-              Generate Knowledge Piece →
-            </button>
-          </motion.div>
-        )
+        <LessonCompletePanel
+          status={currentLesson?.status}
+          isSummarizing={isSummarizing}
+          isAdvancingCourse={isAdvancingCourse}
+          onSummarize={() => void handleSummarize()}
+          onAdvance={() => {
+            void (async () => {
+              setIsAdvancingCourse(true);
+              setError(null);
+              try {
+                const advanceResult = unwrapActionResult(
+                  await advanceCourseAction(courseId),
+                  "Failed to advance course",
+                );
+                if (advanceResult.nextPhase !== "lesson_summary") {
+                  onReturnToActiveLesson();
+                }
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to advance course");
+              } finally {
+                setIsAdvancingCourse(false);
+              }
+            })();
+          }}
+        />
       )}
     </motion.div>
   );

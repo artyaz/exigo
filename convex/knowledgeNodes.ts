@@ -1,29 +1,17 @@
 import { v } from "convex/values";
 import {
-  action,
   internalMutation,
   internalQuery,
   mutation,
   query,
 } from "./_generated/server";
-import { GoogleGenAI } from "@google/genai";
 import { internal } from "./_generated/api";
 import {
   getAuthedContext,
-  getAuthedContextForAction,
   requireEducatorAccess,
   getAuthenticatedUserId,
 } from "./authDecorators";
 import { RESOLUTION_THRESHOLD } from "../shared/planConfig";
-import {
-  captureAiGenerationEvent,
-  createAiTraceId,
-  getPosthogClient,
-} from "../shared/posthogAiObservability";
-import { getPromptInternal, renderPrompt } from "./coursePrompts";
-
-const FALLBACK_IMPROVEMENT =
-  "Explore advanced edge cases and nuanced trade-offs in this topic.";
 
 export const create = mutation({
   args: {
@@ -160,96 +148,6 @@ export const createInternal = internalMutation({
       content: args.content,
       resolutionScore: 0,
       isActive: true,
-    });
-  },
-});
-
-export const generateImprovements = action({
-  args: {
-    knowledgePieceId: v.id("knowledgePieces"),
-    testId: v.id("tests"),
-  },
-  handler: async (ctx, args) => {
-    const auth = await getAuthedContextForAction(ctx);
-    requireEducatorAccess(auth);
-
-    const pieceData = await ctx.runQuery(
-      internal.knowledgeNodes.getPieceDataInternal,
-      {
-        knowledgePieceId: args.knowledgePieceId,
-        userId: auth.userId,
-      },
-    );
-
-    if (!pieceData) {
-      throw new Error("Knowledge piece not found or unauthorized");
-    }
-
-    const promptDoc = await ctx.runQuery(
-      internal.coursePrompts.getPromptInternal,
-      {
-        name: "knowledge_node_improvement",
-      },
-    );
-    const prompt = renderPrompt(promptDoc.content, {
-      pieceContent: pieceData.content,
-    });
-
-    let improvementIdea = FALLBACK_IMPROVEMENT;
-    if (!process.env.GOOGLE_GEMINI_API_KEY) {
-      console.warn(
-        "knowledgeNodes.generateImprovements: GOOGLE_GEMINI_API_KEY is missing; using fallback improvement.",
-      );
-    } else {
-      try {
-        const ai = new GoogleGenAI({
-          apiKey: process.env.GOOGLE_GEMINI_API_KEY,
-        });
-        const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
-        const startedAt = Date.now();
-        const response = await ai.models.generateContent({
-          model,
-          contents: prompt,
-        });
-        captureAiGenerationEvent({
-          distinctId: auth.userId,
-          traceId: createAiTraceId(),
-          provider: "google",
-          model,
-          input: [{ role: "user", content: prompt }],
-          response,
-          latencySeconds: (Date.now() - startedAt) / 1000,
-        });
-        improvementIdea = response.text?.trim() ?? FALLBACK_IMPROVEMENT;
-      } catch (error) {
-        console.error(
-          "knowledgeNodes.generateImprovements: Gemini request failed; using fallback improvement.",
-          error,
-        );
-        const posthog = getPosthogClient();
-        if (posthog) {
-          posthog.capture({
-            distinctId: auth.userId,
-            event: "ai_generation_failed",
-            properties: {
-              source: "knowledgeNodes.generateImprovements",
-              error_message:
-                error instanceof Error ? error.message : String(error),
-              error_name: error instanceof Error ? error.name : "UnknownError",
-              model: process.env.GEMINI_MODEL ?? "gemini-3-flash-preview",
-              knowledgePieceId: args.knowledgePieceId,
-              usedFallback: true,
-            },
-          });
-        }
-      }
-    }
-
-    await ctx.runMutation(internal.knowledgeNodes.createInternal, {
-      spaceId: pieceData.spaceId,
-      knowledgePieceId: args.knowledgePieceId,
-      type: "improvement",
-      content: improvementIdea,
     });
   },
 });
