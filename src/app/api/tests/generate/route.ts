@@ -1,15 +1,17 @@
 import type { NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import {
-  ConvexAuthError,
-  createAuthedConvexClient,
-} from "../../../../lib/convexClientAuth";
+  enqueueSseError,
+  sseDelta,
+  sseDone,
+  sseResponse,
+} from "../../../../lib/sse";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -247,9 +249,7 @@ export async function POST(req: NextRequest) {
     parseGenerateBody(rawBody);
 
   if (!spaceId || !testType) {
-    return new Response(JSON.stringify({ error: "Missing params" }), {
-      status: 400,
-    });
+    return jsonError(400, "Missing params");
   }
 
   if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -258,28 +258,21 @@ export async function POST(req: NextRequest) {
       requestId,
       route: "/api/tests/generate",
     });
-    return new Response(
-      JSON.stringify({ error: "Server configuration error" }),
-      { status: 500 },
-    );
+    return jsonError(500, "Server configuration error");
   }
 
   const ALLOWED_TYPES = ["select", "write"] as const;
   if (!ALLOWED_TYPES.includes(testType as (typeof ALLOWED_TYPES)[number])) {
-    return new Response(
-      JSON.stringify({
-        error: "Invalid testType — must be 'select' or 'write'",
-      }),
-      { status: 400 },
-    );
+    return jsonError(400, "Invalid testType — must be 'select' or 'write'");
   }
 
-  const { userId, getToken } = await auth();
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
-  }
+  const authResult = await requireAuthedApi("api.tests.generate", {
+    requestId,
+    route: "/api/tests/generate",
+    duration_ms: Date.now() - startedAt,
+  });
+  if (authResult instanceof Response) return authResult;
+  const { userId, convex } = authResult;
 
   logInfo("Test generation request received", {
     source: "api.tests.generate",
@@ -290,30 +283,6 @@ export async function POST(req: NextRequest) {
     testId,
     testType,
   });
-
-  let convex: ConvexHttpClient;
-  try {
-    convex = await createAuthedConvexClient(getToken, "api.tests.generate");
-  } catch (error) {
-    logError("Failed to initialize Convex client for generation", {
-      source: "api.tests.generate",
-      requestId,
-      route: "/api/tests/generate",
-      userId,
-      duration_ms: Date.now() - startedAt,
-      ...getErrorAttributes(error),
-    });
-    if (error instanceof ConvexAuthError) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }),
-        { status: 401 },
-      );
-    }
-    return new Response(
-      JSON.stringify({ error: "Internal server error", requestId }),
-      { status: 500 },
-    );
-  }
 
   const planStatus = await convex.query(api.planLimits.getPlan, {});
   const MAX_TESTS = planStatus.limits.maxTestsPerMonth;
@@ -453,8 +422,6 @@ export async function POST(req: NextRequest) {
   const aiTraceId = createAiTraceId();
 
   // Create a streaming response back to the client
-  const encoder = new TextEncoder();
-
   const readable = new ReadableStream({
     async start(controller) {
       try {
@@ -484,12 +451,7 @@ export async function POST(req: NextRequest) {
           if (part) {
             firstTokenAt ??= Date.now();
             fullText += part;
-            // Send the delta to the client as SSE
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "delta", text: part })}\n\n`,
-              ),
-            );
+            controller.enqueue(sseDelta(part));
           }
         }
 
@@ -535,11 +497,8 @@ export async function POST(req: NextRequest) {
           knowledgeNodeId: focusedNodeId,
         });
 
-        // Send the final event
         controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "done", testId: activeTestId, questionId })}\n\n`,
-          ),
+          sseDone({ testId: activeTestId, questionId }),
         );
         logInfo("Generated test question persisted", {
           source: "api.tests.generate",
@@ -560,22 +519,11 @@ export async function POST(req: NextRequest) {
           duration_ms: Date.now() - startedAt,
           ...getErrorAttributes(err),
         });
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        controller.enqueue(
-          encoder.encode(
-            `data: ${JSON.stringify({ type: "error", error: msg })}\n\n`,
-          ),
-        );
-        controller.close();
+        // Opaque public message — real error logged above
+        enqueueSseError(controller, "Test generation failed");
       }
     },
   });
 
-  return new Response(readable, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  return sseResponse(readable);
 }

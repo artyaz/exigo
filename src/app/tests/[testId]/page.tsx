@@ -242,7 +242,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         spaceId: test.spaceId,
                         testType: test.config.type,
                         testId: tId,
-                        knowledgePieceId: sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined,
+                        knowledgePieceId: test.knowledgePieceId,
                     }),
                     signal: abortController.signal,
                 });
@@ -347,7 +347,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         setAnswers(prev => ({ ...prev, [questionId]: answer }));
         setIsEvaluating(prev => ({ ...prev, [questionId]: true }));
 
-        const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined;
+        const knowledgePieceId = test?.knowledgePieceId;
         let isCorrect = false;
         let requestFailed = false;
         try {
@@ -400,7 +400,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 if (score >= 0.8 && knowledgePieceId) {
                     // Trigger improvements generation softly in background
                     void generateImprovements({
-                        knowledgePieceId: knowledgePieceId as Id<"knowledgePieces">,
+                        knowledgePieceId,
                         testId: tId
                     }).catch((err: unknown) => console.error("Failed to generate improvements", err));
                 }
@@ -470,7 +470,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         setFeelsHardLoading(messageId);
 
         try {
-            const knowledgePieceId = sessionStorage.getItem(`exigo_test_topic_${tId}`) ?? undefined;
+            const knowledgePieceId = test?.knowledgePieceId;
 
             const res = await fetch("/api/tests/feels-hard", {
                 method: "POST",

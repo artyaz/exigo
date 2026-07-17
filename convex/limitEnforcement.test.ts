@@ -1,364 +1,89 @@
-import { describe, it, expect, vi, type Mock } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   getLimitsForAccessLevel,
   parseSlugToAccessLevel,
+  isProOrHigher,
+  normalizeAccessLevel,
   ACCESS_LEVELS,
 } from "./subscriptionService";
-import { UNLIMITED_LIMIT } from "../shared/planConfig";
+import { UNLIMITED_LIMIT, MAX_TESTS_SENTINEL } from "../shared/planConfig";
 
-interface MockCtx {
-  db: {
-    insert: Mock<(...args: unknown[]) => Promise<unknown>>;
-    patch: Mock<(...args: unknown[]) => Promise<unknown>>;
-    get: Mock<(id: string) => Promise<{ userId: string } | null>>;
-    query: Mock<
-      (table: string) => {
-        withIndex: (
-          name: string,
-          fn: (q: { eq: (field: string, value: string) => unknown }) => unknown,
-        ) => { collect: Mock<() => Promise<unknown[]>> };
-      }
-    >;
-  };
-  auth: {
-    getUserIdentity: Mock<
-      () => Promise<{
-        subject: string;
-        privateMetadata?: Record<string, unknown>;
-      } | null>
-    >;
-  };
-}
+/**
+ * Honest pure-unit coverage for plan limit helpers used by production
+ * mutations (spaces, tests, knowledgePieces). No local shadow handlers —
+ * those previously claimed to "enforce limits" while never importing prod code.
+ */
 
-const createMockCtx = (
-  userId: string,
-  plan?: string,
-): MockCtx => {
-  return {
-    db: {
-      insert: vi.fn(),
-      patch: vi.fn(),
-      get: vi.fn(),
-      query: vi.fn(),
-    },
-    auth: {
-      getUserIdentity: vi
-        .fn()
-        .mockResolvedValue({
-          subject: userId,
-          privateMetadata: plan ? { plan } : {},
-        }),
-    },
-  };
-};
-
-function getLimitsForPlan(plan: string | undefined) {
-  const accessLevel = parseSlugToAccessLevel(plan);
-  return getLimitsForAccessLevel(accessLevel);
-}
-
-async function createSpaceHandler(
-  ctx: MockCtx,
-  args: { name: string; userId: string; plan?: string },
-) {
-  const identity = await ctx.auth.getUserIdentity();
-  const authenticatedUserId = identity?.subject;
-  if (!authenticatedUserId || authenticatedUserId !== args.userId) {
-    throw new Error("Unauthorized");
-  }
-
-  const serverLimit = getLimitsForPlan(args.plan).maxSpaces;
-
-  if (serverLimit !== UNLIMITED_LIMIT) {
-    const mockSpaces = (await ctx.db
-      .query("spaces")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect()) as unknown[];
-    if (mockSpaces.length >= serverLimit) {
-      throw new Error(
-        `Limit reached: You can only have ${serverLimit} spaces on your current plan.`,
-      );
-    }
-  }
-
-  return await ctx.db.insert("spaces", {
-    name: args.name,
-    userId: args.userId,
+describe("limit helpers — access levels & plan slugs", () => {
+  it("maps free/undefined/unknown slugs to FREE access", () => {
+    expect(parseSlugToAccessLevel(undefined)).toBe(ACCESS_LEVELS.FREE);
+    expect(parseSlugToAccessLevel("free")).toBe(ACCESS_LEVELS.FREE);
+    expect(parseSlugToAccessLevel("not-a-real-plan")).toBe(ACCESS_LEVELS.FREE);
   });
-}
 
-async function addKnowledgePieceHandler(
-  ctx: MockCtx,
-  args: { spaceId: string; content: string; plan?: string },
-) {
-  const identity = await ctx.auth.getUserIdentity();
-  const userId = identity?.subject;
-  if (!userId) {
-    throw new Error("Unauthorized access to this space");
-  }
+  it("maps pro and educator billing slugs", () => {
+    expect(parseSlugToAccessLevel("pro-monthly")).toBe(ACCESS_LEVELS.PRO_SCHOLAR);
+    expect(parseSlugToAccessLevel("pro-annual")).toBe(ACCESS_LEVELS.PRO_SCHOLAR);
+    expect(parseSlugToAccessLevel("educator-monthly")).toBe(ACCESS_LEVELS.EDUCATOR);
+    expect(parseSlugToAccessLevel("educator-annual")).toBe(ACCESS_LEVELS.EDUCATOR);
+  });
 
-  const space = await ctx.db.get(args.spaceId);
-  if (!space || space.userId !== userId) {
-    throw new Error("Unauthorized access to this space");
-  }
+  it("isProOrHigher is false for free, true for pro and educator", () => {
+    expect(isProOrHigher(ACCESS_LEVELS.FREE)).toBe(false);
+    expect(isProOrHigher(ACCESS_LEVELS.PRO_SCHOLAR)).toBe(true);
+    expect(isProOrHigher(ACCESS_LEVELS.EDUCATOR)).toBe(true);
+  });
 
-  const existingPieces = (await ctx.db
-    .query("knowledgePieces")
-    .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-    .collect()) as unknown[];
-
-  const serverLimit = getLimitsForPlan(args.plan).maxKnowledgePiecesPerSpace;
-  const projectedTotal = existingPieces.length + 1;
-  if (serverLimit !== UNLIMITED_LIMIT && projectedTotal > serverLimit) {
-    throw new Error(
-      `Limit reached: You can only have ${serverLimit} knowledge pieces per space on your current plan.`,
+  it("normalizeAccessLevel clamps invalid levels to FREE", () => {
+    expect(normalizeAccessLevel(ACCESS_LEVELS.PRO_SCHOLAR)).toBe(
+      ACCESS_LEVELS.PRO_SCHOLAR,
     );
-  }
-
-  return await ctx.db.insert("knowledgePieces", {
-    spaceId: args.spaceId,
-    content: args.content,
+    expect(normalizeAccessLevel(-1)).toBe(ACCESS_LEVELS.FREE);
+    expect(normalizeAccessLevel(99)).toBe(ACCESS_LEVELS.FREE);
   });
-}
+});
 
-async function createEmptyTestHandler(
-  ctx: MockCtx,
-  args: {
-    spaceId: string;
-    userId: string;
-    type: string;
-    questionCount: number;
-    plan?: string;
-  },
-) {
-  const identity = await ctx.auth.getUserIdentity();
-  const userId = identity?.subject;
-  if (!userId || args.userId !== userId) {
-    throw new Error("Unauthorized");
-  }
+describe("limit helpers — free tier boundaries", () => {
+  const free = getLimitsForAccessLevel(ACCESS_LEVELS.FREE);
 
-  const limits = getLimitsForPlan(args.plan);
-  const maxAllowed = limits.maxTestsPerMonth;
-  if (maxAllowed === 0) {
-    throw new Error(
-      "You don't have access to test generation on your current plan.",
+  it("free plan: 3 spaces, 3 tests/month, 20 knowledge pieces/space", () => {
+    expect(free.maxSpaces).toBe(3);
+    expect(free.maxTestsPerMonth).toBe(3);
+    expect(free.maxKnowledgePiecesPerSpace).toBe(20);
+  });
+
+  it("free test monthly boundary is 3, not a fictional higher cap", () => {
+    // Ghost suite used to "block" after 10 tests while free limit is 3.
+    expect(free.maxTestsPerMonth).toBe(3);
+    const atLimit = 3;
+    const overLimit = 4;
+    expect(atLimit >= free.maxTestsPerMonth).toBe(true);
+    expect(overLimit > free.maxTestsPerMonth).toBe(true);
+  });
+});
+
+describe("limit helpers — paid tiers & unlimited sentinel", () => {
+  it("pro: unlimited spaces, finite tests and knowledge pieces", () => {
+    const pro = getLimitsForAccessLevel(ACCESS_LEVELS.PRO_SCHOLAR);
+    expect(pro.maxSpaces).toBe(UNLIMITED_LIMIT);
+    expect(pro.maxTestsPerMonth).toBe(100);
+    expect(pro.maxKnowledgePiecesPerSpace).toBe(200);
+    expect(pro.maxSpaces === UNLIMITED_LIMIT).toBe(true);
+  });
+
+  it("educator: unlimited spaces and knowledge pieces; tests capped by sentinel", () => {
+    const edu = getLimitsForAccessLevel(ACCESS_LEVELS.EDUCATOR);
+    expect(edu.maxSpaces).toBe(UNLIMITED_LIMIT);
+    expect(edu.maxKnowledgePiecesPerSpace).toBe(UNLIMITED_LIMIT);
+    expect(edu.maxTestsPerMonth).toBe(Math.min(300, MAX_TESTS_SENTINEL));
+    expect(edu.maxTestsPerMonth).toBeLessThanOrEqual(MAX_TESTS_SENTINEL);
+  });
+
+  it("slug → limits composition matches access-level lookup", () => {
+    const viaSlug = getLimitsForAccessLevel(
+      parseSlugToAccessLevel("pro-monthly"),
     );
-  }
-
-  const space = await ctx.db.get(args.spaceId);
-  if (!space || space.userId !== userId) {
-    throw new Error("Unauthorized access to this space");
-  }
-
-  const mockTests = (await ctx.db
-    .query("tests")
-    .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-    .collect()) as unknown[];
-  const count = mockTests.length;
-
-  if (maxAllowed !== UNLIMITED_LIMIT && count >= maxAllowed) {
-    throw new Error(
-      `Limit reached: You have created ${count} tests this month.`,
-    );
-  }
-
-  return await ctx.db.insert("tests", {
-    spaceId: args.spaceId,
-    status: "active",
-    config: { type: args.type, questionCount: args.questionCount },
-  });
-}
-
-async function bulkImportHandler(
-  ctx: MockCtx,
-  args: { spaceId: string; pieces: { content: string }[]; plan?: string },
-) {
-  const identity = await ctx.auth.getUserIdentity();
-  const userId = identity?.subject;
-  if (!userId) {
-    throw new Error("Unauthorized access to this space");
-  }
-
-  const space = await ctx.db.get(args.spaceId);
-  if (!space || space.userId !== userId) {
-    throw new Error("Unauthorized access to this space");
-  }
-
-  const existingPieces = (await ctx.db
-    .query("knowledgePieces")
-    .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-    .collect()) as unknown[];
-
-  const serverLimit = getLimitsForPlan(args.plan).maxKnowledgePiecesPerSpace;
-  const nonEmptyIncomingCount = args.pieces.filter(
-    (piece) => piece.content.trim() !== "",
-  ).length;
-  const projectedTotal = existingPieces.length + nonEmptyIncomingCount;
-
-  if (serverLimit !== UNLIMITED_LIMIT && projectedTotal > serverLimit) {
-    throw new Error(
-      `Limit reached: Bulk import would exceed the limit of ${serverLimit} knowledge pieces per space.`,
-    );
-  }
-
-  for (const piece of args.pieces) {
-    if (piece.content.trim() === "") continue;
-    await ctx.db.insert("knowledgePieces", {
-      spaceId: args.spaceId,
-      content: piece.content,
-    });
-  }
-}
-
-describe("Convex Limit Enforcement & Security", () => {
-  describe("Exploit Prevention", () => {
-    it("prevents spoofing userId in createSpace", async () => {
-      const ctx = createMockCtx("attacker_id");
-      await expect(
-        createSpaceHandler(ctx, { name: "Evil Space", userId: "victim_id" }),
-      ).rejects.toThrow("Unauthorized");
-    });
-
-    it("prevents adding knowledge piece to someone else's space", async () => {
-      const ctx = createMockCtx("attacker_id");
-      ctx.db.get.mockResolvedValue({ userId: "victim_id" });
-      await expect(
-        addKnowledgePieceHandler(ctx, {
-          spaceId: "victim_space",
-          content: "Spam",
-        }),
-      ).rejects.toThrow("Unauthorized access to this space");
-    });
-  });
-
-  describe("Space Limits", () => {
-    it("verifies the full createSpace mutation flow with auth", async () => {
-      const userId = "user_test_123";
-      const ctx = createMockCtx(userId);
-
-      const mockCollect = vi.fn().mockResolvedValue([]);
-      ctx.db.query.mockReturnValue({
-        withIndex: () => ({ collect: mockCollect }),
-      });
-
-      await createSpaceHandler(ctx, { name: "Test Flow", userId });
-
-      expect(ctx.auth.getUserIdentity).toHaveBeenCalled();
-      expect(ctx.db.insert).toHaveBeenCalledWith("spaces", {
-        name: "Test Flow",
-        userId,
-      });
-    });
-
-    it("blocks creating a space when at the limit (free plan)", async () => {
-      const ctx = createMockCtx("user_free");
-      const mockCollect = vi.fn().mockResolvedValue([{}, {}, {}]);
-      ctx.db.query.mockReturnValue({
-        withIndex: () => ({ collect: mockCollect }),
-      });
-
-      await expect(
-        createSpaceHandler(ctx, { name: "Too Many", userId: "user_free" }),
-      ).rejects.toThrow(/Limit reached: You can only have 3 spaces/);
-    });
-
-    it("allows unlimited spaces on Pro plan", async () => {
-      const ctx = createMockCtx("user_pro", "pro-monthly");
-      const mockCollect = vi.fn().mockResolvedValue(new Array(10).fill({}));
-      ctx.db.query.mockReturnValue({
-        withIndex: () => ({ collect: mockCollect }),
-      });
-
-      await createSpaceHandler(ctx, { name: "Pro Space", userId: "user_pro", plan: "pro-monthly" });
-      expect(ctx.db.insert).toHaveBeenCalled();
-    });
-
-    it("skips the existing-space scan entirely on unlimited plans", async () => {
-      const ctx = createMockCtx("user_pro", "pro-monthly");
-      const mockCollect = vi.fn().mockResolvedValue([]);
-      ctx.db.query.mockReturnValue({
-        withIndex: () => ({ collect: mockCollect }),
-      });
-
-      await createSpaceHandler(ctx, {
-        name: "Pro Space",
-        userId: "user_pro",
-        plan: "pro-monthly",
-      });
-
-      expect(ctx.db.query).not.toHaveBeenCalled();
-      expect(mockCollect).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("Knowledge Piece Limits", () => {
-    it("blocks adding a knowledge piece when at the limit (free plan)", async () => {
-      const ctx = createMockCtx("user_free");
-      ctx.db.get.mockResolvedValue({ userId: "user_free" });
-      const mockCollect = vi.fn().mockResolvedValue(new Array(20).fill({}));
-      ctx.db.query.mockReturnValue({
-        withIndex: () => ({ collect: mockCollect }),
-      });
-
-      await expect(
-        addKnowledgePieceHandler(ctx, {
-          spaceId: "space_123",
-          content: "Too much",
-        }),
-      ).rejects.toThrow(/Limit reached: You can only have 20 knowledge pieces/);
-    });
-
-    it("blocks bulk import that would exceed limit", async () => {
-      const ctx = createMockCtx("user_free");
-      ctx.db.get.mockResolvedValue({ userId: "user_free" });
-      const mockCollect = vi.fn().mockResolvedValue(new Array(15).fill({}));
-      ctx.db.query.mockReturnValue({
-        withIndex: () => ({ collect: mockCollect }),
-      });
-
-      const pieces = new Array(6).fill({ content: "content" });
-
-      await expect(
-        bulkImportHandler(ctx, { spaceId: "space_123", pieces }),
-      ).rejects.toThrow(/Bulk import would exceed the limit of 20/);
-    });
-  });
-
-  describe("Test Generation Limits", () => {
-    it("blocks creating a test when at the limit (free plan)", async () => {
-      const ctx = createMockCtx("user_free");
-      ctx.db.get.mockResolvedValue({ userId: "user_free" });
-      const mockCollect = vi.fn().mockResolvedValue(new Array(10).fill({}));
-      ctx.db.query.mockReturnValue({
-        withIndex: () => ({ collect: mockCollect }),
-      });
-
-      await expect(
-        createEmptyTestHandler(ctx, {
-          spaceId: "space_123",
-          userId: "user_free",
-          type: "select",
-          questionCount: 5,
-        }),
-      ).rejects.toThrow(/Limit reached: You have created 10 tests/);
-    });
-
-    it("allows test creation on pro plan with many tests", async () => {
-      const ctx = createMockCtx("user_pro", "pro-monthly");
-      ctx.db.get.mockResolvedValue({ userId: "user_pro" });
-      const mockCollect = vi.fn().mockResolvedValue(new Array(50).fill({}));
-      ctx.db.query.mockReturnValue({
-        withIndex: () => ({ collect: mockCollect }),
-      });
-
-      await createEmptyTestHandler(ctx, {
-        spaceId: "space_123",
-        userId: "user_pro",
-        type: "select",
-        questionCount: 5,
-        plan: "pro-monthly",
-      });
-      expect(ctx.db.insert).toHaveBeenCalled();
-    });
+    const viaLevel = getLimitsForAccessLevel(ACCESS_LEVELS.PRO_SCHOLAR);
+    expect(viaSlug).toEqual(viaLevel);
   });
 });

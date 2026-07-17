@@ -1,16 +1,23 @@
-import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
+import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import {
-  ConvexAuthError,
-  createAuthedConvexClient,
-} from "../../../../lib/convexClientAuth";
+  enqueueSseError,
+  sseDelta,
+  sseDone,
+  sseResponse,
+} from "../../../../lib/sse";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
 } from "../../../../../shared/posthogAiObservability";
+import {
+  createRequestId,
+  getErrorAttributes,
+  logError,
+} from "../../../../lib/otlpLogger";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -26,12 +33,16 @@ function getModel() {
 }
 
 export async function POST(req: Request) {
-  const { userId, getToken } = await auth();
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
-  }
+  const requestId = createRequestId(req.headers);
+  const startedAt = Date.now();
+
+  const authResult = await requireAuthedApi("api.learn.clarify", {
+    requestId,
+    route: "/api/learn/clarify",
+    duration_ms: Date.now() - startedAt,
+  });
+  if (authResult instanceof Response) return authResult;
+  const { userId, convex } = authResult;
 
   const body = (await req.json()) as {
     lessonId: string;
@@ -60,21 +71,7 @@ export async function POST(req: Request) {
     typeof blockIndex !== "number" ||
     typeof sectionIndex !== "number"
   ) {
-    return new Response(JSON.stringify({ error: "Missing required fields" }), {
-      status: 400,
-    });
-  }
-
-  let convex: Awaited<ReturnType<typeof createAuthedConvexClient>>;
-  try {
-    convex = await createAuthedConvexClient(getToken, "api.learn.clarify");
-  } catch (error) {
-    if (error instanceof ConvexAuthError) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      });
-    }
-    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
+    return jsonError(400, "Missing required fields");
   }
 
   try {
@@ -132,7 +129,6 @@ export async function POST(req: Request) {
 
     const ai = getAiClient();
     const model = getModel();
-    const encoder = new TextEncoder();
     const aiTraceId = createAiTraceId();
 
     const readable = new ReadableStream({
@@ -149,11 +145,7 @@ export async function POST(req: Request) {
             const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
             if (part) {
               fullText += part;
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: "delta", text: part })}\n\n`,
-                ),
-              );
+              controller.enqueue(sseDelta(part));
             }
           }
 
@@ -179,36 +171,32 @@ export async function POST(req: Request) {
             threadId,
           });
 
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "done", fullText })}\n\n`,
-            ),
-          );
+          controller.enqueue(sseDone({ fullText }));
           controller.close();
         } catch (err) {
-          try {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "error", error: "Clarification failed" })}\n\n`,
-              ),
-            );
-            controller.close();
-          } catch {
-            // Controller may already be closed
-          }
+          logError("Clarify stream failed", {
+            source: "api.learn.clarify",
+            requestId,
+            route: "/api/learn/clarify",
+            userId,
+            duration_ms: Date.now() - startedAt,
+            ...getErrorAttributes(err),
+          });
+          enqueueSseError(controller, "Clarification failed");
         }
       },
     });
 
-    return new Response(readable, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
+    return sseResponse(readable);
+  } catch (err) {
+    logError("Clarify request failed", {
+      source: "api.learn.clarify",
+      requestId,
+      route: "/api/learn/clarify",
+      userId,
+      duration_ms: Date.now() - startedAt,
+      ...getErrorAttributes(err),
     });
-  } catch {
-    return new Response(JSON.stringify({ error: "Clarification request failed" }), { status: 500 });
+    return jsonError(500, "Clarification request failed");
   }
 }

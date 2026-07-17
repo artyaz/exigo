@@ -1,12 +1,15 @@
-import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
+import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import {
-  ConvexAuthError,
-  createAuthedConvexClient,
-} from "../../../../lib/convexClientAuth";
+  enqueueSseError,
+  sseData,
+  sseDelta,
+  sseDone,
+  sseResponse,
+} from "../../../../lib/sse";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -50,41 +53,19 @@ export async function POST(req: Request) {
   const requestId = createRequestId(req.headers);
   const startedAt = Date.now();
 
-  const { userId, getToken } = await auth();
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
-  }
+  const authResult = await requireAuthedApi("api.learn.teach", {
+    requestId,
+    route: "/api/learn/teach",
+    duration_ms: Date.now() - startedAt,
+  });
+  if (authResult instanceof Response) return authResult;
+  const { userId, convex } = authResult;
 
   const body = (await req.json()) as { lessonId: string; userMessage?: string };
   const { lessonId, userMessage } = body;
 
   if (!lessonId) {
-    return new Response(JSON.stringify({ error: "lessonId required" }), {
-      status: 400,
-    });
-  }
-
-  let convex: Awaited<ReturnType<typeof createAuthedConvexClient>>;
-  try {
-    convex = await createAuthedConvexClient(getToken, "api.learn.teach");
-  } catch (error) {
-    logError("Failed to initialize Convex client for teach", {
-      source: "api.learn.teach",
-      requestId,
-      route: "/api/learn/teach",
-      userId,
-      duration_ms: Date.now() - startedAt,
-      ...getErrorAttributes(error),
-    });
-    if (error instanceof ConvexAuthError) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Missing Convex auth token." }),
-        { status: 401 },
-      );
-    }
-    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
+    return jsonError(400, "lessonId required");
   }
 
   try {
@@ -118,30 +99,21 @@ export async function POST(req: Request) {
       (m: { role: string }) => m.role === "teacher",
     ).length;
     if (teacherMessageCount >= MAX_TEACHER_MESSAGES) {
-      const encoder = new TextEncoder();
       const forceComplete = new ReadableStream({
         start(controller) {
           const text = "[LESSON_COMPLETE]";
+          controller.enqueue(sseDelta(text));
           controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "delta", text })}\n\n`,
-            ),
-          );
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "done", isComplete: true, inputRequest: null, fullText: text })}\n\n`,
-            ),
+            sseDone({
+              isComplete: true,
+              inputRequest: null,
+              fullText: text,
+            }),
           );
           controller.close();
         },
       });
-      return new Response(forceComplete, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-        },
-      });
+      return sseResponse(forceComplete);
     }
 
     const masteryGoals = parseMasteryGoals(lesson.masteryGoals);
@@ -178,7 +150,6 @@ export async function POST(req: Request) {
 
     const ai = getAiClient();
     const model = getModel();
-    const encoder = new TextEncoder();
     const aiTraceId = createAiTraceId();
 
     logInfo("Teach stream started", {
@@ -209,11 +180,7 @@ export async function POST(req: Request) {
             if (part) {
               firstTokenAt ??= Date.now();
               fullText += part;
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: "delta", text: part })}\n\n`,
-                ),
-              );
+              controller.enqueue(sseDelta(part));
             }
           }
 
@@ -265,21 +232,19 @@ export async function POST(req: Request) {
           });
 
           // Send done event with parsed metadata
-          const donePayload = {
-            type: "done" as const,
-            isComplete,
-            inputRequest: inputRequestMatch
-              ? {
-                  type: inputRequestMatch[1]!.trim(),
-                  question: inputRequestMatch[2]!.trim(),
-                  expectedAnswer: inputRequestMatch[3]?.trim() ?? "",
-                }
-              : null,
-            fullText,
-          };
-
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(donePayload)}\n\n`),
+            sseData({
+              type: "done",
+              isComplete,
+              inputRequest: inputRequestMatch
+                ? {
+                    type: inputRequestMatch[1]!.trim(),
+                    question: inputRequestMatch[2]!.trim(),
+                    expectedAnswer: inputRequestMatch[3]?.trim() ?? "",
+                  }
+                : null,
+              fullText,
+            }),
           );
           controller.close();
         } catch (err) {
@@ -291,23 +256,12 @@ export async function POST(req: Request) {
             duration_ms: Date.now() - startedAt,
             ...getErrorAttributes(err),
           });
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ type: "error", error: "Teaching failed" })}\n\n`,
-            ),
-          );
-          controller.close();
+          enqueueSseError(controller, "Teaching failed");
         }
       },
     });
 
-    return new Response(readable, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    });
+    return sseResponse(readable);
   } catch (err) {
     logError("Teach request failed", {
       source: "api.learn.teach",
@@ -317,6 +271,6 @@ export async function POST(req: Request) {
       duration_ms: Date.now() - startedAt,
       ...getErrorAttributes(err),
     });
-    return new Response(JSON.stringify({ error: "Teaching request failed" }), { status: 500 });
+    return jsonError(500, "Teaching request failed");
   }
 }
