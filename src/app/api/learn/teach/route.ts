@@ -3,6 +3,7 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
+import { requireServerMutationSecret } from "../../../../lib/serverMutationSecret";
 import {
   enqueueSseError,
   sseData,
@@ -60,6 +61,13 @@ export async function POST(req: Request) {
   });
   if (authResult instanceof Response) return authResult;
   const { userId, convex } = authResult;
+
+  let serverSecret: string;
+  try {
+    serverSecret = requireServerMutationSecret();
+  } catch {
+    return jsonError(503, "Server mutation secret is not configured");
+  }
 
   const body = (await req.json()) as { lessonId: string; userMessage?: string };
   const { lessonId, userMessage } = body;
@@ -225,7 +233,7 @@ export async function POST(req: Request) {
 
           // Save teacher message to DB
           await convex.mutation(api.courseLessonMessages.sendTeacher, {
-            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
+            serverSecret,
             lessonId: lessonIdTyped,
             content: fullText,
             messageType,

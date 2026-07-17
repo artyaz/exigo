@@ -1,21 +1,11 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import { getAuthedContext } from "./authDecorators";
+import { assertServerMutationSecret } from "./serverMutationSecret";
 
 type LessonMessageRole = "teacher" | "user" | "system";
-
-/** Shared secret so only Next.js server routes can write teacher/system roles. */
-function assertServerMutationSecret(serverSecret: string) {
-  const expected = process.env.EXIGO_SERVER_MUTATION_SECRET;
-  if (!expected || serverSecret !== expected) {
-    throw new ConvexError({
-      code: "FORBIDDEN",
-      message: "Server mutation secret required",
-    });
-  }
-}
 
 async function assertLessonOwner(
   ctx: MutationCtx,

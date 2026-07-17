@@ -166,28 +166,6 @@ export async function advanceCourseAction(
   }
 }
 
-export async function teachLessonAction(
-  lessonId: string,
-  userMessage?: string,
-): Promise<ActionResult<{
-  teacherResponse: string;
-  isComplete: boolean;
-  inputRequest: { type: string; question: string; expectedAnswer: string } | null;
-}>> {
-  const { userId, getToken } = await auth();
-  if (!userId) return { ok: false, error: "Unauthorized" };
-
-  try {
-    const convex = await createAuthedConvexClient(getToken, "actions.learn.teachLessonAction");
-    const result = await convex.action(api.courseAi.teachLesson, {
-      lessonId: lessonId as Id<"courseLessons">,
-      userMessage,
-    });
-    return { ok: true, data: result };
-  } catch (error) {
-    return failWithLog(error, "actions.learn.teachLessonAction", "Failed to load lesson content. Please try again.");
-  }
-}
 
 export async function verifyInputAction(
   lessonId: string,
@@ -252,25 +230,3 @@ export async function summarizeLessonAction(
   }
 }
 
-export async function clarifyConceptAction(
-  lessonId: string,
-  quote: string,
-  question: string,
-  threadId: string,
-): Promise<ActionResult<{ answer: string }>> {
-  const { userId, getToken } = await auth();
-  if (!userId) return { ok: false, error: "Unauthorized" };
-
-  try {
-    const convex = await createAuthedConvexClient(getToken, "actions.learn.clarifyConceptAction");
-    const result = await convex.action(api.courseAi.clarifyConcept, {
-      lessonId: lessonId as Id<"courseLessons">,
-      quote,
-      question,
-      threadId,
-    });
-    return { ok: true, data: result };
-  } catch (error) {
-    return failWithLog(error, "actions.learn.clarifyConceptAction", "Failed to clarify concept. Please try again.");
-  }
-}

@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 import {
   query,
   mutation,
@@ -9,16 +9,7 @@ import {
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
-
-function assertServerMutationSecret(serverSecret: string) {
-  const expected = process.env.EXIGO_SERVER_MUTATION_SECRET;
-  if (!expected || serverSecret !== expected) {
-    throw new ConvexError({
-      code: "FORBIDDEN",
-      message: "Server mutation secret required",
-    });
-  }
-}
+import { assertServerMutationSecret } from "./serverMutationSecret";
 
 // ─── Chat CRUD ───
 

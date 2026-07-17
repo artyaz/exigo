@@ -6,6 +6,20 @@ import {
   type RestoredLessonRuntimeState,
 } from "~/lib/lessonCheckpoints";
 import type { TeachDoneArgs } from "~/app/_components/learn/useLessonCheckpoints";
+import { iterateParsedSseBlocks, parseJsonData } from "~/lib/sseClient";
+
+type TeachSsePayload = {
+  type: string;
+  text?: string;
+  error?: string;
+  isComplete?: boolean;
+  inputRequest?: {
+    type: string;
+    question: string;
+    expectedAnswer: string;
+  } | null;
+  fullText?: string;
+};
 
 /** Methods supplied by useLessonCheckpoints; read via ref to avoid declaration-order cycles. */
 export type LessonTeachCheckpointBridge = {
@@ -65,63 +79,33 @@ export function useLessonTeachStream(opts: {
 
       if (!res.body) throw new Error("No stream body");
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
       let accumulated = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
+      for await (const block of iterateParsedSseBlocks(res.body)) {
+        if (block.event) continue; // majority dialect only
+        const payload = parseJsonData<TeachSsePayload>(block.data);
+        if (!payload) continue;
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const payload = JSON.parse(line.slice(6)) as {
-              type: string;
-              text?: string;
-              error?: string;
-              isComplete?: boolean;
-              inputRequest?: {
-                type: string;
-                question: string;
-                expectedAnswer: string;
-              } | null;
-              fullText?: string;
-            };
+        if (payload.type === "delta" && payload.text) {
+          accumulated += payload.text;
+          setFullText(accumulated);
 
-            if (payload.type === "delta" && payload.text) {
-              accumulated += payload.text;
-              setFullText(accumulated);
-
-              // Auto-reveal: check if we've streamed past the current revealed section
-              // and we're not waiting on an input request
-              const currentSections = parseLessonSections(accumulated);
-              // Reveal the first section immediately while streaming
-              if (currentSections.length > 0) {
-                checkpointBridgeRef.current.revealFirstSection();
-              }
-            } else if (payload.type === "done") {
-              const final = payload.fullText ?? accumulated;
-              setFullText(final);
-
-              // Pause at first input request
-              const parsed = parseLessonSections(final);
-              checkpointBridgeRef.current.applyTeachDone({
-                finalText: final,
-                isComplete: payload.isComplete ?? false,
-                inputRequest: payload.inputRequest,
-                parsed,
-              });
-            } else if (payload.type === "error") {
-              setError(payload.error ?? "Teaching failed");
-            }
-          } catch {
-            /* skip malformed SSE */
+          const currentSections = parseLessonSections(accumulated);
+          if (currentSections.length > 0) {
+            checkpointBridgeRef.current.revealFirstSection();
           }
+        } else if (payload.type === "done") {
+          const final = payload.fullText ?? accumulated;
+          setFullText(final);
+          const parsed = parseLessonSections(final);
+          checkpointBridgeRef.current.applyTeachDone({
+            finalText: final,
+            isComplete: payload.isComplete ?? false,
+            inputRequest: payload.inputRequest,
+            parsed,
+          });
+        } else if (payload.type === "error") {
+          setError(payload.error ?? "Teaching failed");
         }
       }
     } catch (err) {

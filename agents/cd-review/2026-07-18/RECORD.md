@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|--------|
-| **State** | paused (Wave 6 code + verify done; not shipped) |
-| **Branch** | `fix/wave6-product` (from layout reorg + main through #73) |
-| **Last updated** | 2026-07-18 (Wave 6 residual implemented + verified) |
+| **State** | in_progress (Wave 7 code done; Wave 6 PRs open; Wave 8 deferred backlog) |
+| **Branch** | `fix/wave7-product` (stacked on wave6 → develop) |
+| **Last updated** | 2026-07-18 (Wave 7 residual packs implemented + verified) |
 | **Continues from** | Same calendar window as product work started 2026-07-17 (UTC/session) |
 | **RUN_ROOT** | `agents/cd-review/2026-07-18` |
 
@@ -24,7 +24,8 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | Verify | **done** per ship | tests 270–281; CI build green after lint fixes |
 | Ship | **done** | See PR list below |
 | Artifact reorg | **done** | Moved into this RUN_ROOT; LOOP.md polished |
-| Wave 6 residual | **code done / ship pending** | P6-A TTL, P6-B sseClient tests, P6-C dual-AI docs, P6-D perk sync; verify 281 tests |
+| Wave 6 residual | **PR open** | #77 develop, #78 main; P6-A–D |
+| Wave 7 residual | **code done / ship pending** | S-W7 audit 16 findings; P7-A–D; verify 280 tests |
 
 ## Done (chronological)
 
@@ -116,7 +117,21 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 **Verify:** `npm run check` green (pre-existing warnings only); `npm run test` **281** passed. See `audits/verify-wave6.md`.
 
-**Ship:** not opened yet — branch `fix/wave6-product`.
+**Ship:** #77 → develop, #78 → main (open).
+
+### Wave 7 — residual hostile + fix
+
+| Pack | Outcome |
+|------|---------|
+| Audit S-W7 | 16 findings (3 P1, 11 P2, 2 P3) → `audits/slices/S-W7.md` |
+| P7-A | Teach/clarify hooks back on `sseClient` (F-W7-001) |
+| P7-B | Deleted dead `teachLesson`/`clarifyConcept` + shadow `chat`/`generateImprovements` (F-W7-005/006) |
+| P7-C | Shared secret assert + Next fail-fast before AI (F-W7-014/015) |
+| P7-D | Identity-first spaces/tests; drop knowledge piece limit console.log (F-W7-003/016) |
+
+**Verify:** `npm run check` green; `npm run test` **280** passed. See `audits/verify-wave7.md`.
+
+**Ship:** branch `fix/wave7-product` (includes wave6 commits until #77 merges).
 
 ### Artifact reorg (this step)
 
@@ -126,24 +141,36 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 ## In flight
 
-- None code. Ship PR(s) for Wave 6 when ready.
+- Ship Wave 7 PR after Wave 6 merges (or stack).
+- Wave 8 candidates from S-W7 deferred list.
 
 ## Stopped at
 
-1. **Ship Wave 6** from `fix/wave6-product` (PR to develop/main per policy).
-2. **Ops after deploy:** run `seedPlans.syncPerksFromSsot` on Convex deployments with stale free perk text.
-3. **Optional residual:** P6-E LessonPhase further JSX split (~566 lines); CodeRabbit keep PRs scoped.
+1. **Merge #77/#78 (Wave 6)** then open Wave 7 PR to develop/main.
+2. **Ops:** `seedPlans.syncPerksFromSsot` on Convex after Wave 6 deploys.
+3. **Wave 8 backlog** (next product wave under same RUN_ROOT unless user asks new date):
+   - Product Next routes → `resolveAiProvider` (F-W7-002, L)
+   - Tutor route split + optional dialect unify (F-W7-007/010)
+   - LessonPhase presentation extract (F-W7-009)
+   - `default_user` policy (F-W7-004)
+   - ConvexError helpers (F-W7-012)
+   - Tutor memory vector search (F-W7-013)
 
 ## Residual / backlog (priority)
 
 | Priority | Item | Source | Status |
 |----------|------|--------|--------|
-| P1 | TTL / reclaim for stuck `generationInProgress` | P5-C | **done** P6-A |
-| P2 | Dual AI stack documentation | S8/S9 | **done** P6-C (docs) |
-| P2 | Migrate test SSE generation to `sseClient` | P5-D | **done** P6-B |
-| P2 | Seed refresh for free perk strings | P3-A / P4-E | **done** P6-D (helper; run ops) |
-| P3 | Further LessonPhase JSX split | P5-A | deferred |
-| P3 | CodeRabbit 100-file limit → keep product PRs scoped | ops | open |
+| P1 | TTL / reclaim stuck generation lock | P5-C | **done** P6-A |
+| P1 | Teach/clarify sseClient regression | F-W7-001 | **done** P7-A |
+| P1 | Identity-first spaces/tests | F-W7-003 | **done** P7-D |
+| P1 | Product Next → resolveAiProvider | F-W7-002 | Wave 8 |
+| P2 | Dead dual AI delete | F-W7-005/006 | **done** P7-B |
+| P2 | Secret fail-fast + shared assert | F-W7-014/015 | **done** P7-C |
+| P2 | Tutor god route / courseAi split | F-W7-007/008 | Wave 8 |
+| P2 | LessonPhase further split | F-W7-009 | Wave 8 |
+| P2 | Tutor SSE dialect unify | F-W7-010 | Wave 8 |
+| P2 | default_user tenancy policy | F-W7-004 | Wave 8 (product) |
+| P3 | CodeRabbit 100-file PR scope | ops | open |
 
 ## Valuable notes
 

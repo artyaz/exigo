@@ -4,6 +4,7 @@ import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
+import { requireServerMutationSecret } from "../../../../lib/serverMutationSecret";
 import { sseNamedEvent } from "../../../../lib/sse";
 import {
   captureAiGenerationEvent,
@@ -513,6 +514,13 @@ export async function POST(req: Request) {
   if (authResult instanceof Response) return authResult;
   const { userId, convex } = authResult;
 
+  let serverSecret: string;
+  try {
+    serverSecret = requireServerMutationSecret();
+  } catch {
+    return jsonError(503, "Server mutation secret is not configured");
+  }
+
   const body = (await req.json()) as {
     spaceId: string;
     courseId?: string;
@@ -698,7 +706,7 @@ export async function POST(req: Request) {
           await convex.mutation(api.courseTutor.sendTutorMessage, {
             chatId,
             content: fullResponse,
-            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
+            serverSecret,
           });
 
           send("done", { chatId });
@@ -722,7 +730,7 @@ export async function POST(req: Request) {
           await convex.mutation(api.courseTutor.sendTutorMessage, {
             chatId,
             content: fullResponse,
-            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
+            serverSecret,
           });
 
           send("done", { chatId });

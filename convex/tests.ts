@@ -97,14 +97,10 @@ export const createEmptyTest = mutation({
     type: v.string(),
     questionCount: v.number(),
     topicTitle: v.optional(v.string()),
-    userId: v.string(),
     knowledgePieceId: v.optional(v.id("knowledgePieces")),
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-    if (args.userId !== auth.userId) {
-      throw new Error("Unauthorized");
-    }
 
     const maxAllowed = auth.limits.maxTestsPerMonth;
     if (maxAllowed === 0) {
@@ -148,13 +144,9 @@ export const create = mutation({
     spaceId: v.id("spaces"),
     type: v.string(),
     questionCount: v.optional(v.number()),
-    userId: v.string(),
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-    if (args.userId !== auth.userId) {
-      throw new Error("Unauthorized");
-    }
 
     const maxAllowed = auth.limits.maxTestsPerMonth;
     if (maxAllowed === 0) {
@@ -191,13 +183,10 @@ export const create = mutation({
 });
 
 export const countForUserThisMonth = query({
-  args: { userId: v.string() },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject || identity.subject !== args.userId) {
-      throw new Error("Unauthorized");
-    }
-    return await countForUserThisMonthInternal(ctx, args.userId);
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    return await countForUserThisMonthInternal(ctx, userId);
   },
 });
 
@@ -246,16 +235,13 @@ export const getForSpace = query({
 });
 
 export const listAll = query({
-  args: { userId: v.string() },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject || identity.subject !== args.userId) {
-      throw new Error("Unauthorized");
-    }
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthenticatedUserId(ctx);
 
     const spaces = await ctx.db
       .query("spaces")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     if (spaces.length === 0) return [];
 
@@ -308,7 +294,6 @@ export const createWithQuestions = mutation({
   args: {
     spaceId: v.id("spaces"),
     type: v.string(),
-    userId: v.string(),
     questions: v.array(
       v.object({
         type: QUESTION_TYPE,
@@ -320,9 +305,6 @@ export const createWithQuestions = mutation({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-    if (args.userId !== auth.userId) {
-      throw new Error("Unauthorized");
-    }
 
     const maxAllowed = auth.limits.maxTestsPerMonth;
     if (maxAllowed === 0) {
