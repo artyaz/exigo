@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import {
-  ConvexAuthError,
-  createAuthedConvexClient,
-} from "../../../../lib/convexClientAuth";
+import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -58,15 +54,13 @@ export async function POST(req: NextRequest) {
   const requestId = createRequestId(req.headers);
   const startedAt = Date.now();
   try {
-    const { userId, getToken } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const convex = await createAuthedConvexClient(
-      getToken,
-      "api.tests.feels-hard",
-    );
+    const authResult = await requireAuthedApi("api.tests.feels-hard", {
+      requestId,
+      route: "/api/tests/feels-hard",
+      duration_ms: Date.now() - startedAt,
+    });
+    if (authResult instanceof Response) return authResult;
+    const { userId, convex } = authResult;
 
     const planStatus = await convex.query(api.planLimits.getPlan, {});
 
@@ -223,13 +217,6 @@ export async function POST(req: NextRequest) {
       duration_ms: Date.now() - startedAt,
       ...getErrorAttributes(err),
     });
-    if (err instanceof ConvexAuthError) {
-      return NextResponse.json(
-        { error: "Unauthorized: Missing Convex auth token." },
-        { status: 401 },
-      );
-    }
-    const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return jsonError(500, "Internal server error");
   }
 }

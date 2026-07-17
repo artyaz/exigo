@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import {
-  ConvexAuthError,
-  createAuthedConvexClient,
-} from "../../../../lib/convexClientAuth";
+import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import { PLAN_LIMIT_CODE } from "../../../../../shared/planConfig";
 import {
   createRequestId,
@@ -50,23 +46,24 @@ export async function POST(req: NextRequest) {
   const requestId = createRequestId(req.headers);
   const startedAt = Date.now();
   try {
-    const { userId, getToken } = await auth();
-
-    const convex = await createAuthedConvexClient(getToken, "api.tests.chat");
+    const authResult = await requireAuthedApi("api.tests.chat", {
+      requestId,
+      route: "/api/tests/chat",
+      duration_ms: Date.now() - startedAt,
+    });
+    if (authResult instanceof Response) return authResult;
+    const { userId, convex } = authResult;
 
     let rawBody: Record<string, unknown>;
     try {
       rawBody = (await req.json()) as Record<string, unknown>;
     } catch {
-      return NextResponse.json({ error: "Malformed JSON" }, { status: 400 });
+      return jsonError(400, "Malformed JSON");
     }
 
     const parsedBody = parseChatBody(rawBody);
     if (!parsedBody) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 },
-      );
+      return jsonError(400, "Missing required fields");
     }
 
     const result = await convex.action(api.testMessagesActions.chat, {
@@ -79,7 +76,7 @@ export async function POST(req: NextRequest) {
       source: "api.tests.chat",
       requestId,
       route: "/api/tests/chat",
-      userId: userId ?? undefined,
+      userId,
       testId: parsedBody.testId,
       questionId: parsedBody.questionId,
       duration_ms: Date.now() - startedAt,
@@ -94,24 +91,12 @@ export async function POST(req: NextRequest) {
       duration_ms: Date.now() - startedAt,
       ...getErrorAttributes(err),
     });
-    if (err instanceof ConvexAuthError) {
-      return NextResponse.json(
-        { error: "Unauthorized: Missing Convex auth token." },
-        { status: 401 },
-      );
-    }
     if (hasErrorCode(err, PLAN_LIMIT_CODE)) {
-      return NextResponse.json(
-        {
-          error:
-            "AI Tutor is available on Educator plan. Please upgrade your plan.",
-        },
-        { status: 403 },
+      return jsonError(
+        403,
+        "AI Tutor is available on Educator plan. Please upgrade your plan.",
       );
     }
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return jsonError(500, "Internal server error");
   }
 }
