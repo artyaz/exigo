@@ -7,6 +7,7 @@ import {
   getAuthedContextForAction,
   requireEducatorAccess,
 } from "./authDecorators";
+import { requireOwnedCourseForAction } from "./courseAuth";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -94,6 +95,14 @@ export const normalizeTopic = action({
   handler: async (ctx, args) => {
     const auth = await getAuthedContextForAction(ctx);
     requireEducatorAccess(auth);
+
+    // Fail-fast space ownership before burning Gemini quota
+    const space = await ctx.runQuery(internal.courses.getSpaceInternal, {
+      spaceId: args.spaceId,
+    });
+    if (!space || space.userId !== auth.userId) {
+      throw new Error("Unauthorized access to this space");
+    }
 
     const ai = getAiClient();
     const model = getModelPro();
@@ -213,6 +222,12 @@ export const generateBaselineQuestion = action({
     const auth = await getAuthedContextForAction(ctx);
     requireEducatorAccess(auth);
 
+    const course = await requireOwnedCourseForAction(
+      ctx,
+      args.courseId,
+      auth.userId,
+    );
+
     const ai = getAiClient();
     const model = getModel();
     const resultsContext =
@@ -227,7 +242,7 @@ export const generateBaselineQuestion = action({
       },
     );
     const prompt = renderPrompt(promptDoc.content, {
-      courseTopic: args.courseTopic,
+      courseTopic: course.refinedTitle || args.courseTopic,
       targetAudienceLevel: "intermediate",
       currentStep: args.currentStep,
       previousQuestions: JSON.stringify(args.previousQuestions),
@@ -272,6 +287,8 @@ export const evaluateBaselineAnswer = action({
   handler: async (ctx, args) => {
     const auth = await getAuthedContextForAction(ctx);
     requireEducatorAccess(auth);
+
+    await requireOwnedCourseForAction(ctx, args.courseId, auth.userId);
 
     const ai = getAiClient();
     const model = getModel();

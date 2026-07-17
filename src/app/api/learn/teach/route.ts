@@ -104,7 +104,6 @@ export async function POST(req: Request) {
       await convex.mutation(api.courseLessonMessages.send, {
         lessonId: lessonIdTyped,
         content: userMessage,
-        role: "user",
       });
     }
 
@@ -258,10 +257,9 @@ export async function POST(req: Request) {
               : "narrative";
 
           // Save teacher message to DB
-          await convex.mutation(api.courseLessonMessages.send, {
+          await convex.mutation(api.courseLessonMessages.sendTeacher, {
             lessonId: lessonIdTyped,
             content: fullText,
-            role: "teacher",
             messageType,
           });
 

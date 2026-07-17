@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as authDecorators from "../authDecorators.js";
 import type * as courseAi from "../courseAi.js";
+import type * as courseAuth from "../courseAuth.js";
 import type * as courseLessonMessages from "../courseLessonMessages.js";
 import type * as courseLessons from "../courseLessons.js";
 import type * as courseModules from "../courseModules.js";
@@ -40,7 +41,6 @@ import type * as testMessages from "../testMessages.js";
 import type * as testMessagesActions from "../testMessagesActions.js";
 import type * as testUtils from "../testUtils.js";
 import type * as tests from "../tests.js";
-import type * as usageService from "../usageService.js";
 import type * as userSettings from "../userSettings.js";
 
 import type {
@@ -53,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authDecorators: typeof authDecorators;
   courseAi: typeof courseAi;
+  courseAuth: typeof courseAuth;
   courseLessonMessages: typeof courseLessonMessages;
   courseLessons: typeof courseLessons;
   courseModules: typeof courseModules;
@@ -82,7 +83,6 @@ declare const fullApi: ApiFromModules<{
   testMessagesActions: typeof testMessagesActions;
   testUtils: typeof testUtils;
   tests: typeof tests;
-  usageService: typeof usageService;
   userSettings: typeof userSettings;
 }>;
 
