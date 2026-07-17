@@ -1,0 +1,18 @@
+# https://docs.coderabbit.ai/guides/configure-coderabbit
+language: en-US
+reviews:
+  profile: chill
+  path_filters:
+    - "!audits/**"
+    - "!loops/**"
+    - "!**/_generated/**"
+    - "!**/*.md"
+  path_instructions:
+    - path: "convex/**"
+      instructions: |
+        Focus on authz (no client-trusted userId/role), Convex conventions, and clarity.
+    - path: "src/app/api/**"
+      instructions: |
+        Focus on auth gates, SSE consistency, and secret/error leakage.
+chat:
+  auto_reply: true
