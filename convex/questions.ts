@@ -1,124 +1,187 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { getAuthenticatedUserId } from "./authDecorators";
+
+type DbCtx = QueryCtx | MutationCtx;
+
+async function loadTestSpace(ctx: DbCtx, testId: Id<"tests">) {
+  const test = await ctx.db.get(testId);
+  if (!test) return null;
+  const space = await ctx.db.get(test.spaceId);
+  if (!space) return null;
+  return { test, space };
+}
+
+function canAccessSpace(space: Doc<"spaces">, userId: string): boolean {
+  return space.userId === userId || space.userId === "default_user";
+}
+
+function canAccessTest(
+  space: Doc<"spaces"> | null | undefined,
+  userId: string,
+): boolean {
+  return !!space && canAccessSpace(space, userId);
+}
+
+async function requireTestAccess(
+  ctx: DbCtx,
+  testId: Id<"tests">,
+  userId: string,
+) {
+  const test = await ctx.db.get(testId);
+  if (!test) throw new Error("Test not found");
+
+  const space = await ctx.db.get(test.spaceId);
+  if (!space || !canAccessSpace(space, userId)) {
+    throw new Error("Unauthorized access to this test");
+  }
+
+  return { test, space };
+}
 
 export const create = mutation({
-    args: {
-        testId: v.id("tests"),
-        userId: v.string(),
-        type: v.string(), // "select" | "write"
-        question: v.string(),
-        options: v.optional(v.array(v.string())),
-        answer: v.optional(v.string()),
-        knowledgeNodeId: v.optional(v.id("knowledgeNodes")),
-    },
-    handler: async (ctx, args) => {
-        const test = await ctx.db.get(args.testId);
-        if (!test) throw new Error("Test not found");
+  args: {
+    testId: v.id("tests"),
+    type: v.string(), // "select" | "write"
+    question: v.string(),
+    options: v.optional(v.array(v.string())),
+    answer: v.optional(v.string()),
+    knowledgeNodeId: v.optional(v.id("knowledgeNodes")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    await requireTestAccess(ctx, args.testId, userId);
 
-        const space = await ctx.db.get(test.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
-            throw new Error("Unauthorized access to this test");
-        }
-
-        return await ctx.db.insert("questions", {
-            testId: args.testId,
-            type: args.type as "select" | "write",
-            question: args.question,
-            options: args.options,
-            answer: args.answer,
-            knowledgeNodeId: args.knowledgeNodeId,
-        });
-    },
+    return await ctx.db.insert("questions", {
+      testId: args.testId,
+      type: args.type as "select" | "write",
+      question: args.question,
+      options: args.options,
+      answer: args.answer,
+      knowledgeNodeId: args.knowledgeNodeId,
+    });
+  },
 });
 
-
 export const getForTest = query({
-    args: { testId: v.id("tests") },
-    handler: async (ctx, args) => {
-        return await ctx.db
-            .query("questions")
-            .withIndex("by_test", (q) => q.eq("testId", args.testId))
-            .collect();
-    },
+  args: { testId: v.id("tests") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+    if (!userId) return [];
+
+    const loaded = await loadTestSpace(ctx, args.testId);
+    if (!loaded || !canAccessTest(loaded.space, userId)) return [];
+
+    return await ctx.db
+      .query("questions")
+      .withIndex("by_test", (q) => q.eq("testId", args.testId))
+      .collect();
+  },
 });
 
 export const get = query({
-    args: { questionId: v.id("questions") },
-    handler: async (ctx, args) => {
-        return await ctx.db.get(args.questionId);
-    },
+  args: { questionId: v.id("questions") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+    if (!userId) return null;
+
+    const question = await ctx.db.get(args.questionId);
+    if (!question) return null;
+
+    const loaded = await loadTestSpace(ctx, question.testId);
+    if (!loaded || !canAccessTest(loaded.space, userId)) return null;
+
+    return question;
+  },
 });
 
 export const updateFeedback = mutation({
-    args: {
-        questionId: v.id("questions"),
-        userId: v.string(),
-        isCorrect: v.boolean(),
-        aiFeedback: v.string(),
-        userAnswer: v.string(),
-    },
-    handler: async (ctx, args) => {
-        const question = await ctx.db.get(args.questionId);
-        if (!question) throw new Error("Question not found");
+  args: {
+    questionId: v.id("questions"),
+    isCorrect: v.boolean(),
+    aiFeedback: v.string(),
+    userAnswer: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
 
-        const test = await ctx.db.get(question.testId);
-        if (!test) throw new Error("Test not found");
+    const question = await ctx.db.get(args.questionId);
+    if (!question) throw new Error("Question not found");
 
-        const space = await ctx.db.get(test.spaceId);
-        if (!space || (space.userId !== args.userId && space.userId !== "default_user")) {
-            throw new Error("Unauthorized access to this question");
-        }
+    await requireTestAccess(ctx, question.testId, userId);
 
-        await ctx.db.patch(args.questionId, {
-            isCorrect: args.isCorrect,
-            aiFeedback: args.aiFeedback,
-            userAnswer: args.userAnswer,
-        });
-    },
+    await ctx.db.patch(args.questionId, {
+      isCorrect: args.isCorrect,
+      aiFeedback: args.aiFeedback,
+      userAnswer: args.userAnswer,
+    });
+  },
 });
 
-
 export const getForSpace = query({
-    args: { spaceId: v.id("spaces") },
-    handler: async (ctx, args) => {
-        // Get all tests for this space
-        const tests = await ctx.db
-            .query("tests")
-            .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-            .collect();
-        // Get all questions for those tests
-        const allQuestions = await Promise.all(
-            tests.map((test) =>
-                ctx.db.query("questions")
-                    .withIndex("by_test", (q) => q.eq("testId", test._id))
-                    .collect()
-            )
-        );
-        return allQuestions.flat();
-    },
+  args: { spaceId: v.id("spaces") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+    if (!userId) return [];
+
+    const space = await ctx.db.get(args.spaceId);
+    if (!space || !canAccessSpace(space, userId)) return [];
+
+    const tests = await ctx.db
+      .query("tests")
+      .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+      .collect();
+
+    const allQuestions = await Promise.all(
+      tests.map((test) =>
+        ctx.db
+          .query("questions")
+          .withIndex("by_test", (q) => q.eq("testId", test._id))
+          .collect(),
+      ),
+    );
+    return allQuestions.flat();
+  },
 });
 
 export const getIncorrectForTopic = query({
-    args: { spaceId: v.id("spaces"), topicTitle: v.string() },
-    handler: async (ctx, args) => {
-        const tests = await ctx.db
-            .query("tests")
-            .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-            .filter((q) => q.eq(q.field("topicTitle"), args.topicTitle))
-            .collect();
+  args: { spaceId: v.id("spaces"), topicTitle: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+    if (!userId) return [];
 
-        const perTest = await Promise.all(
-            tests.map((test) =>
-                ctx.db.query("questions")
-                    .withIndex("by_test", (q) => q.eq("testId", test._id))
-                    .filter((q) => q.eq(q.field("isCorrect"), false))
-                    .collect()
-            )
-        );
+    const space = await ctx.db.get(args.spaceId);
+    if (!space || !canAccessSpace(space, userId)) return [];
 
-        return perTest
-            .flat()
-            .sort((a, b) => b._creationTime - a._creationTime)
-            .slice(0, 10);
-    },
+    const tests = await ctx.db
+      .query("tests")
+      .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
+      .filter((q) => q.eq(q.field("topicTitle"), args.topicTitle))
+      .collect();
+
+    const perTest = await Promise.all(
+      tests.map((test) =>
+        ctx.db
+          .query("questions")
+          .withIndex("by_test", (q) => q.eq("testId", test._id))
+          .filter((q) => q.eq(q.field("isCorrect"), false))
+          .collect(),
+      ),
+    );
+
+    return perTest
+      .flat()
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, 10);
+  },
 });

@@ -6,11 +6,12 @@ import { GeminiProvider } from "./gemini";
 import { OpenAiProvider } from "./openai";
 import { decryptSecret } from "./secrets";
 
-/* The single routing decision: given a user, return the AiProvider to use.
-   Default is the app's Google Gemini key; a user who configured a custom
-   OpenAI-compatible endpoint gets that instead. Settings live in Convex;
-   we reference the function by string (makeFunctionReference) so this
-   compiles independently of `convex codegen`. */
+/* The single routing decision: given an authed Convex client, return the
+   AiProvider to use. Default is the app's Google Gemini key; a user who
+   configured a custom OpenAI-compatible endpoint gets that instead.
+   Identity comes from the client's JWT — userId is not passed as an arg.
+   Settings live in Convex; we reference the function by string
+   (makeFunctionReference) so this compiles independently of `convex codegen`. */
 
 interface CipherSettings {
   provider: "gemini" | "openai";
@@ -20,7 +21,7 @@ interface CipherSettings {
   keyIv: string | null;
 }
 
-const getCipherRef = makeFunctionReference<"query", { userId: string }, CipherSettings | null>(
+const getCipherRef = makeFunctionReference<"query", Record<string, never>, CipherSettings | null>(
   "userSettings:getCipher",
 );
 
@@ -36,12 +37,12 @@ export function defaultGeminiProvider(model?: string): AiProvider {
   });
 }
 
-/** Resolve the provider for a user, honouring their saved preference and
-    falling back to the default Gemini provider on any gap. */
-export async function resolveAiProvider(convex: ConvexHttpClient, userId: string): Promise<AiProvider> {
+/** Resolve the provider for the authenticated user, honouring their saved
+    preference and falling back to the default Gemini provider on any gap. */
+export async function resolveAiProvider(convex: ConvexHttpClient): Promise<AiProvider> {
   let settings: CipherSettings | null = null;
   try {
-    settings = await convex.query(getCipherRef, { userId });
+    settings = await convex.query(getCipherRef, {});
   } catch {
     // Settings table/function not deployed yet, or transient — use the default.
     return defaultGeminiProvider();

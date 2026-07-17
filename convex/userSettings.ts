@@ -1,18 +1,20 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getAuthenticatedUserId } from "./authDecorators";
 
-/* Per-user AI provider settings. The Next.js server (which has the Clerk
-   identity) passes `userId`, matching the convention used across the other
-   Convex functions in this app. The custom API key is only ever handled as
-   opaque ciphertext here — encryption/decryption happens in the Next.js
-   server (src/server/ai/secrets.ts), so a Convex data leak exposes no key. */
+/* Per-user AI provider settings. The authenticated user is derived
+   server-side from the Convex auth context — never trusted from the client.
+   The custom API key is only ever handled as opaque ciphertext here —
+   encryption/decryption happens in the Next.js server
+   (src/server/ai/secrets.ts), so a Convex data leak exposes no key. */
 
 const PROVIDER = v.union(v.literal("gemini"), v.literal("openai"));
 
 /** Client-safe view: never returns the key, only whether one is set. */
 export const getMine = query({
-  args: { userId: v.string() },
-  handler: async (ctx, { userId }) => {
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthenticatedUserId(ctx);
     const row = await ctx.db
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -32,8 +34,9 @@ export const getMine = query({
     Next.js server can decrypt it. The cipher is useless without the server
     secret, so this is safe to expose to an authenticated caller. */
 export const getCipher = query({
-  args: { userId: v.string() },
-  handler: async (ctx, { userId }) => {
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthenticatedUserId(ctx);
     const row = await ctx.db
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -53,7 +56,6 @@ export const getCipher = query({
     server. `clearKey` removes a stored key (e.g. switching back to Gemini). */
 export const save = mutation({
   args: {
-    userId: v.string(),
     provider: PROVIDER,
     model: v.optional(v.string()),
     baseUrl: v.optional(v.string()),
@@ -62,9 +64,10 @@ export const save = mutation({
     clearKey: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
     const existing = await ctx.db
       .query("userSettings")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
 
     const patch: {
@@ -93,9 +96,9 @@ export const save = mutation({
     }
 
     if (existing) {
-      await ctx.db.replace(existing._id, { userId: args.userId, ...patch });
+      await ctx.db.replace(existing._id, { userId, ...patch });
       return existing._id;
     }
-    return await ctx.db.insert("userSettings", { userId: args.userId, ...patch });
+    return await ctx.db.insert("userSettings", { userId, ...patch });
   },
 });

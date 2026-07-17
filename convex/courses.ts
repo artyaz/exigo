@@ -64,21 +64,6 @@ export const getForSpace = query({
   },
 });
 
-export const updatePhase = mutation({
-  args: {
-    courseId: v.id("courses"),
-    phase: COURSE_PHASE,
-  },
-  handler: async (ctx, args) => {
-    const userId = await getAuthenticatedUserId(ctx);
-    const course = await ctx.db.get(args.courseId);
-    if (!course || course.userId !== userId) {
-      throw new Error("Unauthorized");
-    }
-    await ctx.db.patch(args.courseId, { phase: args.phase });
-  },
-});
-
 export const updatePhaseInternal = internalMutation({
   args: {
     courseId: v.id("courses"),
@@ -159,6 +144,11 @@ export const createInternal = internalMutation({
     courseDescription: v.string(),
   },
   handler: async (ctx, args) => {
+    const space = await ctx.db.get(args.spaceId);
+    if (!space || space.userId !== args.userId) {
+      throw new Error("Unauthorized access to this space");
+    }
+
     return await ctx.db.insert("courses", {
       spaceId: args.spaceId,
       userId: args.userId,
@@ -176,5 +166,12 @@ export const getInternal = internalQuery({
   args: { courseId: v.id("courses") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.courseId);
+  },
+});
+
+export const getSpaceInternal = internalQuery({
+  args: { spaceId: v.id("spaces") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.spaceId);
   },
 });

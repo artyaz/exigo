@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const convex = await createAuthedConvexClient(getToken, "api.generate.lesson");
-    const provider = await resolveAiProvider(convex, userId);
+    const provider = await resolveAiProvider(convex);
 
     const draftResult = await draftLesson(provider, body.topic.trim());
     if (!draftResult.draft) {

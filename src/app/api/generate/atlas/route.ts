@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const cfg: AtlasConfig = { ...(body.quick ? ATLAS_QUICK : ATLAS_DEFAULT), ...body.config };
 
   const convex = await createAuthedConvexClient(getToken, "api.generate.atlas");
-  const provider = await resolveAiProvider(convex, userId);
+  const provider = await resolveAiProvider(convex);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

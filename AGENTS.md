@@ -56,7 +56,7 @@ All AI calls use **Google Gemini** (`@google/genai`). The consistent pattern acr
 
 - Plan config lives in `shared/planConfig.ts` (shared between frontend and Convex backend).
 - `convex/subscriptionService.ts` implements a **Strategy pattern** for plan limits (`FreeLimitStrategy`, `ProScholarLimitStrategy`, `EducatorLimitStrategy`).
-- Usage tracking (tests, deep dives) is in `convex/usageService.ts` with rolling 30-day periods.
+- Usage tracking (tests, deep dives) is calendar-month entity counts in `convex/tests.ts` / `convex/deepDives.ts`.
 - Payments are handled via **Paddle** through the provider abstraction in `src/server/payments/` (`IPaymentProvider` interface, `PaddleProvider` implementation).
 
 ### Adaptive Course System (Educator-only)

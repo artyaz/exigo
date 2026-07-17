@@ -165,14 +165,10 @@ export const sendMessageInternal = internalMutation({
   },
 });
 
+/** Public: always inserts role "user". Clients cannot choose role. */
 export const sendMessage = mutation({
   args: {
     chatId: v.id("courseTutorChats"),
-    role: v.union(
-      v.literal("user"),
-      v.literal("tutor"),
-      v.literal("system"),
-    ),
     content: v.string(),
   },
   handler: async (ctx, args) => {
@@ -181,7 +177,25 @@ export const sendMessage = mutation({
     if (!chat || chat.userId !== userId) throw new Error("Unauthorized");
     return await ctx.db.insert("courseTutorMessages", {
       chatId: args.chatId,
-      role: args.role,
+      role: "user",
+      content: args.content,
+    });
+  },
+});
+
+/** Public: always inserts role "tutor". For server-side AI writers only. */
+export const sendTutorMessage = mutation({
+  args: {
+    chatId: v.id("courseTutorChats"),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    const chat = await ctx.db.get(args.chatId);
+    if (!chat || chat.userId !== userId) throw new Error("Unauthorized");
+    return await ctx.db.insert("courseTutorMessages", {
+      chatId: args.chatId,
+      role: "tutor",
       content: args.content,
     });
   },
