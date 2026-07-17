@@ -4,6 +4,7 @@ import type { GenericQueryCtx } from "convex/server";
 import type { DataModel } from "./_generated/dataModel";
 import { SUBSCRIPTION_STATUSES } from "../shared/subscriptionStatuses";
 import { hashId } from "../shared/hashId";
+import { slugToAccessLevel } from "../shared/planConfig";
 
 const vSubscriptionStatus = v.union(
   ...SUBSCRIPTION_STATUSES.map((s) => v.literal(s)),
@@ -24,8 +25,9 @@ async function findByPaddleSubId(
 export const upsertFromPaddle = internalMutation({
   args: {
     userId: v.string(),
-    accessLevel: v.number(),
-    planSlug: v.optional(v.string()),
+    /** Optional body value — ignored for entitlements; derived from planSlug. */
+    accessLevel: v.optional(v.number()),
+    planSlug: v.string(),
     paddleSubscriptionId: v.string(),
     paddleCustomerId: v.optional(v.string()),
     status: vSubscriptionStatus,
@@ -34,9 +36,13 @@ export const upsertFromPaddle = internalMutation({
     canceledAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Trust planSlug only — never caller-supplied accessLevel for entitlements.
+    const accessLevel = slugToAccessLevel(args.planSlug);
+
     console.log("[Subscription] Upserting from Paddle", {
       userId: hashId(args.userId),
-      accessLevel: args.accessLevel,
+      planSlug: args.planSlug,
+      accessLevel,
       status: args.status,
       paddleSubscriptionId: hashId(args.paddleSubscriptionId),
     });
@@ -45,15 +51,23 @@ export const upsertFromPaddle = internalMutation({
 
     if (existing) {
       if (existing.userId !== args.userId) {
-        console.warn("[Subscription] userId mismatch on existing subscription", {
-          existingUserId: hashId(existing.userId),
-          incomingUserId: hashId(args.userId),
-          paddleSubscriptionId: hashId(args.paddleSubscriptionId),
-        });
+        // Fail closed: do not patch entitlements onto the original owner.
+        console.warn(
+          "[Subscription] userId mismatch on existing subscription — rejecting",
+          {
+            existingUserId: hashId(existing.userId),
+            incomingUserId: hashId(args.userId),
+            paddleSubscriptionId: hashId(args.paddleSubscriptionId),
+          },
+        );
+        return {
+          ok: false as const,
+          reason: "userId_mismatch" as const,
+        };
       }
 
       await ctx.db.patch(existing._id, {
-        accessLevel: args.accessLevel,
+        accessLevel,
         planSlug: args.planSlug,
         paddleCustomerId: args.paddleCustomerId,
         status: args.status,
@@ -61,12 +75,12 @@ export const upsertFromPaddle = internalMutation({
         currentPeriodEnd: args.currentPeriodEnd,
         canceledAt: args.canceledAt,
       });
-      return existing._id;
+      return { ok: true as const, subscriptionId: existing._id };
     }
 
-    return await ctx.db.insert("subscriptions", {
+    const subscriptionId = await ctx.db.insert("subscriptions", {
       userId: args.userId,
-      accessLevel: args.accessLevel,
+      accessLevel,
       planSlug: args.planSlug,
       paddleSubscriptionId: args.paddleSubscriptionId,
       paddleCustomerId: args.paddleCustomerId,
@@ -75,6 +89,7 @@ export const upsertFromPaddle = internalMutation({
       currentPeriodEnd: args.currentPeriodEnd,
       canceledAt: args.canceledAt,
     });
+    return { ok: true as const, subscriptionId };
   },
 });
 
