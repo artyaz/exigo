@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const convex = await createAuthedConvexClient(getToken, "api.generate.embed");
-    const provider = await resolveAiProvider(convex, userId);
+    const provider = await resolveAiProvider(convex);
     const result = await authorEmbedExercise(provider, description);
     return Response.json({ provider: provider.config.label, model: provider.config.model, ...result });
   } catch (e) {

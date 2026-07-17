@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const convex = await createAuthedConvexClient(getToken, "api.generate.exercise");
-    const provider = await resolveAiProvider(convex, userId);
+    const provider = await resolveAiProvider(convex);
     const result = await constructExercise(provider, parsed.data, { maxRepairs: body.maxRepairs ?? 2 });
     return Response.json({ provider: provider.config.label, model: provider.config.model, ...result });
   } catch (e) {

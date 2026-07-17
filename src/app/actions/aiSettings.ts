@@ -9,7 +9,9 @@ import { encryptSecret } from "../../server/ai/secrets";
    encrypted here (Node crypto) and only the opaque ciphertext is sent to
    Convex — the symmetric secret never leaves the Next.js server. We address
    the Convex functions by string so this compiles independently of the
-   currently-stale `convex codegen` (see note in resolve.ts). */
+   currently-stale `convex codegen` (see note in resolve.ts).
+   Clerk auth() gates the action and supplies the JWT; Convex re-derives
+   identity from that token (userId is not passed as an arg). */
 
 interface MineView {
   provider: "gemini" | "openai";
@@ -19,12 +21,11 @@ interface MineView {
   updatedAt: number;
 }
 
-const getMineRef = makeFunctionReference<"query", { userId: string }, MineView | null>("userSettings:getMine");
+const getMineRef = makeFunctionReference<"query", Record<string, never>, MineView | null>("userSettings:getMine");
 
 const saveRef = makeFunctionReference<
   "mutation",
   {
-    userId: string;
     provider: "gemini" | "openai";
     model?: string;
     baseUrl?: string;
@@ -41,7 +42,7 @@ export async function getAiSettings(): Promise<AiSettingsView> {
   const { userId, getToken } = await auth();
   if (!userId) throw new Error("Unauthorized");
   const convex = await createAuthedConvexClient(getToken, "actions.aiSettings.getAiSettings");
-  return await convex.query(getMineRef, { userId });
+  return await convex.query(getMineRef, {});
 }
 
 export interface SaveAiSettingsInput {
@@ -69,7 +70,6 @@ export async function saveAiSettings(input: SaveAiSettingsInput): Promise<{ ok: 
   }
 
   await convex.mutation(saveRef, {
-    userId,
     provider: input.provider,
     model: clean(input.model),
     baseUrl: clean(input.baseUrl),

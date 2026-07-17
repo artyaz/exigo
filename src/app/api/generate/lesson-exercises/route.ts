@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const convex = await createAuthedConvexClient(getToken, "api.generate.lessonExercises");
-    const provider = await resolveAiProvider(convex, userId);
+    const provider = await resolveAiProvider(convex);
 
     const briefsReply = await provider.generate({
       system: "You design interactive practice exercises for a lesson. Output ONLY a JSON array of strings.",
