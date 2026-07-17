@@ -4,11 +4,15 @@ import type { SubscriptionStatus } from "../shared/subscriptionStatuses";
 import {
   PLAN_LIMIT_CODE,
   UNLIMITED_LIMIT,
-  MAX_TESTS_SENTINEL,
-  DEEP_DIVE_LIMITS_BY_TIER,
+  LIMITS_BY_TIER,
+  getLimitsForTier,
   slugToTier,
   tierToAccessLevel,
+  type PlanLimits,
+  type PlanTier,
 } from "../shared/planConfig";
+
+export type { PlanLimits, PlanTier };
 
 export const ACCESS_LEVELS = {
   FREE: 0,
@@ -20,64 +24,10 @@ export type AccessLevel = (typeof ACCESS_LEVELS)[keyof typeof ACCESS_LEVELS];
 
 export type { SubscriptionStatus };
 
-export interface PlanLimits {
-  maxSpaces: number;
-  maxTestsPerMonth: number;
-  maxKnowledgePiecesPerSpace: number;
-  deepDiveLimit: number;
-}
-
-interface LimitStrategy {
-  getLimits(): PlanLimits;
-  getAccessLevel(): AccessLevel;
-}
-
-class FreeLimitStrategy implements LimitStrategy {
-  getLimits(): PlanLimits {
-    return {
-      maxSpaces: 3,
-      maxTestsPerMonth: 3,
-      maxKnowledgePiecesPerSpace: 20,
-      deepDiveLimit: DEEP_DIVE_LIMITS_BY_TIER.free,
-    };
-  }
-  getAccessLevel(): AccessLevel {
-    return ACCESS_LEVELS.FREE;
-  }
-}
-
-class ProScholarLimitStrategy implements LimitStrategy {
-  getLimits(): PlanLimits {
-    return {
-      maxSpaces: UNLIMITED_LIMIT,
-      maxTestsPerMonth: 100,
-      maxKnowledgePiecesPerSpace: 200,
-      deepDiveLimit: DEEP_DIVE_LIMITS_BY_TIER.pro,
-    };
-  }
-  getAccessLevel(): AccessLevel {
-    return ACCESS_LEVELS.PRO_SCHOLAR;
-  }
-}
-
-class EducatorLimitStrategy implements LimitStrategy {
-  getLimits(): PlanLimits {
-    return {
-      maxSpaces: UNLIMITED_LIMIT,
-      maxTestsPerMonth: Math.min(300, MAX_TESTS_SENTINEL),
-      maxKnowledgePiecesPerSpace: UNLIMITED_LIMIT,
-      deepDiveLimit: DEEP_DIVE_LIMITS_BY_TIER.educator,
-    };
-  }
-  getAccessLevel(): AccessLevel {
-    return ACCESS_LEVELS.EDUCATOR;
-  }
-}
-
-const STRATEGIES: Record<AccessLevel, LimitStrategy> = {
-  [ACCESS_LEVELS.FREE]: new FreeLimitStrategy(),
-  [ACCESS_LEVELS.PRO_SCHOLAR]: new ProScholarLimitStrategy(),
-  [ACCESS_LEVELS.EDUCATOR]: new EducatorLimitStrategy(),
+const ACCESS_LEVEL_TO_TIER: Record<AccessLevel, PlanTier> = {
+  [ACCESS_LEVELS.FREE]: "free",
+  [ACCESS_LEVELS.PRO_SCHOLAR]: "pro",
+  [ACCESS_LEVELS.EDUCATOR]: "educator",
 };
 
 function isValidAccessLevel(level: number): level is AccessLevel {
@@ -94,23 +44,14 @@ export function normalizeAccessLevel(level: number): AccessLevel {
   return ACCESS_LEVELS.FREE;
 }
 
-export function getAccessLevelName(accessLevel: AccessLevel): string {
-  switch (accessLevel) {
-    case ACCESS_LEVELS.EDUCATOR:
-      return "educator";
-    case ACCESS_LEVELS.PRO_SCHOLAR:
-      return "pro";
-    default:
-      return "free";
-  }
+export function getAccessLevelName(accessLevel: AccessLevel): PlanTier {
+  return ACCESS_LEVEL_TO_TIER[accessLevel] ?? "free";
 }
 
-export function getStrategy(accessLevel: AccessLevel): LimitStrategy {
-  return STRATEGIES[accessLevel] ?? STRATEGIES[ACCESS_LEVELS.FREE];
-}
-
+/** Thin lookup into shared LIMITS_BY_TIER (SSOT). */
 export function getLimitsForAccessLevel(accessLevel: AccessLevel): PlanLimits {
-  return getStrategy(accessLevel).getLimits();
+  const tier = getAccessLevelName(normalizeAccessLevel(accessLevel));
+  return getLimitsForTier(tier);
 }
 
 export function isProOrHigher(accessLevel: AccessLevel): boolean {
@@ -212,4 +153,4 @@ export async function getEffectiveLimitsForAction(
   return getLimitsForAccessLevel(accessLevel);
 }
 
-export { PLAN_LIMIT_CODE, UNLIMITED_LIMIT };
+export { PLAN_LIMIT_CODE, UNLIMITED_LIMIT, LIMITS_BY_TIER };

@@ -28,6 +28,13 @@ export function toneRgb(tone: ToneToken | undefined, i = 0): string {
   return TONE_RGB[key] ?? TONE_RGB.azure!;
 }
 
+/** Full `rgb(<triple>)` color string for SVG fill/stroke (and CSS that
+    cannot use a bare triple + separate alpha var). Built on toneRgb so
+    every renderer shares one palette. */
+export function toneSolid(tone: ToneToken | undefined, i = 0): string {
+  return `rgb(${toneRgb(tone, i)})`;
+}
+
 /** Catmull-Rom → cubic bézier path through pixel points: the gentle, natural
     curve every line/area uses. Two points degrade to a straight segment. */
 export function smoothPath(pts: ReadonlyArray<readonly [number, number]>): string {

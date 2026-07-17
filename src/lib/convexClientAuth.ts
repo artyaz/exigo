@@ -1,12 +1,12 @@
 import "server-only";
 
 import { ConvexHttpClient } from "convex/browser";
-import type { PostHog } from "posthog-node";
 import {
     getErrorAttributes,
     logError,
     logInfo,
 } from "./otlpLogger";
+import { getPostHogServer } from "./posthog-server";
 
 type GetTokenFn = (options?: { template?: string }) => Promise<string | null>;
 
@@ -54,57 +54,34 @@ function getDistinctIdFromJwt(token: string): string | undefined {
     }
 }
 
-let posthogClient: PostHog | null = null;
-
-function getConvexPosthogClient(): PostHog | null {
-    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-    const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-    if (!key || !host) return null;
-    return posthogClient;
-}
-
-async function ensureConvexPosthogClient(): Promise<PostHog | null> {
-    if (posthogClient) return posthogClient;
-    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-    const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-    if (!key || !host) return null;
-    const { PostHog } = await import("posthog-node");
-    posthogClient ??= new PostHog(key, { host, flushAt: 1, flushInterval: 0 });
-    return posthogClient;
-}
-
 function captureConvexException(
     error: unknown,
     distinctId: string | undefined,
     properties: Record<string, string>,
 ): void {
-    if (!getConvexPosthogClient() && !process.env.NEXT_PUBLIC_POSTHOG_KEY) {
-        return;
-    }
-    ensureConvexPosthogClient()
-        .then((posthog) => {
-            if (!posthog) return;
-            let message = String(error);
-            if (error instanceof Error && error.message) {
-                message = error.message;
-            } else if (error && typeof error === "object") {
-                const withMessage = error as { message?: unknown };
-                if (typeof withMessage.message === "string" && withMessage.message) {
-                    message = withMessage.message;
-                }
+    const posthog = getPostHogServer();
+    if (!posthog) return;
+    try {
+        let message = String(error);
+        if (error instanceof Error && error.message) {
+            message = error.message;
+        } else if (error && typeof error === "object") {
+            const withMessage = error as { message?: unknown };
+            if (typeof withMessage.message === "string" && withMessage.message) {
+                message = withMessage.message;
             }
-            const exception =
-                error instanceof Error && typeof error.stack === "string"
-                    ? error
-                    : new Error(message);
-            posthog.captureException(exception, distinctId, properties);
-        })
-        .catch((captureError: unknown) => {
-            logError("PostHog exception capture failed", {
-                source: "convex-client",
-                ...getErrorAttributes(captureError),
-            });
+        }
+        const exception =
+            error instanceof Error && typeof error.stack === "string"
+                ? error
+                : new Error(message);
+        posthog.captureException(exception, distinctId, properties);
+    } catch (captureError: unknown) {
+        logError("PostHog exception capture failed", {
+            source: "convex-client",
+            ...getErrorAttributes(captureError),
         });
+    }
 }
 
 export function getConvexUrlOrThrow(context: string): string {

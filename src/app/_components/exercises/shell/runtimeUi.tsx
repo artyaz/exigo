@@ -9,6 +9,10 @@
 import React from "react";
 import type { Accent } from "../runtime/types";
 
+/** Shell chrome accents (rails, chips, celebration ink) — intentionally a
+    softer pastel vocabulary than series/semantic tones in `display/visual.ts`
+    (`TONE_RGB` / `toneRgb`). Same token *names* (amber/azure/…); different
+    channels by design. Do not import ACCENTS into display renderers. */
 export const ACCENTS: Record<Accent, { rgb: string; solid: string }> = {
   amber: { rgb: "254 240 138", solid: "#fde047" },
   azure: { rgb: "191 219 254", solid: "#bfdbfe" },

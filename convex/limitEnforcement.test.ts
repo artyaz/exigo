@@ -6,7 +6,11 @@ import {
   normalizeAccessLevel,
   ACCESS_LEVELS,
 } from "./subscriptionService";
-import { UNLIMITED_LIMIT, MAX_TESTS_SENTINEL } from "../shared/planConfig";
+import {
+  UNLIMITED_LIMIT,
+  MAX_TESTS_SENTINEL,
+  LIMITS_BY_TIER,
+} from "../shared/planConfig";
 
 /**
  * Honest pure-unit coverage for plan limit helpers used by production
@@ -47,6 +51,7 @@ describe("limit helpers — free tier boundaries", () => {
   const free = getLimitsForAccessLevel(ACCESS_LEVELS.FREE);
 
   it("free plan: 3 spaces, 3 tests/month, 20 knowledge pieces/space", () => {
+    expect(free).toEqual(LIMITS_BY_TIER.free);
     expect(free.maxSpaces).toBe(3);
     expect(free.maxTestsPerMonth).toBe(3);
     expect(free.maxKnowledgePiecesPerSpace).toBe(20);
@@ -65,17 +70,18 @@ describe("limit helpers — free tier boundaries", () => {
 describe("limit helpers — paid tiers & unlimited sentinel", () => {
   it("pro: unlimited spaces, finite tests and knowledge pieces", () => {
     const pro = getLimitsForAccessLevel(ACCESS_LEVELS.PRO_SCHOLAR);
+    expect(pro).toEqual(LIMITS_BY_TIER.pro);
     expect(pro.maxSpaces).toBe(UNLIMITED_LIMIT);
     expect(pro.maxTestsPerMonth).toBe(100);
     expect(pro.maxKnowledgePiecesPerSpace).toBe(200);
-    expect(pro.maxSpaces === UNLIMITED_LIMIT).toBe(true);
   });
 
-  it("educator: unlimited spaces and knowledge pieces; tests capped by sentinel", () => {
+  it("educator: unlimited spaces and knowledge pieces; finite tests under sentinel", () => {
     const edu = getLimitsForAccessLevel(ACCESS_LEVELS.EDUCATOR);
+    expect(edu).toEqual(LIMITS_BY_TIER.educator);
     expect(edu.maxSpaces).toBe(UNLIMITED_LIMIT);
     expect(edu.maxKnowledgePiecesPerSpace).toBe(UNLIMITED_LIMIT);
-    expect(edu.maxTestsPerMonth).toBe(Math.min(300, MAX_TESTS_SENTINEL));
+    expect(edu.maxTestsPerMonth).toBe(300);
     expect(edu.maxTestsPerMonth).toBeLessThanOrEqual(MAX_TESTS_SENTINEL);
   });
 

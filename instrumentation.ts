@@ -59,23 +59,23 @@ export const onRequestError = async (
       : crypto.randomUUID();
 
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-    const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-    if (!key || !host) {
+    // Dynamic import keeps posthog-node out of non-nodejs instrumentation bundles.
+    const { getPostHogServer } = await import("./src/lib/posthog-server");
+    const posthog = getPostHogServer();
+    if (!posthog) {
       logWarn("PostHog env vars missing; skipping exception capture", {
         requestId,
         route: request.url ?? "unknown",
-        missingKey: !key,
-        missingHost: !host,
+        missingKey: !process.env.NEXT_PUBLIC_POSTHOG_KEY,
+        missingHost: !process.env.NEXT_PUBLIC_POSTHOG_HOST,
       });
     } else {
-      const { PostHog } = await import("posthog-node");
-      const posthog = new PostHog(key, { host, flushAt: 1, flushInterval: 0 });
       const distinctId = extractDistinctId(request.headers, requestId);
       posthog.captureException(normalizeException(err), distinctId, {
         source: "next.onRequestError",
       });
-      await posthog.shutdown(2000);
+      // Flush only — do not shutdown the shared Next singleton.
+      await posthog.flush();
     }
   }
 

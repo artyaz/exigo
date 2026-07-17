@@ -13,6 +13,9 @@ import { run } from "../runtime/expr";
 import type { ArenaOverflow, ArenaRegion, ToneToken, Value } from "../runtime/types";
 import { toneRgb } from "./visual";
 
+/** Unique SVG marker ids per Arena instance (mirrors Graph MARK_SEQ / Plot GRAD_SEQ). */
+let ARENA_MARK_SEQ = 0;
+
 interface Block {
   id: string;
   region: string;
@@ -64,6 +67,7 @@ export function Arena({
     }
   })());
   const uniform = uniformSizes(blocks.map((b) => b.size));
+  const markId = React.useMemo(() => `exg-arena-head-${++ARENA_MARK_SEQ}`, []);
 
   const bodyRef = React.useRef<HTMLDivElement>(null);
   const regionEls = React.useRef<Map<string, HTMLDivElement>>(new Map());
@@ -209,14 +213,14 @@ export function Arena({
               return (
                 <svg className="exg-arena__arrows" aria-hidden="true">
                   <defs>
-                    <marker id="arena-head" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
-                      <path d="M0,0 L7,3 L0,6 Z" fill="rgb(251 113 133)" />
+                    <marker id={markId} markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+                      <path d="M0,0 L7,3 L0,6 Z" fill={`rgb(${toneRgb("no")})`} />
                     </marker>
                   </defs>
                   <path
                     className="exg-arena__spill"
                     d={`M ${arrow.x1} ${arrow.y1} Q ${qx} ${qy} ${arrow.x2} ${arrow.y2}`}
-                    markerEnd="url(#arena-head)"
+                    markerEnd={`url(#${markId})`}
                   />
                   {layer.overflow?.label ? (
                     <text className="exg-arena__spill-lab" x={lx} y={ly + 14} textAnchor="middle">

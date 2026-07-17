@@ -1,13 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI, Type, FunctionCallingConfigMode } from "@google/genai";
 import type { FunctionDeclaration } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
-import {
-  ConvexAuthError,
-  createAuthedConvexClient,
-} from "../../../../lib/convexClientAuth";
+import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import { sseNamedEvent } from "../../../../lib/sse";
 import {
   captureAiGenerationEvent,
@@ -513,22 +509,9 @@ async function assembleContext(
 }
 
 export async function POST(req: Request) {
-  const { userId, getToken } = await auth();
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
-  }
-
-  let convex: ConvexHttpClient;
-  try {
-    convex = await createAuthedConvexClient(getToken, "api.learn.tutor");
-  } catch (e) {
-    if (e instanceof ConvexAuthError) {
-      return new Response(JSON.stringify({ error: e.message }), { status: 401 });
-    }
-    throw e;
-  }
+  const authResult = await requireAuthedApi("api.learn.tutor");
+  if (authResult instanceof Response) return authResult;
+  const { userId, convex } = authResult;
 
   const body = (await req.json()) as {
     spaceId: string;
@@ -538,9 +521,7 @@ export async function POST(req: Request) {
   };
 
   if (!body.spaceId || !body.message?.trim()) {
-    return new Response(JSON.stringify({ error: "Missing spaceId or message" }), {
-      status: 400,
-    });
+    return jsonError(400, "Missing spaceId or message");
   }
 
   const spaceId = body.spaceId as Id<"spaces">;
