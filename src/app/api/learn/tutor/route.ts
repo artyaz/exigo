@@ -8,6 +8,7 @@ import {
   ConvexAuthError,
   createAuthedConvexClient,
 } from "../../../../lib/convexClientAuth";
+import { sseNamedEvent } from "../../../../lib/sse";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -40,10 +41,6 @@ async function generateEmbedding(
     contents: text,
   });
   return result.embeddings?.[0]?.values ?? [];
-}
-
-function sseEvent(event: string, data: unknown): string {
-  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 function getOptionalString(value: unknown): string | null {
@@ -550,11 +547,11 @@ export async function POST(req: Request) {
   const courseId = body.courseId ? (body.courseId as Id<"courses">) : null;
   const userMessage = body.message.trim();
 
-  const encoder = new TextEncoder();
+  // Residual named-event dialect (tool_call / chat_created / …) — see src/lib/sse.ts
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(sseEvent(event, data)));
+        controller.enqueue(sseNamedEvent(event, data));
       };
 
       try {

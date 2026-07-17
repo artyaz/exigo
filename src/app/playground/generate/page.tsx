@@ -99,18 +99,6 @@ const CSS = `
 details summary{ cursor:pointer; font-family:var(--font-mono); font-size:11px; color:var(--white-50); }
 .gn__plan{ font-size:13px; line-height:1.6; color:var(--white-75); background:var(--white-03); border:1px solid var(--border-faint); border-radius:var(--radius-lg); padding:11px 13px; }
 .gn__plan b{ color:var(--azure-400); font-weight:600; }
-.exg-open{ display:flex; flex-direction:column; gap:8px; }
-.exg-open__prox{ height:3px; border-radius:99px; background:var(--white-08); overflow:hidden; }
-.exg-open__prox i{ display:block; height:100%; background:var(--emerald-400); transition:width .35s var(--ease-spring); }
-.exg-open__frame{ width:100%; border:1px solid var(--border-faint); border-radius:var(--radius-xl); background:var(--surface-sunken); }
-.exg-open__done{ font-family:var(--font-mono); font-size:11.5px; letter-spacing:.06em; color:var(--emerald-400); }
-.exg-open__done--no{ color:var(--rose-400); }
-.exg-embed{ display:flex; flex-direction:column; gap:8px; }
-.exg-embed__prox{ height:3px; border-radius:99px; background:var(--white-08); overflow:hidden; }
-.exg-embed__prox i{ display:block; height:100%; background:var(--emerald-400); transition:width .35s var(--ease-spring); }
-.exg-embed__frame{ display:block; border:1px solid var(--border); border-radius:var(--radius-2xl); background:#000; box-shadow:var(--shadow-card); overflow:hidden; }
-.exg-embed__done{ font-family:var(--font-mono); font-size:11.5px; letter-spacing:.06em; color:var(--emerald-400); }
-.exg-embed__done--no{ color:var(--rose-400); }
 `;
 
 const SAMPLE_BRIEF = {
