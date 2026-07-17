@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { getAuthenticatedUserId } from "./authDecorators";
+import { getAuthedContext } from "./authDecorators";
 
 /* Per-user AI provider settings. The authenticated user is derived
    server-side from the Convex auth context — never trusted from the client.
@@ -14,7 +14,7 @@ const PROVIDER = v.union(v.literal("gemini"), v.literal("openai"));
 export const getMine = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthenticatedUserId(ctx);
+    const { userId } = await getAuthedContext(ctx);
     const row = await ctx.db
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -36,7 +36,7 @@ export const getMine = query({
 export const getCipher = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthenticatedUserId(ctx);
+    const { userId } = await getAuthedContext(ctx);
     const row = await ctx.db
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -64,7 +64,7 @@ export const save = mutation({
     clearKey: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthenticatedUserId(ctx);
+    const { userId } = await getAuthedContext(ctx);
     const existing = await ctx.db
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
