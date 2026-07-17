@@ -17,6 +17,7 @@ import {
   isRequestedTopicCovered,
   parseInsertTopicRequestContent,
 } from "../shared/courseTopicRequests";
+import { MAX_MODULES } from "../shared/courseConfig";
 
 function getAiClient() {
   if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -325,6 +326,16 @@ export const evaluateBaselineAnswer = action({
 });
 
 // ─── ACTION 3: Generate Module (Adaptive Syllabus AI) ───
+/**
+ * Creates the next module + lessons. Entry guards:
+ * - owner + educator
+ * - course.phase must be "module_generation" (orchestrator claims this phase)
+ * - modules.length < MAX_MODULES (terminal budget; orchestrator also enforces)
+ *
+ * On success, patches currentModuleIndex / currentLessonIndex and phase → "lesson"
+ * so the UI leaves GeneratingPhase. Structural transitions (incl. "completed")
+ * remain orchestrator-owned.
+ */
 export const generateModule = action({
   args: {
     courseId: v.id("courses"),
@@ -333,19 +344,29 @@ export const generateModule = action({
     const auth = await getAuthedContextForAction(ctx);
     requireEducatorAccess(auth);
 
-    const course: Doc<"courses"> | null = await ctx.runQuery(
-      internal.courses.getInternal,
-      {
-        courseId: args.courseId,
-      },
+    const course = await requireOwnedCourseForAction(
+      ctx,
+      args.courseId,
+      auth.userId,
     );
-    if (!course || course.userId !== auth.userId)
-      throw new Error("Course not found");
+
+    if (course.phase !== "module_generation") {
+      throw new Error(
+        `Cannot generate module while course phase is "${course.phase}" (expected "module_generation")`,
+      );
+    }
 
     const existingModules: Doc<"courseModules">[] = await ctx.runQuery(
       internal.courseModules.getForCourseInternal,
       { courseId: args.courseId },
     );
+
+    if (existingModules.length >= MAX_MODULES) {
+      throw new Error(
+        `Course already has the maximum of ${MAX_MODULES} modules`,
+      );
+    }
+
     const completedTopics = existingModules.map(
       (m: Doc<"courseModules">) => m.moduleTitle,
     );

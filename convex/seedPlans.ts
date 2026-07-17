@@ -2,6 +2,23 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { getMarketingPerksForTier } from "../shared/planConfig";
 
+/**
+ * Seed the plans catalog. Perks come from `getMarketingPerksForTier` → `LIMITS_BY_TIER` (SSOT).
+ *
+ * Idempotency: throws if any `plans` rows exist — does not update or re-seed in place.
+ *
+ * ## Stale free “10 AI tests / month” rows (pre-P3-A)
+ * Environments seeded before marketing was aligned still store free perk text advertising
+ * 10 tests while runtime enforcement has always used `LIMITS_BY_TIER.free.maxTestsPerMonth`
+ * (3). This seed cannot fix those rows (it refuses when plans exist).
+ *
+ * Ops options (no automatic migration):
+ * 1. Delete all `plans` rows, run `seedPlans.seed`, then re-apply `setPriceId` for paid slugs.
+ * 2. Manually patch the free plan’s `perks` to match `getMarketingPerksForTier("free")`
+ *    (includes “3 AI tests / month”, not 10). Paid rows are usually fine if seeded from SSOT.
+ * Optional future helper: an internal mutation that patches every plan’s `perks` from
+ * `getMarketingPerksForTier(slugToTier(slug))` without deleting rows — not shipped here.
+ */
 export const seed = internalMutation({
   args: {},
   handler: async (ctx) => {
