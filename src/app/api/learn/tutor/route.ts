@@ -720,6 +720,7 @@ export async function POST(req: Request) {
           await convex.mutation(api.courseTutor.sendTutorMessage, {
             chatId,
             content: fullResponse,
+            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
           });
 
           send("done", { chatId });
@@ -743,6 +744,7 @@ export async function POST(req: Request) {
           await convex.mutation(api.courseTutor.sendTutorMessage, {
             chatId,
             content: fullResponse,
+            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
           });
 
           send("done", { chatId });

@@ -258,6 +258,7 @@ export async function POST(req: Request) {
 
           // Save teacher message to DB
           await convex.mutation(api.courseLessonMessages.sendTeacher, {
+            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
             lessonId: lessonIdTyped,
             content: fullText,
             messageType,

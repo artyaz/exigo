@@ -6,7 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { getAuthenticatedUserId } from "./authDecorators";
+import { getAuthedContext } from "./authDecorators";
 
 type DbCtx = QueryCtx | MutationCtx;
 
@@ -18,18 +18,17 @@ async function loadTestSpace(ctx: DbCtx, testId: Id<"tests">) {
   return { test, space };
 }
 
-function canAccessSpace(space: Doc<"spaces">, userId: string): boolean {
+/** Shared template spaces may be read by any authenticated user. */
+function canReadSpace(space: Doc<"spaces">, userId: string): boolean {
   return space.userId === userId || space.userId === "default_user";
 }
 
-function canAccessTest(
-  space: Doc<"spaces"> | null | undefined,
-  userId: string,
-): boolean {
-  return !!space && canAccessSpace(space, userId);
+/** Writes require strict ownership — never the default_user exception. */
+function canWriteSpace(space: Doc<"spaces">, userId: string): boolean {
+  return space.userId === userId;
 }
 
-async function requireTestAccess(
+async function requireTestWriteAccess(
   ctx: DbCtx,
   testId: Id<"tests">,
   userId: string,
@@ -38,7 +37,7 @@ async function requireTestAccess(
   if (!test) throw new Error("Test not found");
 
   const space = await ctx.db.get(test.spaceId);
-  if (!space || !canAccessSpace(space, userId)) {
+  if (!space || !canWriteSpace(space, userId)) {
     throw new Error("Unauthorized access to this test");
   }
 
@@ -55,8 +54,8 @@ export const create = mutation({
     knowledgeNodeId: v.optional(v.id("knowledgeNodes")),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthenticatedUserId(ctx);
-    await requireTestAccess(ctx, args.testId, userId);
+    const { userId } = await getAuthedContext(ctx);
+    await requireTestWriteAccess(ctx, args.testId, userId);
 
     return await ctx.db.insert("questions", {
       testId: args.testId,
@@ -77,7 +76,7 @@ export const getForTest = query({
     if (!userId) return [];
 
     const loaded = await loadTestSpace(ctx, args.testId);
-    if (!loaded || !canAccessTest(loaded.space, userId)) return [];
+    if (!loaded || !canReadSpace(loaded.space, userId)) return [];
 
     return await ctx.db
       .query("questions")
@@ -97,7 +96,7 @@ export const get = query({
     if (!question) return null;
 
     const loaded = await loadTestSpace(ctx, question.testId);
-    if (!loaded || !canAccessTest(loaded.space, userId)) return null;
+    if (!loaded || !canReadSpace(loaded.space, userId)) return null;
 
     return question;
   },
@@ -111,12 +110,12 @@ export const updateFeedback = mutation({
     userAnswer: v.string(),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthenticatedUserId(ctx);
+    const { userId } = await getAuthedContext(ctx);
 
     const question = await ctx.db.get(args.questionId);
     if (!question) throw new Error("Question not found");
 
-    await requireTestAccess(ctx, question.testId, userId);
+    await requireTestWriteAccess(ctx, question.testId, userId);
 
     await ctx.db.patch(args.questionId, {
       isCorrect: args.isCorrect,
@@ -134,8 +133,7 @@ export const getForSpace = query({
     if (!userId) return [];
 
     const space = await ctx.db.get(args.spaceId);
-    if (!space || !canAccessSpace(space, userId)) return [];
-
+    if (!space || !canReadSpace(space, userId)) return [];
     const tests = await ctx.db
       .query("tests")
       .withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
@@ -161,7 +159,7 @@ export const getIncorrectForTopic = query({
     if (!userId) return [];
 
     const space = await ctx.db.get(args.spaceId);
-    if (!space || !canAccessSpace(space, userId)) return [];
+    if (!space || !canReadSpace(space, userId)) return [];
 
     const tests = await ctx.db
       .query("tests")
