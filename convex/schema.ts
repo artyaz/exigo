@@ -139,6 +139,8 @@ export default defineSchema({
     generationInProgress: v.optional(v.boolean()),
     /** Wall-clock ms when generationInProgress was set; used for TTL steal (P6-A). */
     generationClaimedAt: v.optional(v.number()),
+    /** Legacy course mode present on some rows (e.g. "self"); optional for schema drift. */
+    mode: v.optional(v.string()),
   })
     .index("by_space", ["spaceId"])
     .index("by_user", ["userId"]),
@@ -172,6 +174,14 @@ export default defineSchema({
         is_correct: v.boolean(),
         feedback_block: v.string(),
       })),
+    }))),
+    /**
+     * Legacy field present on some rows (schema drift). Not written by current code;
+     * optional so deploy/push can validate existing documents.
+     */
+    exerciseStates: v.optional(v.array(v.object({
+      sectionIndex: v.number(),
+      status: v.string(),
     }))),
     summaryMarkdown: v.optional(v.string()),
     knowledgePieceId: v.optional(v.id("knowledgePieces")),
