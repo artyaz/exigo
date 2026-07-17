@@ -41,24 +41,16 @@ function getStartOfMonthMs() {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0);
 }
 
+/** Space IDs that count toward personal monthly test quotas (never default_user). */
 async function getOwnedSpaceIds(
   ctx: QueryCtx | MutationCtx,
   userId: string,
 ): Promise<Id<"spaces">[]> {
-  const [userSpaces, defaultSpaces] = await Promise.all([
-    ctx.db
-      .query("spaces")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect(),
-    ctx.db
-      .query("spaces")
-      .withIndex("by_user", (q) => q.eq("userId", "default_user"))
-      .collect(),
-  ]);
-
-  return [
-    ...new Set([...userSpaces, ...defaultSpaces].map((space) => space._id)),
-  ];
+  const userSpaces = await ctx.db
+    .query("spaces")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect();
+  return userSpaces.map((space) => space._id);
 }
 
 async function countTestsForSpacesSince(

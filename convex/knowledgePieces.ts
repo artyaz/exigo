@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { canReadSpace } from "./spaceAccess";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
@@ -13,7 +14,7 @@ export const getForSpace = query({
     const space = await ctx.db.get(args.spaceId);
     if (
       !space ||
-      (space.userId !== userId && space.userId !== "default_user")
+      (!canReadSpace(space, userId))
     ) {
       return [];
     }
