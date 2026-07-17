@@ -15,7 +15,8 @@ function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
         controller.close();
         return;
       }
-      controller.enqueue(encoder.encode(chunks[i]!));
+      const chunk = chunks[i];
+      if (chunk !== undefined) controller.enqueue(encoder.encode(chunk));
       i += 1;
     },
   });
