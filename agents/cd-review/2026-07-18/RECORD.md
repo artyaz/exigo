@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|--------|
-| **State** | paused (Waves 6–8 coded; PRs open through Wave 8) |
-| **Branch** | `fix/wave8-product` (stacked on wave7 → wave6 → develop) |
-| **Last updated** | 2026-07-18 (Wave 8 LessonPhase + geminiEnv) |
+| **State** | in_progress (Waves 6–8 shipped main; Wave 9 started) |
+| **Branch** | `fix/wave9-product` |
+| **Last updated** | 2026-07-18 (ship protocol executed; Wave 9 tutor split) |
 | **Continues from** | Same calendar window as product work started 2026-07-17 (UTC/session) |
 | **RUN_ROOT** | `agents/cd-review/2026-07-18` |
 
@@ -26,7 +26,8 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | Artifact reorg | **done** | Moved into this RUN_ROOT; LOOP.md polished |
 | Wave 6 residual | **PR open** | #77 develop, #78 main; P6-A–D |
 | Wave 7 residual | **PR open** | #79 develop, #80 main; P7-A–D |
-| Wave 8 residual | **code done / ship pending** | P8-A LessonPhase extract; P8-B geminiEnv; verify 280 |
+| Wave 8 residual | **shipped** | #81 develop, #83 main (via #84 main→develop merge) |
+| Wave 9 residual | **in progress** | P9-A tutor route split (813→~330) |
 
 ## Done (chronological)
 
@@ -181,7 +182,7 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | P2 | Secret fail-fast | F-W7-014/015 | **done** P7-C |
 | P2 | Shared env Gemini helpers | F-W7-011 | **done** P8-B (partial) |
 | P2 | LessonPhase feels-hard + complete extract | F-W7-009 | **done** P8-A |
-| P2 | Tutor god route / dialect | F-W7-007/010 | Wave 9 |
+| P2 | Tutor god route split | F-W7-007 | **done** P9-A (dialect F-W7-010 still open) |
 | P2 | default_user policy | F-W7-004 | Wave 9 (product) |
 | P3 | CodeRabbit PR scope | ops | open |
 
