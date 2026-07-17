@@ -6,7 +6,10 @@ import { SignedIn, SignedOut, useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useEffect, useMemo, useState } from "react";
-import { slugToTier } from "../../../shared/planConfig";
+import {
+    getMarketingPerksForTier,
+    slugToTier,
+} from "../../../shared/planConfig";
 
 type BillingPeriod = "month" | "annual";
 
@@ -38,11 +41,7 @@ function groupPlans(
         name: "Free",
         basePrice: 0,
         accessLevel: 0,
-        perks: [
-            { text: "3 spaces" },
-            { text: "20 knowledge pieces / space" },
-            { text: "10 AI tests / month" },
-        ],
+        perks: getMarketingPerksForTier("free"),
         isFree: true,
     });
 

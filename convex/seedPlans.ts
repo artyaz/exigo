@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { getMarketingPerksForTier } from "../shared/planConfig";
 
 export const seed = internalMutation({
   args: {},
@@ -14,11 +15,7 @@ export const seed = internalMutation({
         name: "Free",
         slug: "free",
         accessLevel: 0,
-        perks: [
-          { text: "3 spaces" },
-          { text: "20 knowledge pieces / space" },
-          { text: "10 AI tests / month" },
-        ],
+        perks: getMarketingPerksForTier("free"),
         basePrice: 0,
       },
       {
@@ -26,12 +23,7 @@ export const seed = internalMutation({
         slug: "pro-monthly",
         priceId: "",
         accessLevel: 1,
-        perks: [
-          { text: "Unlimited spaces" },
-          { text: "200 knowledge pieces / space" },
-          { text: "100 AI tests / month" },
-          { text: "Deep dive analysis", link: "/knowledge-nodes" },
-        ],
+        perks: getMarketingPerksForTier("pro"),
         basePrice: 900,
       },
       {
@@ -39,12 +31,7 @@ export const seed = internalMutation({
         slug: "pro-annual",
         priceId: "",
         accessLevel: 1,
-        perks: [
-          { text: "Unlimited spaces" },
-          { text: "200 knowledge pieces / space" },
-          { text: "100 AI tests / month" },
-          { text: "Deep dive analysis", link: "/knowledge-nodes" },
-        ],
+        perks: getMarketingPerksForTier("pro"),
         basePrice: 7500,
       },
       {
@@ -52,12 +39,7 @@ export const seed = internalMutation({
         slug: "educator-monthly",
         priceId: "",
         accessLevel: 2,
-        perks: [
-          { text: "Unlimited spaces" },
-          { text: "Unlimited knowledge pieces" },
-          { text: "300 AI tests / month" },
-          { text: "Deep dive analysis", link: "/knowledge-nodes" },
-        ],
+        perks: getMarketingPerksForTier("educator"),
         basePrice: 1900,
       },
       {
@@ -65,12 +47,7 @@ export const seed = internalMutation({
         slug: "educator-annual",
         priceId: "",
         accessLevel: 2,
-        perks: [
-          { text: "Unlimited spaces" },
-          { text: "Unlimited knowledge pieces" },
-          { text: "300 AI tests / month" },
-          { text: "Deep dive analysis", link: "/knowledge-nodes" },
-        ],
+        perks: getMarketingPerksForTier("educator"),
         basePrice: 19200,
       },
     ];
