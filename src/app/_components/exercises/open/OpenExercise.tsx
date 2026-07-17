@@ -36,6 +36,7 @@ export function OpenExercise({
     function onMessage(e: MessageEvent): void {
       const data = e.data as { __exigo?: boolean; type?: string; data?: Record<string, unknown> } | null;
       if (data?.__exigo !== true) return;
+      if (e.origin !== "null" && e.origin !== window.location.origin) return; // sandboxed (opaque-origin) frame posts origin "null"
       // Only trust messages from our own frame's content window.
       if (e.source !== frameRef.current?.contentWindow) return;
       const h = data.data?.height;

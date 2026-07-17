@@ -74,7 +74,16 @@ export function Commentable({
       {children}
       {at ? (
         <>
-          <div className="exg-cmt__scrim" onClick={() => setAt(null)} />
+          <div
+            className="exg-cmt__scrim"
+            role="button"
+            tabIndex={-1}
+            aria-label="Dismiss"
+            onClick={() => setAt(null)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " " || e.key === "Escape") setAt(null);
+            }}
+          />
           <div className="exg-cmt__pop" style={{ left: at.x, top: at.y }} onClick={(e) => e.stopPropagation()}>
             {saved ? (
               <div className="exg-cmt__ok">Saved ✓</div>

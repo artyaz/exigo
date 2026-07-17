@@ -37,6 +37,7 @@ export function EmbedExercise({
     function onMessage(e: MessageEvent): void {
       const data = e.data as { __exigo?: boolean; type?: string; data?: Record<string, unknown> } | null;
       if (data?.__exigo !== true) return;
+      if (e.origin !== "null" && e.origin !== window.location.origin) return; // sandboxed (opaque-origin) frame posts origin "null"
       if (e.source !== frameRef.current?.contentWindow) return; // only our frame
       const d = data.data ?? {};
       switch (data.type) {
