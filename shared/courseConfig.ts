@@ -9,3 +9,10 @@
  * machine can exit instead of generating forever.
  */
 export const MAX_MODULES = 5;
+
+/**
+ * Stable error substring when a second concurrent advance/generate loses the
+ * generation claim (P5-C). Orchestrator soft-returns instead of erroring the UI.
+ */
+export const MODULE_GENERATION_IN_PROGRESS_MSG =
+  "Module generation already in progress";

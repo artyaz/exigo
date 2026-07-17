@@ -7,7 +7,10 @@ import {
   getAuthedContextForAction,
   requireEducatorAccess,
 } from "./authDecorators";
-import { MAX_MODULES } from "../shared/courseConfig";
+import {
+  MAX_MODULES,
+  MODULE_GENERATION_IN_PROGRESS_MSG,
+} from "../shared/courseConfig";
 
 type AdvanceResult = {
   nextPhase: string;
@@ -27,8 +30,16 @@ type AdvanceResult = {
  *
  * generateModule may set phase "lesson" after creating content (generation
  * completion); only this action sets "completed" and other structural hops.
- * generateModule itself requires phase === "module_generation".
+ * generateModule requires phase === "module_generation" and holds an atomic
+ * generationInProgress claim (P5-C) so concurrent advance cannot double-insert.
  */
+
+function isGenerationInProgressError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes(MODULE_GENERATION_IN_PROGRESS_MSG)
+  );
+}
 
 /** Load lessons for the course's current module, sorted by lessonIndex. */
 async function loadCurrentModuleLessons(
@@ -58,19 +69,31 @@ async function loadCurrentModuleLessons(
 }
 
 /**
- * Shared arm: generate next module (requires phase module_generation),
+ * Shared arm: generate next module (requires phase module_generation + claim),
  * seed mastery goals on the first lesson, return lesson phase.
  * generateModule patches phase → lesson after content is written.
+ * If another advance already holds the generation claim, soft-return so the
+ * UI stays on GeneratingPhase until the winner finishes.
  */
 async function generateModuleAndStartLessons(
   ctx: ActionCtx,
   courseId: Id<"courses">,
 ): Promise<AdvanceResult> {
-  const moduleResult: {
+  let moduleResult: {
     moduleId: Id<"courseModules">;
     moduleTitle: string;
     subTopicCount: number;
-  } = await ctx.runAction(api.courseAi.generateModule, { courseId });
+  };
+  try {
+    moduleResult = await ctx.runAction(api.courseAi.generateModule, {
+      courseId,
+    });
+  } catch (error) {
+    if (isGenerationInProgressError(error)) {
+      return { nextPhase: "module_generation" };
+    }
+    throw error;
+  }
 
   const lessons: Doc<"courseLessons">[] = await ctx.runQuery(
     internal.courseLessons.getForModuleInternal,

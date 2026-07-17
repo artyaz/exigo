@@ -1,6 +1,7 @@
 import {
   Children,
   cloneElement,
+  createElement,
   isValidElement,
   createContext,
   useContext,
@@ -227,13 +228,14 @@ function mergeClasses(...classNames: Array<string | undefined>): string {
   return classNames.filter(Boolean).join(" ");
 }
 
-/**
- * Inline SVG filters that use fractal noise displacement to break the
- * pixel-perfect rectangular edges of CSS backgrounds into natural,
- * wavy boundaries — like real highlighter ink on paper.
- * Each variant uses a different noise seed / frequency / scale so
- * every highlighted element looks slightly different.
- */
+/** Fractal-noise displacement filters so marker highlights look like ink, not boxes. */
+const MARKER_FILTERS = [
+  { id: "marker-rough-a", baseFrequency: "0.04 0.08", numOctaves: 4, seed: 2, scale: 3 },
+  { id: "marker-rough-b", baseFrequency: "0.035 0.095", numOctaves: 3, seed: 7, scale: 3.5 },
+  { id: "marker-rough-c", baseFrequency: "0.03 0.07", numOctaves: 4, seed: 13, scale: 2.8 },
+  { id: "marker-rough-d", baseFrequency: "0.045 0.085", numOctaves: 3, seed: 19, scale: 3.2 },
+] as const;
+
 function MarkerSvgFilters() {
   return (
     <svg
@@ -243,98 +245,32 @@ function MarkerSvgFilters() {
       aria-hidden="true"
     >
       <defs>
-        <filter
-          id="marker-rough-a"
-          x="-5%"
-          y="-20%"
-          width="110%"
-          height="140%"
-          colorInterpolationFilters="sRGB"
-        >
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.04 0.08"
-            numOctaves={4}
-            seed={2}
-            result="noise"
-          />
-          <feDisplacementMap
-            in="SourceGraphic"
-            in2="noise"
-            scale={3}
-            xChannelSelector="R"
-            yChannelSelector="G"
-          />
-        </filter>
-        <filter
-          id="marker-rough-b"
-          x="-5%"
-          y="-20%"
-          width="110%"
-          height="140%"
-          colorInterpolationFilters="sRGB"
-        >
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.035 0.095"
-            numOctaves={3}
-            seed={7}
-            result="noise"
-          />
-          <feDisplacementMap
-            in="SourceGraphic"
-            in2="noise"
-            scale={3.5}
-            xChannelSelector="R"
-            yChannelSelector="G"
-          />
-        </filter>
-        <filter
-          id="marker-rough-c"
-          x="-5%"
-          y="-20%"
-          width="110%"
-          height="140%"
-          colorInterpolationFilters="sRGB"
-        >
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.03 0.07"
-            numOctaves={4}
-            seed={13}
-            result="noise"
-          />
-          <feDisplacementMap
-            in="SourceGraphic"
-            in2="noise"
-            scale={2.8}
-            xChannelSelector="R"
-            yChannelSelector="G"
-          />
-        </filter>
-        <filter
-          id="marker-rough-d"
-          x="-5%"
-          y="-20%"
-          width="110%"
-          height="140%"
-          colorInterpolationFilters="sRGB"
-        >
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.045 0.085"
-            numOctaves={3}
-            seed={19}
-            result="noise"
-          />
-          <feDisplacementMap
-            in="SourceGraphic"
-            in2="noise"
-            scale={3.2}
-            xChannelSelector="R"
-            yChannelSelector="G"
-          />
-        </filter>
+        {MARKER_FILTERS.map(({ id, baseFrequency, numOctaves, seed, scale }) => (
+          <filter
+            key={id}
+            id={id}
+            x="-5%"
+            y="-20%"
+            width="110%"
+            height="140%"
+            colorInterpolationFilters="sRGB"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency={baseFrequency}
+              numOctaves={numOctaves}
+              seed={seed}
+              result="noise"
+            />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="noise"
+              scale={scale}
+              xChannelSelector="R"
+              yChannelSelector="G"
+            />
+          </filter>
+        ))}
       </defs>
     </svg>
   );
@@ -371,76 +307,50 @@ function useFocusState(node: MarkdownElement, children: ReactNode) {
   return { targetId, stateClass, sectionKey };
 }
 
-function HeadingOne({ node, children, className, ...props }: MarkdownComponentProps<"h1">) {
-  const { targetId, stateClass, sectionKey } = useFocusState(node, children);
-  return (
-    <>
-      <h1
-        {...props}
-        data-focus-target={targetId}
-        className={mergeClasses("lesson-heading lesson-heading--hero", stateClass, className)}
-      >
-        <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
-          {decorateChildren(children, `${sectionKey}-h1`)}
-        </span>
-      </h1>
-      <AppendageSlot node={node} />
-    </>
-  );
-}
+const HEADING_LEVEL_CLASS = {
+  h1: "lesson-heading--hero",
+  h2: "lesson-heading--section",
+  h3: "lesson-heading--subsection",
+  h4: "lesson-heading--minor",
+} as const;
 
-function HeadingTwo({ node, children, className, ...props }: MarkdownComponentProps<"h2">) {
-  const { targetId, stateClass, sectionKey } = useFocusState(node, children);
-  return (
-    <>
-      <h2
-        {...props}
-        data-focus-target={targetId}
-        className={mergeClasses("lesson-heading lesson-heading--section", stateClass, className)}
-      >
-        <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
-          {decorateChildren(children, `${sectionKey}-h2`)}
-        </span>
-      </h2>
-      <AppendageSlot node={node} />
-    </>
-  );
-}
+type HeadingTag = keyof typeof HEADING_LEVEL_CLASS;
 
-function HeadingThree({ node, children, className, ...props }: MarkdownComponentProps<"h3">) {
-  const { targetId, stateClass, sectionKey } = useFocusState(node, children);
-  return (
-    <>
-      <h3
-        {...props}
-        data-focus-target={targetId}
-        className={mergeClasses("lesson-heading lesson-heading--subsection", stateClass, className)}
-      >
-        <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
-          {decorateChildren(children, `${sectionKey}-h3`)}
-        </span>
-      </h3>
-      <AppendageSlot node={node} />
-    </>
-  );
-}
+function createHeadingComponent(tag: HeadingTag) {
+  const levelClass = HEADING_LEVEL_CLASS[tag];
 
-function HeadingFour({ node, children, className, ...props }: MarkdownComponentProps<"h4">) {
-  const { targetId, stateClass, sectionKey } = useFocusState(node, children);
-  return (
-    <>
-      <h4
-        {...props}
-        data-focus-target={targetId}
-        className={mergeClasses("lesson-heading lesson-heading--minor", stateClass, className)}
-      >
-        <span className={mergeClasses("lesson-heading-mark", getHeadingAccentClass(children), getMarkerVariantClass(extractTextContent(children)))}>
-          {decorateChildren(children, `${sectionKey}-h4`)}
-        </span>
-      </h4>
-      <AppendageSlot node={node} />
-    </>
-  );
+  return function Heading({
+    node,
+    children,
+    className,
+    ...props
+  }: MarkdownComponentProps<HeadingTag>) {
+    const { targetId, stateClass, sectionKey } = useFocusState(node, children);
+    const headingText = extractTextContent(children);
+
+    return (
+      <>
+        {createElement(
+          tag,
+          {
+            ...props,
+            "data-focus-target": targetId,
+            className: mergeClasses("lesson-heading", levelClass, stateClass, className),
+          },
+          <span
+            className={mergeClasses(
+              "lesson-heading-mark",
+              getHeadingAccentClass(children),
+              getMarkerVariantClass(headingText),
+            )}
+          >
+            {decorateChildren(children, `${sectionKey}-${tag}`)}
+          </span>,
+        )}
+        <AppendageSlot node={node} />
+      </>
+    );
+  };
 }
 
 function Paragraph({ node, children, className, ...props }: MarkdownComponentProps<"p">) {
@@ -527,10 +437,10 @@ function CodeBlockWithCopy({ language, code }: { language: string; code: string 
 }
 
 const markdownComponents: Components = {
-  h1: HeadingOne,
-  h2: HeadingTwo,
-  h3: HeadingThree,
-  h4: HeadingFour,
+  h1: createHeadingComponent("h1"),
+  h2: createHeadingComponent("h2"),
+  h3: createHeadingComponent("h3"),
+  h4: createHeadingComponent("h4"),
   p: Paragraph,
   li: ListItem,
   blockquote: Blockquote,

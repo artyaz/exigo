@@ -1,5 +1,6 @@
 /**
- * Shared SSE framing for AI stream routes.
+ * Shared SSE framing for AI stream routes (server → wire).
+ * Client readers live in `src/lib/sseClient.ts` (block parse + adapters).
  *
  * ## Majority dialect (teach / clarify / tests/generate)
  * Single `data:` line with type-in-JSON payload:
@@ -9,7 +10,7 @@
  * ## Residual dialect (learn/tutor only)
  * Named SSE events for tool_call / tool_result / chat_created:
  *   event: <name>\ndata: <json>\n\n
- * Kept until CourseTutor client migrates (S7 ownership). Use `sseNamedEvent`.
+ * Use `sseNamedEvent`. Client keeps a named-event adapter in CourseTutor.
  * Do not force tutor onto type-in-payload without co-changing the client.
  */
 

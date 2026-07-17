@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { getAuthedContext, getAuthenticatedUserId, requireEducatorAccess } from "./authDecorators";
+import { MAX_MODULES } from "../shared/courseConfig";
 
 const COURSE_PHASE = v.union(
   v.literal("baseline"),
@@ -95,14 +96,76 @@ export const updateProgress = internalMutation({
     currentModuleIndex: v.optional(v.number()),
     currentLessonIndex: v.optional(v.number()),
     phase: v.optional(COURSE_PHASE),
+    generationInProgress: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { courseId, ...updates } = args;
     const patch: Record<string, unknown> = {};
     if (updates.currentModuleIndex !== undefined) patch.currentModuleIndex = updates.currentModuleIndex;
     if (updates.currentLessonIndex !== undefined) patch.currentLessonIndex = updates.currentLessonIndex;
-    if (updates.phase !== undefined) patch.phase = updates.phase;
+    if (updates.phase !== undefined) {
+      patch.phase = updates.phase;
+      // Leaving generation always drops the lock so a failed/partial run cannot stick forever
+      // when a later successful structural hop writes phase.
+      if (updates.phase !== "module_generation") {
+        patch.generationInProgress = false;
+      }
+    }
+    if (updates.generationInProgress !== undefined) {
+      patch.generationInProgress = updates.generationInProgress;
+    }
     await ctx.db.patch(courseId, patch);
+  },
+});
+
+/**
+ * Atomic claim for module generation (P5-C).
+ * Only one concurrent generateModule / advance can hold the lock.
+ * Convex OCC retries the loser so it observes generationInProgress === true.
+ */
+export const claimModuleGeneration = internalMutation({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, args) => {
+    const course = await ctx.db.get(args.courseId);
+    if (!course) throw new Error("Course not found");
+
+    if (course.phase !== "module_generation") {
+      return {
+        claimed: false as const,
+        reason: "wrong_phase" as const,
+        phase: course.phase,
+      };
+    }
+    if (course.generationInProgress === true) {
+      return { claimed: false as const, reason: "in_progress" as const };
+    }
+
+    const modules = await ctx.db
+      .query("courseModules")
+      .withIndex("by_course", (q) => q.eq("courseId", args.courseId))
+      .collect();
+
+    if (modules.length >= MAX_MODULES) {
+      return { claimed: false as const, reason: "at_cap" as const };
+    }
+
+    await ctx.db.patch(args.courseId, { generationInProgress: true });
+    return {
+      claimed: true as const,
+      moduleIndex: modules.length,
+    };
+  },
+});
+
+/** Release generation lock after a failed generateModule (success clears via updateProgress). */
+export const releaseModuleGeneration = internalMutation({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, args) => {
+    const course = await ctx.db.get(args.courseId);
+    if (!course) return;
+    if (course.phase === "module_generation" && course.generationInProgress === true) {
+      await ctx.db.patch(args.courseId, { generationInProgress: false });
+    }
   },
 });
 
