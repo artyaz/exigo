@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { iterateParsedSseBlocks, parseJsonData } from "~/lib/sseClient";
 
 type TestForGeneration = {
     spaceId: Id<"spaces">;
@@ -9,9 +10,24 @@ type TestForGeneration = {
     config: { type: string; questionCount?: number };
 } | null | undefined;
 
+type MajoritySsePayload = {
+    type: string;
+    text?: string;
+    error?: string;
+};
+
+function isRateLimitMessage(msg: string): boolean {
+    return (
+        msg.includes("429") ||
+        msg.includes("quota") ||
+        msg.includes("RESOURCE_EXHAUSTED")
+    );
+}
+
 /**
  * Background SSE loop that fills a test up to targetQuestionCount.
  * Preserves lastGeneratedForCount guard so re-renders don't re-fire generation.
+ * Majority dialect via shared `sseClient` (P5-D residual / P6-B).
  */
 export function useTestQuestionGeneration(opts: {
     questionsLength: number | undefined;
@@ -65,7 +81,7 @@ export function useTestQuestionGeneration(opts: {
                     const errBody = await res.text().catch(() => "");
                     const msg = errBody.trim() ? errBody : `Server error (${res.status})`;
                     setGenError(
-                        msg.includes("429") || msg.includes("quota")
+                        isRateLimitMessage(msg)
                             ? "API rate limit reached. Please wait a moment and retry."
                             : msg
                     );
@@ -75,45 +91,21 @@ export function useTestQuestionGeneration(opts: {
 
                 if (!res.body) throw new Error("No stream body");
 
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = "";
                 let hadError = false;
 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split("\n\n");
-                    buffer = lines.pop() ?? "";
+                for await (const block of iterateParsedSseBlocks(res.body)) {
+                    // Majority dialect is data-only (`type` in JSON); ignore named-event frames if any
+                    if (block.event) continue;
+                    const payload = parseJsonData<MajoritySsePayload>(block.data);
+                    if (payload?.type !== "error") continue;
 
-                    for (const line of lines) {
-                        if (!line.startsWith("data: ")) continue;
-                        try {
-                            const payload = JSON.parse(line.slice(6)) as {
-                                type: string;
-                                text?: string;
-                                error?: string;
-                            };
-                            if (payload.type === "error") {
-                                hadError = true;
-                                const msg = payload.error ?? "Generation failed";
-                                if (
-                                    msg.includes("429") ||
-                                    msg.includes("quota") ||
-                                    msg.includes("RESOURCE_EXHAUSTED")
-                                ) {
-                                    setGenError(
-                                        "API rate limit reached. Please wait a moment and retry."
-                                    );
-                                } else {
-                                    setGenError(msg);
-                                }
-                            }
-                        } catch {
-                            /* skip malformed SSE chunks */
-                        }
-                    }
+                    hadError = true;
+                    const msg = payload.error ?? "Generation failed";
+                    setGenError(
+                        isRateLimitMessage(msg)
+                            ? "API rate limit reached. Please wait a moment and retry."
+                            : msg
+                    );
                 }
                 if (hadError) lastGeneratedForCount.current = -1;
             } catch (e) {
@@ -128,8 +120,6 @@ export function useTestQuestionGeneration(opts: {
         })();
 
         return () => abortController.abort();
-        // Intentionally omit unstable object identity; depend on length + retryNonce
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questionsLength, test, testId, targetQuestionCount, retryNonce]);
 
     return { isGeneratingNext, genError, retry };

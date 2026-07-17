@@ -97,7 +97,6 @@ export async function POST(req: NextRequest) {
 
     const space = await convex.query(api.spaces.get, {
       spaceId: test.spaceId,
-      userId,
     });
     if (!space) {
       return NextResponse.json(

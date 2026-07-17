@@ -1,9 +1,12 @@
-import { GoogleGenAI, Type, FunctionCallingConfigMode } from "@google/genai";
+import { Type, FunctionCallingConfigMode } from "@google/genai";
+import type { GoogleGenAI } from "@google/genai";
 import type { FunctionDeclaration } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
+import { requireServerMutationSecret } from "../../../../lib/serverMutationSecret";
+import { getEnvGeminiClient, getEnvGeminiModel } from "../../../../server/ai/geminiEnv";
 import { sseNamedEvent } from "../../../../lib/sse";
 import {
   captureAiGenerationEvent,
@@ -18,15 +21,7 @@ import type { ConvexHttpClient } from "convex/browser";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-function getAiClient() {
-  if (!process.env.GOOGLE_GEMINI_API_KEY)
-    throw new Error("GOOGLE_GEMINI_API_KEY not set");
-  return new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
-}
 
-function getModel() {
-  return process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
-}
 
 async function generateEmbedding(
   ai: GoogleGenAI,
@@ -513,6 +508,13 @@ export async function POST(req: Request) {
   if (authResult instanceof Response) return authResult;
   const { userId, convex } = authResult;
 
+  let serverSecret: string;
+  try {
+    serverSecret = requireServerMutationSecret();
+  } catch {
+    return jsonError(503, "Server mutation secret is not configured");
+  }
+
   const body = (await req.json()) as {
     spaceId: string;
     courseId?: string;
@@ -562,7 +564,7 @@ export async function POST(req: Request) {
         });
 
         // ─── Assemble Context ───
-        const ai = getAiClient();
+        const ai = getEnvGeminiClient();
         const ctx = await assembleContext(
           convex,
           spaceId,
@@ -611,7 +613,7 @@ export async function POST(req: Request) {
           `Current module sequencing context:\n${ctx.currentModuleContext}`,
         ].join("\n");
 
-        const model = getModel();
+        const model = getEnvGeminiModel();
         const startedAt = Date.now();
 
         // ─── Generate with Tool Support ───
@@ -698,7 +700,7 @@ export async function POST(req: Request) {
           await convex.mutation(api.courseTutor.sendTutorMessage, {
             chatId,
             content: fullResponse,
-            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
+            serverSecret,
           });
 
           send("done", { chatId });
@@ -722,7 +724,7 @@ export async function POST(req: Request) {
           await convex.mutation(api.courseTutor.sendTutorMessage, {
             chatId,
             content: fullResponse,
-            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
+            serverSecret,
           });
 
           send("done", { chatId });

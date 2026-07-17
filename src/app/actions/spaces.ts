@@ -42,7 +42,7 @@ export async function createSpaceServerAction(name: string): Promise<ActionResul
 
     try {
         const convex = await createAuthedConvexClient(getToken, "actions.spaces.createSpaceServerAction");
-        const spaceId = await convex.mutation(api.spaces.create, { name, userId });
+        const spaceId = await convex.mutation(api.spaces.create, { name });
         return { ok: true, data: spaceId };
     } catch (error) {
         const message = getErrorMessage(error);
@@ -82,7 +82,6 @@ export async function createTestServerAction(args: {
             type: args.type,
             questionCount: args.questionCount,
             topicTitle: args.topicTitle,
-            userId,
             knowledgePieceId: args.knowledgePieceId ? (args.knowledgePieceId as Id<"knowledgePieces">) : undefined,
         });
         return { ok: true, data: testId };

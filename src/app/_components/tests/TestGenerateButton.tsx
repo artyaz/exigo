@@ -11,7 +11,6 @@ import {
     PenLine, CheckCircle2, Shuffle, Target, X, Loader2
 } from "lucide-react";
 import Link from "next/link";
-import { useUser } from "@clerk/nextjs";
 
 interface TestGenerateButtonProps {
     spaceId: string;
@@ -26,8 +25,6 @@ function getErrorMessage(error: unknown): string | null {
 export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenerateButtonProps) {
     const router = useRouter();
     const createTest = useMutation(api.tests.createEmptyTest);
-    const { user } = useUser();
-    const userId = user?.id;
 
     // Persist test type in localStorage (except when unmounting, we just read/write directly)
     const [testType, setTestType] = useState<"select" | "write">("select");
@@ -78,10 +75,8 @@ export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenera
             }
 
             if (!topic) throw new Error("Could not determine topic.");
-            if (!userId) throw new Error("User not found.");
 
             const testId = await createTest({
-                userId,
                 spaceId: spaceId as Id<"spaces">,
                 topicTitle: topic.title,
                 knowledgePieceId: topic._id,
@@ -100,7 +95,7 @@ export function TestGenerateButton({ spaceId, pieces, fixedTopicId }: TestGenera
         } finally {
             setIsGenerating(false);
         }
-    }, [createTest, isGenerating, pieces, router, selectedTopicId, spaceId, testType, userId]);
+    }, [createTest, isGenerating, pieces, router, selectedTopicId, spaceId, testType]);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {

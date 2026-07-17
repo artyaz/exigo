@@ -16,7 +16,7 @@ import { LegalCornerLink } from "~/app/_components/legal-ui";
 
 export default function SpacesPage() {
     const { userId, isLoaded } = useAuth();
-    const spaces = useQuery(api.spaces.list, userId ? { userId } : "skip");
+    const spaces = useQuery(api.spaces.list, userId ? {} : "skip");
 
     const [isCreating, setIsCreating] = useState(false);
     const [newSpaceName, setNewSpaceName] = useState("");

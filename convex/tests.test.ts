@@ -173,21 +173,7 @@ describe("convex/tests - listAll handler", () => {
       tests: [],
       questions: [],
     });
-    await expect(listAllHandlerFn(ctx, { userId: "user_id" })).rejects.toThrow(
-      "Unauthorized",
-    );
-  });
-
-  it("throws when identity subject does not match args.userId", async () => {
-    const ctx = buildListAllCtx({
-      identitySubject: "other_user",
-      spaces: baseSpaces,
-      tests: [],
-      questions: [],
-    });
-    await expect(listAllHandlerFn(ctx, { userId: "user_id" })).rejects.toThrow(
-      "Unauthorized",
-    );
+    await expect(listAllHandlerFn(ctx, {})).rejects.toThrow();
   });
 
   it("returns empty array when user has no spaces", async () => {
@@ -197,9 +183,7 @@ describe("convex/tests - listAll handler", () => {
       tests: [],
       questions: [],
     });
-    const result = (await listAllHandlerFn(ctx, {
-      userId: "user_id",
-    })) as unknown[];
+    const result = (await listAllHandlerFn(ctx, {})) as unknown[];
     expect(result).toEqual([]);
   });
 
@@ -217,7 +201,7 @@ describe("convex/tests - listAll handler", () => {
         { _id: "q2", testId: "t2", userAnswer: "yes" },
       ],
     });
-    const result = (await listAllHandlerFn(ctx, { userId: "user_id" })) as {
+    const result = (await listAllHandlerFn(ctx, {})) as {
       _id: string;
     }[];
     expect(result.map((t) => t._id)).toEqual(["t2", "t3", "t1"]);
@@ -234,7 +218,7 @@ describe("convex/tests - listAll handler", () => {
         { _id: "q3", testId: "t1", userAnswer: "b" },
       ],
     });
-    const result = (await listAllHandlerFn(ctx, { userId: "user_id" })) as any[];
+    const result = (await listAllHandlerFn(ctx, {})) as any[];
     expect(result[0]).toMatchObject({
       _id: "t1",
       spaceName: "Alpha",
@@ -253,7 +237,7 @@ describe("convex/tests - listAll handler", () => {
       ],
       questions: [],
     });
-    const result = (await listAllHandlerFn(ctx, { userId: "user_id" })) as {
+    const result = (await listAllHandlerFn(ctx, {})) as {
       _id: string;
     }[];
     expect(result.map((t) => t._id)).toEqual(["t1"]);
@@ -266,9 +250,7 @@ describe("convex/tests - listAll handler", () => {
       tests: [],
       questions: [],
     });
-    const result = (await listAllHandlerFn(ctx, {
-      userId: "user_id",
-    })) as unknown[];
+    const result = (await listAllHandlerFn(ctx, {})) as unknown[];
     expect(result).toEqual([]);
   });
 });

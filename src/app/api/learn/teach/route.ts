@@ -1,8 +1,9 @@
-import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
+import { requireServerMutationSecret } from "../../../../lib/serverMutationSecret";
+import { getEnvGeminiClient, getEnvGeminiModel } from "../../../../server/ai/geminiEnv";
 import {
   enqueueSseError,
   sseData,
@@ -39,15 +40,7 @@ function parseMasteryGoals(value: string | undefined): string[] {
   }
 }
 
-function getAiClient() {
-  if (!process.env.GOOGLE_GEMINI_API_KEY)
-    throw new Error("GOOGLE_GEMINI_API_KEY not set");
-  return new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
-}
 
-function getModel() {
-  return process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
-}
 
 export async function POST(req: Request) {
   const requestId = createRequestId(req.headers);
@@ -60,6 +53,13 @@ export async function POST(req: Request) {
   });
   if (authResult instanceof Response) return authResult;
   const { userId, convex } = authResult;
+
+  let serverSecret: string;
+  try {
+    serverSecret = requireServerMutationSecret();
+  } catch {
+    return jsonError(503, "Server mutation secret is not configured");
+  }
 
   const body = (await req.json()) as { lessonId: string; userMessage?: string };
   const { lessonId, userMessage } = body;
@@ -148,8 +148,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const ai = getAiClient();
-    const model = getModel();
+    const ai = getEnvGeminiClient();
+    const model = getEnvGeminiModel();
     const aiTraceId = createAiTraceId();
 
     logInfo("Teach stream started", {
@@ -225,7 +225,7 @@ export async function POST(req: Request) {
 
           // Save teacher message to DB
           await convex.mutation(api.courseLessonMessages.sendTeacher, {
-            serverSecret: process.env.EXIGO_SERVER_MUTATION_SECRET ?? "",
+            serverSecret,
             lessonId: lessonIdTyped,
             content: fullText,
             messageType,

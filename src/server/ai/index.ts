@@ -15,3 +15,4 @@ export { GeminiProvider } from "./gemini";
 export { OpenAiProvider } from "./openai";
 export { resolveAiProvider, defaultGeminiProvider } from "./resolve";
 export { encryptSecret, decryptSecret, type Encrypted } from "./secrets";
+export { getEnvGeminiClient, getEnvGeminiModel } from "./geminiEnv";
