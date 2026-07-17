@@ -71,6 +71,8 @@ export default defineSchema({
     userId: v.string(),
     spaceId: v.id("spaces"),
     questionId: v.id("questions"),
+    // `_creationTime` is auto-appended to every index; listing it explicitly
+    // is redundant and rejected by Convex, so the index is just ["userId"].
   }).index("by_user", ["userId"]),
   subscriptions: defineTable({
     userId: v.string(),
@@ -88,7 +90,8 @@ export default defineSchema({
     currentPeriodStart: v.optional(v.number()),
     currentPeriodEnd: v.optional(v.number()),
     canceledAt: v.optional(v.number()),
-    // Legacy Clerk-era fields kept temporarily for schema migration compatibility.
+    // Legacy fields from earlier billing integrations, tolerated as optional for
+    // schema-migration compatibility; current code reads the fields above.
     clerkPlanSlug: v.optional(v.string()),
     periodEnd: v.optional(v.number()),
   })
@@ -243,4 +246,29 @@ export default defineSchema({
       dimensions: 768,
       filterFields: ["spaceId", "userId"],
     }),
+  // Per-user AI routing. `provider` selects the default Google key vs. a custom
+  // OpenAI-compatible endpoint. The custom key is stored ONLY as opaque AES-GCM
+  // ciphertext (keyCipher/keyIv); the symmetric secret never lives in Convex.
+  // See src/server/ai/secrets.ts.
+  userSettings: defineTable({
+    userId: v.string(),
+    provider: v.union(v.literal("gemini"), v.literal("openai")),
+    model: v.optional(v.string()),
+    baseUrl: v.optional(v.string()),
+    keyCipher: v.optional(v.string()),
+    keyIv: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+  // Reviewer comments left on a generated exercise. Stores the exercise's own
+  // HTML (its "code") alongside the note + where it came from, so the playground
+  // collection can list and export commented exercises.
+  exerciseComments: defineTable({
+    userId: v.string(),
+    comment: v.string(),
+    html: v.string(),
+    source: v.string(), // "atlas" | "embed" | "lesson"
+    context: v.optional(v.string()), // science/subtopic/lesson title, or the brief
+    mechanic: v.optional(v.string()), // the brainstormed mechanic chosen, if any
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

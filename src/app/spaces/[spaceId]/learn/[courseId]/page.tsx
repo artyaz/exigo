@@ -24,6 +24,7 @@ import {
 } from "../../../../actions/learn";
 import { createFeelsHardNodeAction, queueFeelsHardNodeAction } from "../../../../actions/knowledge";
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
+import { LessonPractice } from "~/app/_components/learn/LessonPractice";
 import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
 import { ClarificationThread, type ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
 import { CourseTutor } from "~/app/_components/learn/CourseTutor";
@@ -1929,6 +1930,11 @@ function LessonPhase({
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
+
+      {/* Inline practice — 1-3 exercises built from this lesson, once its content is fully revealed */}
+      {totalSections > 0 && revealedCount >= totalSections && !isTeaching && !isSummarizing && !currentInputRequest && (
+        <LessonPractice content={fullText} title={currentLesson?.title} />
+      )}
 
       {/* Lesson complete */}
       {/* Lesson complete — show when all sections revealed and not streaming */}

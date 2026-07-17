@@ -21,9 +21,11 @@ import type * as courses from "../courses.js";
 import type * as crons from "../crons.js";
 import type * as debugPlan from "../debugPlan.js";
 import type * as deepDives from "../deepDives.js";
+import type * as exerciseComments from "../exerciseComments.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as knowledgeNodes from "../knowledgeNodes.js";
+import type * as knowledgeNodesActions from "../knowledgeNodesActions.js";
 import type * as knowledgePieces from "../knowledgePieces.js";
 import type * as planLimits from "../planLimits.js";
 import type * as plans from "../plans.js";
@@ -35,9 +37,11 @@ import type * as subscriptionService from "../subscriptionService.js";
 import type * as subscriptionServiceInternal from "../subscriptionServiceInternal.js";
 import type * as subscriptionsInternal from "../subscriptionsInternal.js";
 import type * as testMessages from "../testMessages.js";
+import type * as testMessagesActions from "../testMessagesActions.js";
 import type * as testUtils from "../testUtils.js";
 import type * as tests from "../tests.js";
 import type * as usageService from "../usageService.js";
+import type * as userSettings from "../userSettings.js";
 
 import type {
   ApiFromModules,
@@ -59,9 +63,11 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   debugPlan: typeof debugPlan;
   deepDives: typeof deepDives;
+  exerciseComments: typeof exerciseComments;
   health: typeof health;
   http: typeof http;
   knowledgeNodes: typeof knowledgeNodes;
+  knowledgeNodesActions: typeof knowledgeNodesActions;
   knowledgePieces: typeof knowledgePieces;
   planLimits: typeof planLimits;
   plans: typeof plans;
@@ -73,9 +79,11 @@ declare const fullApi: ApiFromModules<{
   subscriptionServiceInternal: typeof subscriptionServiceInternal;
   subscriptionsInternal: typeof subscriptionsInternal;
   testMessages: typeof testMessages;
+  testMessagesActions: typeof testMessagesActions;
   testUtils: typeof testUtils;
   tests: typeof tests;
   usageService: typeof usageService;
+  userSettings: typeof userSettings;
 }>;
 
 /**

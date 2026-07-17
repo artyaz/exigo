@@ -340,7 +340,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [questions, currentIndex, currentQuestion, answers, test]);
 
-    const generateImprovements = useAction(api.knowledgeNodes.generateImprovements);
+    const generateImprovements = useAction(api.knowledgeNodesActions.generateImprovements);
 
     const handleAnswer = async (questionId: string, answer: string) => {
         if (!answer.trim()) return;
