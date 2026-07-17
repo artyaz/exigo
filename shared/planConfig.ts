@@ -109,3 +109,11 @@ export function slugToTier(slug: string | undefined | null): PlanTier {
 export function tierToAccessLevel(tier: PlanTier): number {
     return ACCESS_LEVEL_MAP[tier] ?? 0;
 }
+
+/**
+ * Resolve plan slug → numeric accessLevel via shared tier mapping.
+ * Used by Paddle webhook trust path so callers cannot invent entitlements.
+ */
+export function slugToAccessLevel(slug: string | undefined | null): number {
+    return tierToAccessLevel(slugToTier(slug));
+}

@@ -54,9 +54,10 @@ All AI calls use **Google Gemini** (`@google/genai`). The consistent pattern acr
 
 ### Subscription & Plan Limits
 
-- Plan config lives in `shared/planConfig.ts` (shared between frontend and Convex backend).
-- `convex/subscriptionService.ts` implements a **Strategy pattern** for plan limits (`FreeLimitStrategy`, `ProScholarLimitStrategy`, `EducatorLimitStrategy`).
-- Usage tracking (tests, deep dives) is calendar-month entity counts in `convex/tests.ts` / `convex/deepDives.ts`.
+- Plan config lives in `shared/planConfig.ts` (shared between frontend and Convex backend). **`LIMITS_BY_TIER` is the SSOT** for numeric entitlements (spaces, tests/month, knowledge pieces, deep dives). `getMarketingPerksForTier` derives seed + pricing perk strings from the same table so marketing cannot drift from enforcement.
+- `convex/subscriptionService.ts` maps access levels → tiers via thin `getLimitsForAccessLevel` → `getLimitsForTier` (no Strategy classes). Access levels remain `FREE (0)` / `PRO_SCHOLAR (1)` / `EDUCATOR (2)`.
+- Usage tracking (tests, deep dives) is **calendar-month entity counts** in `convex/tests.ts` / `convex/deepDives.ts`. There is no separate rolling-window usage meter (`usageService` was removed).
+- Plan catalog seed is `convex/seedPlans.ts` (internal). It refuses re-seed if rows exist; DBs seeded before free perks were aligned may still show stale free “10 AI tests” copy until plans are deleted/reseeded or `perks` patched (see comment on `seed`).
 - Payments are handled via **Paddle** through the provider abstraction in `src/server/payments/` (`IPaymentProvider` interface, `PaddleProvider` implementation).
 
 ### Adaptive Course System (Educator-only)
