@@ -1,17 +1,93 @@
 import { v } from "convex/values";
 import { action } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
 import { internal, api } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
   getAuthedContextForAction,
   requireEducatorAccess,
 } from "./authDecorators";
+import { MAX_MODULES } from "../shared/courseConfig";
 
 type AdvanceResult = {
   nextPhase: string;
   moduleTitle?: string;
   lessonTitle?: string;
 };
+
+/**
+ * Course phase machine (orchestrator is the structural phase writer).
+ *
+ *   baseline
+ *     → module_generation
+ *     → lesson ⇄ lesson_summary  (per lesson in current module)
+ *     → module_complete
+ *         if modules.length >= MAX_MODULES → completed (terminal)
+ *         else → module_generation → … (next module)
+ *
+ * generateModule may set phase "lesson" after creating content (generation
+ * completion); only this action sets "completed" and other structural hops.
+ * generateModule itself requires phase === "module_generation".
+ */
+
+/** Load lessons for the course's current module, sorted by lessonIndex. */
+async function loadCurrentModuleLessons(
+  ctx: ActionCtx,
+  course: Doc<"courses">,
+): Promise<{
+  currentModule: Doc<"courseModules">;
+  sortedLessons: Doc<"courseLessons">[];
+}> {
+  const modules: Doc<"courseModules">[] = await ctx.runQuery(
+    internal.courseModules.getForCourseInternal,
+    { courseId: course._id },
+  );
+  const currentModule = modules.find(
+    (m) => m.moduleIndex === course.currentModuleIndex,
+  );
+  if (!currentModule) throw new Error("Current module not found");
+
+  const lessons: Doc<"courseLessons">[] = await ctx.runQuery(
+    internal.courseLessons.getForModuleInternal,
+    { moduleId: currentModule._id },
+  );
+  const sortedLessons = [...lessons].sort(
+    (a, b) => a.lessonIndex - b.lessonIndex,
+  );
+  return { currentModule, sortedLessons };
+}
+
+/**
+ * Shared arm: generate next module (requires phase module_generation),
+ * seed mastery goals on the first lesson, return lesson phase.
+ * generateModule patches phase → lesson after content is written.
+ */
+async function generateModuleAndStartLessons(
+  ctx: ActionCtx,
+  courseId: Id<"courses">,
+): Promise<AdvanceResult> {
+  const moduleResult: {
+    moduleId: Id<"courseModules">;
+    moduleTitle: string;
+    subTopicCount: number;
+  } = await ctx.runAction(api.courseAi.generateModule, { courseId });
+
+  const lessons: Doc<"courseLessons">[] = await ctx.runQuery(
+    internal.courseLessons.getForModuleInternal,
+    { moduleId: moduleResult.moduleId },
+  );
+
+  if (lessons.length > 0) {
+    const firstLesson = [...lessons].sort(
+      (a, b) => a.lessonIndex - b.lessonIndex,
+    )[0]!;
+    await ctx.runAction(api.courseAi.setMasteryGoals, {
+      lessonId: firstLesson._id,
+    });
+  }
+
+  return { nextPhase: "lesson", moduleTitle: moduleResult.moduleTitle };
+}
 
 /**
  * Main orchestrator: reads current course phase and advances to the next step.
@@ -25,9 +101,12 @@ export const advanceCourse = action({
     const auth = await getAuthedContextForAction(ctx);
     requireEducatorAccess(auth);
 
-    const course: Doc<"courses"> | null = await ctx.runQuery(internal.courses.getInternal, {
-      courseId: args.courseId,
-    });
+    const course: Doc<"courses"> | null = await ctx.runQuery(
+      internal.courses.getInternal,
+      {
+        courseId: args.courseId,
+      },
+    );
     if (!course || course.userId !== auth.userId) {
       throw new Error("Course not found or unauthorized");
     }
@@ -42,46 +121,12 @@ export const advanceCourse = action({
       }
 
       case "module_generation": {
-        const moduleResult: { moduleId: Id<"courseModules">; moduleTitle: string; subTopicCount: number } =
-          await ctx.runAction(api.courseAi.generateModule, {
-            courseId: args.courseId,
-          });
-
-        const lessons: Doc<"courseLessons">[] = await ctx.runQuery(
-          internal.courseLessons.getForModuleInternal,
-          { moduleId: moduleResult.moduleId },
-        );
-
-        if (lessons.length > 0) {
-          const firstLesson: Doc<"courseLessons"> = lessons.sort(
-            (a: Doc<"courseLessons">, b: Doc<"courseLessons">) => a.lessonIndex - b.lessonIndex,
-          )[0]!;
-          await ctx.runAction(api.courseAi.setMasteryGoals, {
-            lessonId: firstLesson._id,
-          });
-        }
-
-        return { nextPhase: "lesson", moduleTitle: moduleResult.moduleTitle };
+        return await generateModuleAndStartLessons(ctx, args.courseId);
       }
 
       case "lesson": {
-        const lessonModules: Doc<"courseModules">[] = await ctx.runQuery(
-          internal.courseModules.getForCourseInternal,
-          { courseId: args.courseId },
-        );
-        const lessonCurrentModule: Doc<"courseModules"> | undefined = lessonModules.find(
-          (m: Doc<"courseModules">) => m.moduleIndex === course.currentModuleIndex,
-        );
-        if (!lessonCurrentModule) throw new Error("Current module not found");
-
-        const lessonModuleLessons: Doc<"courseLessons">[] = await ctx.runQuery(
-          internal.courseLessons.getForModuleInternal,
-          { moduleId: lessonCurrentModule._id },
-        );
-        const lessonSorted: Doc<"courseLessons">[] = lessonModuleLessons.sort(
-          (a: Doc<"courseLessons">, b: Doc<"courseLessons">) => a.lessonIndex - b.lessonIndex,
-        );
-        const currentLesson: Doc<"courseLessons"> | undefined = lessonSorted[course.currentLessonIndex];
+        const { sortedLessons } = await loadCurrentModuleLessons(ctx, course);
+        const currentLesson = sortedLessons[course.currentLessonIndex];
 
         const lessonDoneStatuses = ["completed", "summarized", "integrated"];
         if (!currentLesson || !lessonDoneStatuses.includes(currentLesson.status)) {
@@ -96,26 +141,11 @@ export const advanceCourse = action({
       }
 
       case "lesson_summary": {
-        const modules: Doc<"courseModules">[] = await ctx.runQuery(
-          internal.courseModules.getForCourseInternal,
-          { courseId: args.courseId },
-        );
-        const currentModule: Doc<"courseModules"> | undefined = modules.find(
-          (m: Doc<"courseModules">) => m.moduleIndex === course.currentModuleIndex,
-        );
-        if (!currentModule) throw new Error("Current module not found");
-
-        const lessons: Doc<"courseLessons">[] = await ctx.runQuery(
-          internal.courseLessons.getForModuleInternal,
-          { moduleId: currentModule._id },
-        );
-        const sortedLessons: Doc<"courseLessons">[] = lessons.sort(
-          (a: Doc<"courseLessons">, b: Doc<"courseLessons">) => a.lessonIndex - b.lessonIndex,
-        );
-        const nextLessonIndex: number = course.currentLessonIndex + 1;
+        const { sortedLessons } = await loadCurrentModuleLessons(ctx, course);
+        const nextLessonIndex = course.currentLessonIndex + 1;
 
         if (nextLessonIndex < sortedLessons.length) {
-          const nextLesson: Doc<"courseLessons"> = sortedLessons[nextLessonIndex]!;
+          const nextLesson = sortedLessons[nextLessonIndex]!;
           await ctx.runAction(api.courseAi.setMasteryGoals, {
             lessonId: nextLesson._id,
           });
@@ -125,40 +155,37 @@ export const advanceCourse = action({
             phase: "lesson",
           });
           return { nextPhase: "lesson", lessonTitle: nextLesson.title };
-        } else {
-          await ctx.runMutation(internal.courses.updateProgress, {
-            courseId: args.courseId,
-            phase: "module_complete",
-          });
-          return { nextPhase: "module_complete" };
         }
+
+        await ctx.runMutation(internal.courses.updateProgress, {
+          courseId: args.courseId,
+          phase: "module_complete",
+        });
+        return { nextPhase: "module_complete" };
       }
 
       case "module_complete": {
+        const modules: Doc<"courseModules">[] = await ctx.runQuery(
+          internal.courseModules.getForCourseInternal,
+          { courseId: args.courseId },
+        );
+
+        // Terminal rule: fixed max modules (see shared/courseConfig.ts).
+        if (modules.length >= MAX_MODULES) {
+          await ctx.runMutation(internal.courses.updateProgress, {
+            courseId: args.courseId,
+            phase: "completed",
+          });
+          return { nextPhase: "completed" };
+        }
+
+        // Claim generation phase before public generateModule (phase guard).
         await ctx.runMutation(internal.courses.updateProgress, {
           courseId: args.courseId,
           phase: "module_generation",
         });
 
-        const moduleResult: { moduleId: Id<"courseModules">; moduleTitle: string; subTopicCount: number } =
-          await ctx.runAction(api.courseAi.generateModule, {
-            courseId: args.courseId,
-          });
-
-        const lessons: Doc<"courseLessons">[] = await ctx.runQuery(
-          internal.courseLessons.getForModuleInternal,
-          { moduleId: moduleResult.moduleId },
-        );
-        if (lessons.length > 0) {
-          const firstLesson: Doc<"courseLessons"> = lessons.sort(
-            (a: Doc<"courseLessons">, b: Doc<"courseLessons">) => a.lessonIndex - b.lessonIndex,
-          )[0]!;
-          await ctx.runAction(api.courseAi.setMasteryGoals, {
-            lessonId: firstLesson._id,
-          });
-        }
-
-        return { nextPhase: "lesson", moduleTitle: moduleResult.moduleTitle };
+        return await generateModuleAndStartLessons(ctx, args.courseId);
       }
 
       case "completed": {

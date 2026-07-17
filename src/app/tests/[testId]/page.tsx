@@ -1,10 +1,10 @@
 
 "use client";
 
-import { useQuery, useAction } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
-import { useState, use, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { useState, use, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Loader2,
@@ -14,13 +14,16 @@ import {
     ChevronLeft,
     ChevronRight,
     BrainCircuit,
-    MessageSquare,
     Sparkles,
-    CornerDownLeft,
-    AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
+import { useTestQuestionGeneration } from "../../_components/tests/useTestQuestionGeneration";
+import {
+    useTestAnswerValidation,
+    type ToastPayload,
+} from "../../_components/tests/useTestAnswerValidation";
+import { TestChatSidebar } from "../../_components/tests/TestChatSidebar";
 
 /* ─── spring presets ─── */
 const SPRING_SNAPPY = { type: "spring" as const, stiffness: 500, damping: 30 };
@@ -36,94 +39,6 @@ function cardHash(id: string, seed: number) {
     return h;
 }
 
-/* ─── Basic markdown renderer for chat messages ─── */
-/**
- * Parses inline markdown tokens: **bold**, *italic*, `code`.
- * Uses lookbehind / lookahead so a single * doesn't collide with **.
- */
-function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
-    const result: ReactNode[] = [];
-    // Order matters: match bold (**text**) or code (`text`) before italic (*text*).
-    // This avoids lookbehind/lookahead which breaks on older Safari.
-    const tokenRegex = /(\*\*(.+?)\*\*|`(.+?)`|\*([^*]+?)\*)/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    let partIdx = 0;
-
-    while ((match = tokenRegex.exec(text)) !== null) {
-        if (match.index > lastIndex) {
-            result.push(text.slice(lastIndex, match.index));
-        }
-
-        const key = `${keyPrefix}-${partIdx++}`;
-        if (match[2] !== undefined) {
-            // **bold**
-            result.push(
-                <strong key={key} className="font-semibold text-white">
-                    {match[2]}
-                </strong>
-            );
-        } else if (match[3] !== undefined) {
-            // `code`
-            result.push(
-                <code
-                    key={key}
-                    className="px-1.5 py-0.5 rounded bg-white/[0.08] text-[11px] font-mono text-white/90 border border-white/[0.06]"
-                >
-                    {match[3]}
-                </code>
-            );
-        } else if (match[4] !== undefined) {
-            // *italic* (captured without lookbehind)
-            result.push(
-                <em key={key} className="italic text-white/80">
-                    {match[4]}
-                </em>
-            );
-        }
-
-        lastIndex = match.index + match[0].length;
-    }
-
-    if (lastIndex < text.length) {
-        result.push(text.slice(lastIndex));
-    }
-
-    return result;
-}
-
-/**
- * Renders basic markdown: bullet lists (* / -), **bold**, *italic*, `code`,
- * and newlines.
- */
-function renderMarkdown(text: string): ReactNode[] {
-    const lines = text.split("\n");
-    const result: ReactNode[] = [];
-
-    lines.forEach((line, lineIdx) => {
-        if (lineIdx > 0) result.push(<br key={`br-${lineIdx}`} />);
-
-        // Detect bullet-list lines: "* text", "*   text", "- text"
-        const bulletMatch = /^(\s*)[*-]\s+(.*)/.exec(line);
-        if (bulletMatch) {
-            const indent = bulletMatch[1] ?? "";
-            const content = bulletMatch[2] ?? "";
-            result.push(
-                <span key={`li-${lineIdx}`} style={{ paddingLeft: indent.length * 8 }} className="inline-flex gap-1.5">
-                    <span className="text-white/40 select-none shrink-0">•</span>
-                    <span>{renderInlineMarkdown(content, `${lineIdx}`)}</span>
-                </span>
-            );
-            return;
-        }
-
-        // Regular line — just inline formatting
-        result.push(...renderInlineMarkdown(line, `${lineIdx}`));
-    });
-
-    return result;
-}
-
 export default function TestPage({ params }: { params: Promise<{ testId: string }> }) {
     const { testId } = use(params);
     const tId = testId as Id<"tests">;
@@ -133,28 +48,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
     const questions = useQuery(api.questions.getForTest, userId ? { testId: tId } : "skip");
 
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
-    const localCorrectnessRef = useRef<Record<string, boolean>>({});
-    const [isEvaluating, setIsEvaluating] = useState<Record<string, boolean>>({});
-    const [isGeneratingNext, setIsGeneratingNext] = useState(false);
-    const [genError, setGenError] = useState<string | null>(null);
-    const [retryNonce, setRetryNonce] = useState(0);
-
-    // Chat State
-    const [chatInput, setChatInput] = useState("");
-    const [isSendingChat, setIsSendingChat] = useState(false);
-    const chatEndRef = useRef<HTMLDivElement>(null);
-    const chatInputRef = useRef<HTMLInputElement>(null);
-
-    // Context menu ("Feels hard") state
-    const [contextMenu, setContextMenu] = useState<{
-        x: number;
-        y: number;
-        messageId: string;
-        messageContent: string;
-    } | null>(null);
-    const [feelsHardLoading, setFeelsHardLoading] = useState<string | null>(null);
-    const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+    const [toast, setToast] = useState<ToastPayload | null>(null);
 
     // Arena dimensions for card positioning
     const arenaRef = useRef<HTMLDivElement>(null);
@@ -163,13 +57,28 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
     const targetQuestionCount = test?.config?.questionCount ?? 5;
     const currentQuestion = questions?.[currentIndex];
-
-    // Chat for current question
     const currentQuestionId = currentQuestion?._id;
-    const testMessages = useQuery(
-        api.testMessages.getForQuestion,
-        currentQuestionId && userId ? { questionId: currentQuestionId, userId } : "skip"
-    );
+
+    const { isGeneratingNext, genError, retry } = useTestQuestionGeneration({
+        questionsLength: questions?.length,
+        test,
+        testId: tId,
+        targetQuestionCount,
+    });
+
+    const showToast = useCallback((payload: ToastPayload) => {
+        setToast(payload);
+    }, []);
+
+    const { answers, isEvaluating, handleAnswer } = useTestAnswerValidation({
+        questions,
+        test,
+        testId: tId,
+        currentIndex,
+        setCurrentIndex,
+        targetQuestionCount,
+        onToast: showToast,
+    });
 
     // Track arena size
     useEffect(() => {
@@ -184,124 +93,12 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         return () => ro.disconnect();
     }, []);
 
+    // Auto-dismiss toast
     useEffect(() => {
-        if (questions) {
-            const existing: Record<string, string> = {};
-            questions.forEach(q => {
-                if (q.userAnswer) existing[q._id] = q.userAnswer;
-            });
-            setAnswers(prev => ({ ...existing, ...prev }));
-
-            // Advance to first unanswered
-            const firstUnanswered = questions.findIndex(q => !q.userAnswer && !answers[q._id]);
-            if (firstUnanswered !== -1 && currentIndex === 0 && questions[0] && !answers[questions[0]._id]) {
-                setCurrentIndex(firstUnanswered);
-            }
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [questions, targetQuestionCount]);
-
-    useEffect(() => {
-        if (!questions) return;
-        const prev = localCorrectnessRef.current;
-        let next: Record<string, boolean> | null = null;
-        for (const q of questions) {
-            if (q.isCorrect !== undefined && prev[q._id] !== q.isCorrect) {
-                next ??= { ...prev };
-                next[q._id] = q.isCorrect;
-            }
-        }
-        if (next) localCorrectnessRef.current = next;
-    }, [questions]);
-
-    useEffect(() => {
-        if (chatEndRef.current) {
-            chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-        }
-    }, [testMessages]);
-
-    // Background question generation
-    const lastGeneratedForCount = useRef(-1);
-    useEffect(() => {
-        if (!questions || !test) return;
-        if (questions.length >= targetQuestionCount) return;
-        if (lastGeneratedForCount.current === questions.length) return;
-
-        lastGeneratedForCount.current = questions.length;
-        setIsGeneratingNext(true);
-        setGenError(null);
-
-        const abortController = new AbortController();
-
-        void (async () => {
-            try {
-                const res = await fetch("/api/tests/generate", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        spaceId: test.spaceId,
-                        testType: test.config.type,
-                        testId: tId,
-                        knowledgePieceId: test.knowledgePieceId,
-                    }),
-                    signal: abortController.signal,
-                });
-
-                if (!res.ok) {
-                    const errBody = await res.text().catch(() => "");
-                    const msg = errBody.trim() ? errBody : `Server error (${res.status})`;
-                    setGenError(msg.includes("429") || msg.includes("quota")
-                        ? "API rate limit reached. Please wait a moment and retry."
-                        : msg);
-                    lastGeneratedForCount.current = -1;
-                    return;
-                }
-
-                if (!res.body) throw new Error("No stream body");
-
-                const reader = res.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = "";
-                let hadError = false;
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split("\n\n");
-                    buffer = lines.pop() ?? "";
-
-                    for (const line of lines) {
-                        if (!line.startsWith("data: ")) continue;
-                        try {
-                            const payload = JSON.parse(line.slice(6)) as { type: string; text?: string; error?: string };
-                            if (payload.type === "error") {
-                                hadError = true;
-                                const msg = payload.error ?? "Generation failed";
-                                if (msg.includes("429") || msg.includes("quota") || msg.includes("RESOURCE_EXHAUSTED")) {
-                                    setGenError("API rate limit reached. Please wait a moment and retry.");
-                                } else {
-                                    setGenError(msg);
-                                }
-                            }
-                        } catch { /* skip */ }
-                    }
-                }
-                if (hadError) lastGeneratedForCount.current = -1;
-            } catch (e) {
-                if ((e as Error).name !== "AbortError") {
-                    console.error("Failed to generate question", e);
-                    setGenError("Failed to connect. Check your network and retry.");
-                    lastGeneratedForCount.current = -1;
-                }
-            } finally {
-                setIsGeneratingNext(false);
-            }
-        })();
-
-        return () => abortController.abort();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [questions?.length, test, tId, targetQuestionCount, retryNonce]);
+        if (!toast) return;
+        const timer = setTimeout(() => setToast(null), 3500);
+        return () => clearTimeout(timer);
+    }, [toast]);
 
     // Keyboard navigation
     useEffect(() => {
@@ -311,7 +108,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
 
             if (!questions || !currentQuestion) return;
 
-            // Arrow keys for navigation in review
             if (e.key === "ArrowLeft" && currentIndex > 0) {
                 e.preventDefault();
                 setCurrentIndex(currentIndex - 1);
@@ -320,7 +116,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 setCurrentIndex(currentIndex + 1);
             }
 
-            // Number keys for select questions
             if (test?.config.type === "select" && currentQuestion.options && !answers[currentQuestion._id] && !currentQuestion.userAnswer) {
                 const num = Number.parseInt(e.key);
                 const opt = currentQuestion.options[num - 1];
@@ -330,7 +125,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                 }
             }
 
-            // Escape to go back
             if (e.key === "Escape") {
                 globalThis.history.back();
             }
@@ -338,164 +132,7 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         globalThis.addEventListener("keydown", handleKeyDown);
         return () => globalThis.removeEventListener("keydown", handleKeyDown);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [questions, currentIndex, currentQuestion, answers, test]);
-
-    const generateImprovements = useAction(api.knowledgeNodesActions.generateImprovements);
-
-    const handleAnswer = async (questionId: string, answer: string) => {
-        if (!answer.trim()) return;
-        setAnswers(prev => ({ ...prev, [questionId]: answer }));
-        setIsEvaluating(prev => ({ ...prev, [questionId]: true }));
-
-        const knowledgePieceId = test?.knowledgePieceId;
-        let isCorrect = false;
-        let requestFailed = false;
-        try {
-            const res = await fetch("/api/tests/validate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ questionId, answer, testType: test?.config.type, knowledgePieceId }),
-            });
-            if (!res.ok) {
-                requestFailed = true;
-                const errBody = await res.json().catch(() => ({})) as { error?: string };
-                throw new Error(errBody.error ?? `Validation failed (${res.status})`);
-            }
-            const data = await res.json() as { isCorrect?: boolean };
-            isCorrect = !!data.isCorrect;
-            localCorrectnessRef.current = { ...localCorrectnessRef.current, [questionId]: isCorrect };
-        } catch (e) {
-            requestFailed = true;
-            console.error("Answer validation failed", e);
-            setToast({ message: e instanceof Error ? e.message : "Failed to validate answer", type: "error" });
-            setAnswers((prev) => {
-                const next = { ...prev };
-                delete next[questionId];
-                return next;
-            });
-        } finally {
-            setIsEvaluating(prev => ({ ...prev, [questionId]: false }));
-        }
-
-        if (requestFailed) {
-            return;
-        }
-
-        const mergedCorrectness: Record<string, boolean> = { ...localCorrectnessRef.current, [questionId]: isCorrect };
-
-        // Auto-advance after brief delay — capture index to prevent stale closure
-        const scheduledIndex = currentIndex;
-        setTimeout(() => {
-            if (questions && scheduledIndex === currentIndex && scheduledIndex < questions.length - 1) {
-                setCurrentIndex(prev => prev + 1);
-            } else if (questions && scheduledIndex === questions.length - 1 && scheduledIndex === targetQuestionCount - 1) {
-                // Last question answered! Let's compute score.
-                const correctCount = questions.reduce((count, q) => {
-                    const resolvedCorrectness = mergedCorrectness[q._id];
-                    const isQuestionCorrect = resolvedCorrectness ?? q.isCorrect;
-                    return count + (isQuestionCorrect === true ? 1 : 0);
-                }, 0);
-
-                const score = correctCount / targetQuestionCount;
-                if (score >= 0.8 && knowledgePieceId) {
-                    // Trigger improvements generation softly in background
-                    void generateImprovements({
-                        knowledgePieceId,
-                        testId: tId
-                    }).catch((err: unknown) => console.error("Failed to generate improvements", err));
-                }
-            }
-        }, 600);
-    };
-
-    const handleSendChat = async () => {
-        if (!chatInput.trim() || !currentQuestionId) return;
-        setIsSendingChat(true);
-        const msg = chatInput;
-        setChatInput("");
-
-        try {
-            const response = await fetch("/api/tests/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    testId: tId,
-                    questionId: currentQuestionId,
-                    message: msg,
-                }),
-            });
-            if (!response.ok) throw new Error("Chat failed");
-        } catch (e) {
-            console.error("Chat failed", e);
-            setChatInput(msg);
-        } finally {
-            setIsSendingChat(false);
-        }
-    };
-
-    // Context menu handler for right-clicking AI messages
-    const handleMessageContextMenu = useCallback((e: React.MouseEvent, messageId: string, messageContent: string) => {
-        e.preventDefault();
-        setContextMenu({
-            x: e.clientX,
-            y: e.clientY,
-            messageId,
-            messageContent,
-        });
-    }, []);
-
-    // Close context menu on any click or scroll
-    useEffect(() => {
-        if (!contextMenu) return;
-        const close = () => setContextMenu(null);
-        globalThis.addEventListener("click", close);
-        globalThis.addEventListener("scroll", close, true);
-        return () => {
-            globalThis.removeEventListener("click", close);
-            globalThis.removeEventListener("scroll", close, true);
-        };
-    }, [contextMenu]);
-
-    // Auto-dismiss toast
-    useEffect(() => {
-        if (!toast) return;
-        const timer = setTimeout(() => setToast(null), 3500);
-        return () => clearTimeout(timer);
-    }, [toast]);
-
-    const handleFeelsHard = async (messageId: string, messageContent: string) => {
-        setContextMenu(null);
-        if (!currentQuestionId) return;
-
-        setFeelsHardLoading(messageId);
-
-        try {
-            const knowledgePieceId = test?.knowledgePieceId;
-
-            const res = await fetch("/api/tests/feels-hard", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    testId: tId,
-                    questionId: currentQuestionId,
-                    messageContent,
-                    knowledgePieceId,
-                }),
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({})) as { error?: string };
-                throw new Error(errData.error ?? "Failed to save");
-            }
-
-            setToast({ message: "Struggle note added to knowledge base", type: "success" });
-        } catch (e) {
-            console.error("Feels hard failed", e);
-            setToast({ message: e instanceof Error ? e.message : "Failed to save", type: "error" });
-        } finally {
-            setFeelsHardLoading(null);
-        }
-    };
+    }, [questions, currentIndex, currentQuestion, answers, test, handleAnswer]);
 
     /* ─── Loading ─── */
     if (test === undefined || questions === undefined) {
@@ -518,9 +155,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
         );
     }
 
-
-
-    // Build left stack (answered/past) and right stack (upcoming)
     const rightCards = questions.filter((_, i) => i > currentIndex);
 
     return (
@@ -556,7 +190,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     </div>
                 </div>
 
-                {/* Progress bar */}
                 <div className="flex items-center gap-4">
                     <div className="hidden md:flex items-center gap-1">
                         {Array.from({ length: targetQuestionCount }).map((_, i) => {
@@ -614,7 +247,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
             <div className="flex-1 flex min-h-0">
                 {/* ─── Card arena ─── */}
                 <div className="flex-1 relative min-w-0 overflow-hidden" ref={arenaRef}>
-                    {/* Every question = one motion.div that grows/shrinks */}
                     {questions.map((q, idx) => {
                         const isActive = idx === currentIndex;
                         const offset = idx - currentIndex;
@@ -666,7 +298,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                 style={{ top: '50%', left: '50%' }}
                                 onClick={!isActive ? () => setCurrentIndex(idx) : undefined}
                             >
-                                {/* Stack preview — fades out when active */}
                                 <motion.div
                                     animate={{ opacity: isActive ? 0 : 1 }}
                                     transition={{ duration: 0.15 }}
@@ -684,7 +315,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                                     )}
                                 </motion.div>
 
-                                {/* Full card content — fades in when active */}
                                 <motion.div
                                     animate={{ opacity: isActive ? 1 : 0 }}
                                     transition={{ duration: 0.2, delay: isActive ? 0.12 : 0 }}
@@ -800,7 +430,6 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         );
                     })}
 
-                    {/* Generating placeholder */}
                     {isGeneratingNext && (
                         <motion.div
                             initial={{ opacity: 0, scale: 0.85, rotate: 2 }}
@@ -816,14 +445,13 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                         </motion.div>
                     )}
 
-                    {/* Empty state: waiting for first question */}
                     {!currentQuestion && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 p-8">
                             {genError ? (
                                 <>
                                     <XCircle className="w-8 h-8 text-red-400/50" />
                                     <p className="text-sm text-white/50 text-center max-w-sm">{genError}</p>
-                                    <button onClick={() => { setGenError(null); lastGeneratedForCount.current = -1; setRetryNonce(n => n + 1); }} className="px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact">Retry Generation</button>
+                                    <button onClick={retry} className="px-5 py-2.5 rounded-xl bg-white/10 border border-white/[0.08] text-white text-sm font-medium hover:bg-white/15 spring-interact">Retry Generation</button>
                                 </>
                             ) : isGeneratingNext ? null : (
                                 <>
@@ -835,130 +463,16 @@ export default function TestPage({ params }: { params: Promise<{ testId: string 
                     )}
                 </div>
 
-                {/* ─── Chat sidebar ─── */}
-                <div className="shrink-0 w-80 lg:w-[340px] border-l border-white/[0.06] flex flex-col bg-[#050505] hidden md:flex">
-                    {/* Chat header */}
-                    <div className="shrink-0 px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/[0.08] flex items-center justify-center">
-                            <MessageSquare className="w-3.5 h-3.5 text-white/40" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-xs text-white/80">AI Tutor</h3>
-                            <p className="text-[10px] text-white/30 truncate">
-                                {currentQuestion ? `Q${currentIndex + 1} context` : "Select a question"}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Messages */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar min-h-0">
-                        {!currentQuestionId ? (
-                            <div className="h-full flex items-center justify-center">
-                                <p className="text-xs text-white/20 text-center">No question selected</p>
-                            </div>
-                        ) : testMessages === undefined ? (
-                            <div className="h-full flex items-center justify-center">
-                                <Loader2 className="w-4 h-4 animate-spin text-white/20" />
-                            </div>
-                        ) : testMessages.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-center px-4">
-                                <BrainCircuit className="w-6 h-6 text-white/10 mb-3" />
-                                <p className="text-xs text-white/40 mb-1">Need help?</p>
-                                <p className="text-[10px] text-white/20 leading-relaxed">
-                                    Ask the AI tutor about this question for a deeper explanation.
-                                </p>
-                            </div>
-                        ) : (
-                            testMessages.map((msg) => (
-                                <motion.div
-                                    key={msg._id}
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={SPRING_SNAPPY}
-                                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                                >
-                                    <div
-                                        className={`relative max-w-[88%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed group/msg ${msg.role === "user"
-                                            ? "bg-white/[0.08] text-white/80 border border-white/[0.06]"
-                                            : "bg-transparent text-white/70 border border-white/[0.06]"
-                                            }`}
-                                        onContextMenu={msg.role === "ai" ? (e) => handleMessageContextMenu(e, msg._id, msg.content) : undefined}
-                                    >
-                                        <p className="whitespace-pre-wrap">{renderMarkdown(msg.content)}</p>
-                                        {/* "Feels hard" loading indicator on this specific message */}
-                                        {feelsHardLoading === msg._id && (
-                                            <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                                                <div className="flex items-center gap-2">
-                                                    <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-                                                    <span className="text-[10px] text-amber-400 font-medium">Saving...</span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </motion.div>
-                            ))
-                        )}
-                        {isSendingChat && (
-                            <div className="flex justify-start">
-                                <div className="rounded-xl px-3.5 py-2.5 border border-white/[0.06]">
-                                    <Loader2 className="w-3 h-3 animate-spin text-white/30" />
-                                </div>
-                            </div>
-                        )}
-                        <div ref={chatEndRef} />
-                    </div>
-
-                    {/* Chat input */}
-                    <div className="shrink-0 p-4 border-t border-white/[0.06]">
-                        <form
-                            onSubmit={e => { e.preventDefault(); void handleSendChat(); }}
-                            className="relative flex items-center"
-                        >
-                            <input
-                                ref={chatInputRef}
-                                type="text"
-                                value={chatInput}
-                                onChange={e => setChatInput(e.target.value)}
-                                placeholder="Ask about this question..."
-                                disabled={!currentQuestionId || isSendingChat}
-                                className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/15 transition-colors disabled:opacity-40"
-                            />
-                            <button
-                                type="submit"
-                                disabled={!chatInput.trim() || isSendingChat}
-                                className="absolute right-2 p-1.5 text-white/30 hover:text-white/70 disabled:text-white/10 transition-colors spring-interact"
-                            >
-                                <CornerDownLeft className="w-3.5 h-3.5" />
-                            </button>
-                        </form>
-                    </div>
-                </div>
+                <TestChatSidebar
+                    testId={tId}
+                    currentQuestionId={currentQuestionId}
+                    currentIndex={currentIndex}
+                    knowledgePieceId={test.knowledgePieceId}
+                    userId={userId}
+                    onToast={showToast}
+                />
             </div>
 
-            {/* ─── Custom context menu ─── */}
-            <AnimatePresence>
-                {contextMenu && (
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.92 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.92 }}
-                        transition={{ duration: 0.1 }}
-                        className="fixed z-[200] min-w-[180px] rounded-xl border border-white/[0.1] bg-[#1a1a1a]/95 backdrop-blur-xl shadow-2xl overflow-hidden"
-                        style={{ top: contextMenu.y, left: contextMenu.x }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <button
-                            onClick={() => handleFeelsHard(contextMenu.messageId, contextMenu.messageContent)}
-                            className="w-full flex items-center gap-2.5 px-4 py-3 text-xs text-left hover:bg-white/[0.06] transition-colors spring-interact"
-                        >
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                            <span className="text-white/80 font-medium">Feels hard</span>
-                        </button>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* ─── Toast notification ─── */}
             <AnimatePresence>
                 {toast && (
                     <motion.div
