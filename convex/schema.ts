@@ -137,6 +137,8 @@ export default defineSchema({
     baselineResults: v.optional(v.string()),
     /** OCC lock: only one generateModule may hold this at a time (P5-C). */
     generationInProgress: v.optional(v.boolean()),
+    /** Wall-clock ms when generationInProgress was set; used for TTL steal (P6-A). */
+    generationClaimedAt: v.optional(v.number()),
   })
     .index("by_space", ["spaceId"])
     .index("by_user", ["userId"]),

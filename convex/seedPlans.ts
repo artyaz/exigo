@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
-import { getMarketingPerksForTier } from "../shared/planConfig";
+import {
+  getMarketingPerksForTier,
+  slugToTier,
+} from "../shared/planConfig";
 
 /**
  * Seed the plans catalog. Perks come from `getMarketingPerksForTier` → `LIMITS_BY_TIER` (SSOT).
@@ -10,14 +13,12 @@ import { getMarketingPerksForTier } from "../shared/planConfig";
  * ## Stale free “10 AI tests / month” rows (pre-P3-A)
  * Environments seeded before marketing was aligned still store free perk text advertising
  * 10 tests while runtime enforcement has always used `LIMITS_BY_TIER.free.maxTestsPerMonth`
- * (3). This seed cannot fix those rows (it refuses when plans exist).
+ * (3). `seed` cannot fix those rows (it refuses when plans exist).
  *
- * Ops options (no automatic migration):
- * 1. Delete all `plans` rows, run `seedPlans.seed`, then re-apply `setPriceId` for paid slugs.
- * 2. Manually patch the free plan’s `perks` to match `getMarketingPerksForTier("free")`
- *    (includes “3 AI tests / month”, not 10). Paid rows are usually fine if seeded from SSOT.
- * Optional future helper: an internal mutation that patches every plan’s `perks` from
- * `getMarketingPerksForTier(slugToTier(slug))` without deleting rows — not shipped here.
+ * Ops options:
+ * 1. Prefer **`syncPerksFromSsot`** — patches every plan’s `perks` from SSOT without deleting
+ *    rows or touching priceIds (P6-D).
+ * 2. Delete all `plans` rows, run `seedPlans.seed`, then re-apply `setPriceId` for paid slugs.
  */
 export const seed = internalMutation({
   args: {},
@@ -92,5 +93,24 @@ export const setPriceId = internalMutation({
     if (!plan) throw new Error(`Plan not found: ${args.slug}`);
     await ctx.db.patch(plan._id, { priceId: trimmed });
     return { updated: args.slug };
+  },
+});
+
+/**
+ * Patch every plan row’s `perks` from `getMarketingPerksForTier(slugToTier(slug))`.
+ * Safe on already-seeded DBs: does not delete rows or touch priceIds (P6-D / P3-A residual).
+ * Idempotent when perks already match SSOT.
+ */
+export const syncPerksFromSsot = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const plans = await ctx.db.query("plans").collect();
+    let patched = 0;
+    for (const plan of plans) {
+      const perks = getMarketingPerksForTier(slugToTier(plan.slug));
+      await ctx.db.patch(plan._id, { perks });
+      patched += 1;
+    }
+    return { patched, total: plans.length };
   },
 });

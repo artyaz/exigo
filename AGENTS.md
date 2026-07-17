@@ -38,12 +38,21 @@ Two distinct paths exist for frontend-to-backend communication:
 
 ### AI Integration Pattern
 
-All AI calls use **Google Gemini** (`@google/genai`). The consistent pattern across API routes:
+Two call sites (intentionally separate runtimes — do not force-share clients across the Convex/Node boundary):
+
+| Path | Where | How |
+|------|--------|-----|
+| **Next API routes** (`src/app/api/**`) | Streaming SSE (teach, tutor, tests generate/validate, atlas, …) | `resolveAiProvider` / `defaultGeminiProvider` from `src/server/ai/` — honors user custom OpenAI-compatible settings when present; otherwise Gemini |
+| **Convex actions** (`convex/courseAi.ts`, `knowledgeNodes`, `testMessages`, …) | Backend-only generation (module syllabus, improvements, …) | Direct `@google/genai` + `GOOGLE_GEMINI_API_KEY` / `GEMINI_MODEL` — no user BYOK; Convex cannot import `src/server` |
+
+Shared conventions on both paths:
 - Prompts are stored in the Convex `prompts` table and fetched via `convex/coursePrompts.ts` (`getPrompt`/`renderPrompt` with `{{variable}}` placeholders)
-- Responses stream to clients via SSE (`text/event-stream`) with `delta`/`done`/`error` event types
-- AI observability events are captured via `shared/posthogAiObservability.ts` (`captureAiGenerationEvent`)
+- Client-facing streams use SSE (`text/event-stream`); majority dialect is `data: {"type":"delta"|"done"|"error",...}` (see `src/lib/sse.ts` + client `src/lib/sseClient.ts`). Tutor residual uses named `event:` lines.
+- AI observability events are captured via `shared/posthogAiObservability.ts` (`captureAiGenerationEvent`) where the call site supports it
 - Model fallback: primary model from `GEMINI_MODEL` env var, defaults to `gemini-3-flash-preview`
-- Rate limit retries: 429 responses trigger up to 3 retries with exponential backoff
+- Rate limit retries: 429 responses trigger up to 3 retries with exponential backoff on the Next path
+
+Do **not** grow a third AI entry style. Prefer extending `src/server/ai` for Next routes and the existing Gemini helpers in Convex actions.
 
 ### Auth & Authorization
 
@@ -57,7 +66,7 @@ All AI calls use **Google Gemini** (`@google/genai`). The consistent pattern acr
 - Plan config lives in `shared/planConfig.ts` (shared between frontend and Convex backend). **`LIMITS_BY_TIER` is the SSOT** for numeric entitlements (spaces, tests/month, knowledge pieces, deep dives). `getMarketingPerksForTier` derives seed + pricing perk strings from the same table so marketing cannot drift from enforcement.
 - `convex/subscriptionService.ts` maps access levels → tiers via thin `getLimitsForAccessLevel` → `getLimitsForTier` (no Strategy classes). Access levels remain `FREE (0)` / `PRO_SCHOLAR (1)` / `EDUCATOR (2)`.
 - Usage tracking (tests, deep dives) is **calendar-month entity counts** in `convex/tests.ts` / `convex/deepDives.ts`. There is no separate rolling-window usage meter (`usageService` was removed).
-- Plan catalog seed is `convex/seedPlans.ts` (internal). It refuses re-seed if rows exist; DBs seeded before free perks were aligned may still show stale free “10 AI tests” copy until plans are deleted/reseeded or `perks` patched (see comment on `seed`).
+- Plan catalog seed is `convex/seedPlans.ts` (internal). `seed` refuses re-seed if rows exist. To fix stale free “10 AI tests” copy without deleting rows, run internal `seedPlans.syncPerksFromSsot` (patches every plan’s `perks` from `getMarketingPerksForTier`).
 - Payments are handled via **Paddle** through the provider abstraction in `src/server/payments/` (`IPaymentProvider` interface, `PaddleProvider` implementation).
 
 ### Adaptive Course System (Educator-only)

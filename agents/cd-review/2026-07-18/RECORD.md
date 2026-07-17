@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|--------|
-| **State** | paused (structure reorg done; product waves 0–5 already shipped earlier in session) |
-| **Branch** | `develop` / `main` (both received waves through #73/#74) |
-| **Last updated** | 2026-07-18 (artifact relocation + loop polish) |
+| **State** | paused (Wave 6 code + verify done; not shipped) |
+| **Branch** | `fix/wave6-product` (from layout reorg + main through #73) |
+| **Last updated** | 2026-07-18 (Wave 6 residual implemented + verified) |
 | **Continues from** | Same calendar window as product work started 2026-07-17 (UTC/session) |
 | **RUN_ROOT** | `agents/cd-review/2026-07-18` |
 
@@ -24,6 +24,7 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | Verify | **done** per ship | tests 270–281; CI build green after lint fixes |
 | Ship | **done** | See PR list below |
 | Artifact reorg | **done** | Moved into this RUN_ROOT; LOOP.md polished |
+| Wave 6 residual | **code done / ship pending** | P6-A TTL, P6-B sseClient tests, P6-C dual-AI docs, P6-D perk sync; verify 281 tests |
 
 ## Done (chronological)
 
@@ -103,6 +104,20 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 **Shipped:** #72/#74 develop, #73 main.
 
+### Wave 6 — residual product (same RUN_ROOT)
+
+| Pack | Outcome |
+|------|---------|
+| P6-A | `generationClaimedAt` + `GENERATION_LOCK_TTL_MS` (15m); stale lock steal on claim; clear on release/phase leave |
+| P6-B | `useTestQuestionGeneration` on `iterateParsedSseBlocks` / majority dialect |
+| P6-C | AGENTS.md documents dual AI paths (Next `resolveAiProvider` vs Convex direct Gemini) — no runtime merge |
+| P6-D | `seedPlans.syncPerksFromSsot` internalMutation for stale free “10” perk copy |
+| P6-E | LessonPhase further split **deferred** (still ~566 lines, optional P3) |
+
+**Verify:** `npm run check` green (pre-existing warnings only); `npm run test` **281** passed. See `audits/verify-wave6.md`.
+
+**Ship:** not opened yet — branch `fix/wave6-product`.
+
 ### Artifact reorg (this step)
 
 - Created `agents/cd-review/LOOP.md` (protocol).
@@ -111,31 +126,24 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 
 ## In flight
 
-- None product. Artifact layout is the current deliverable.
+- None code. Ship PR(s) for Wave 6 when ready.
 
 ## Stopped at
 
-1. **Product residual backlog** (not started as Wave 6):
-   - Generation lock has no TTL if process dies mid-generate
-   - Dual AI stack consolidation (direct Gemini routes vs `resolveAiProvider`)
-   - `useTestQuestionGeneration` not yet on `sseClient`
-   - Free-plan perk **DB** rows may still say “10 AI tests” until reseed/patch (enforcement already 3)
-   - `LessonPhase` still ~565 lines (further optional split)
-2. **Process residual:**
-   - Historical brainstorm packages were produced *inline* by L1 agents (runtime lacked nested spawn). Going forward, **Wave A must not brainstorm**; Wave B is separate.
-   - Root `loops/cb-review.md` should be removed or turned into a stub pointing here (do on commit).
-3. **Next clean start:** if user asks for a new day run, create `agents/cd-review/$(date +%Y-%m-%d)/` per LOOP.md §1; set Continues from: `2026-07-18`.
+1. **Ship Wave 6** from `fix/wave6-product` (PR to develop/main per policy).
+2. **Ops after deploy:** run `seedPlans.syncPerksFromSsot` on Convex deployments with stale free perk text.
+3. **Optional residual:** P6-E LessonPhase further JSX split (~566 lines); CodeRabbit keep PRs scoped.
 
 ## Residual / backlog (priority)
 
-| Priority | Item | Source |
-|----------|------|--------|
-| P1 | TTL / reclaim for stuck `generationInProgress` | P5-C residual |
-| P2 | Dual AI stack documentation or thin shared boundary | S8/S9 |
-| P2 | Migrate test SSE generation to `sseClient` | P5-D residual |
-| P2 | Optional seed refresh for free perk strings | P3-A / P4-E |
-| P3 | Further LessonPhase JSX split | P5-A residual |
-| P3 | CodeRabbit 100-file limit → keep product PRs scoped | ops note |
+| Priority | Item | Source | Status |
+|----------|------|--------|--------|
+| P1 | TTL / reclaim for stuck `generationInProgress` | P5-C | **done** P6-A |
+| P2 | Dual AI stack documentation | S8/S9 | **done** P6-C (docs) |
+| P2 | Migrate test SSE generation to `sseClient` | P5-D | **done** P6-B |
+| P2 | Seed refresh for free perk strings | P3-A / P4-E | **done** P6-D (helper; run ops) |
+| P3 | Further LessonPhase JSX split | P5-A | deferred |
+| P3 | CodeRabbit 100-file limit → keep product PRs scoped | ops | open |
 
 ## Valuable notes
 
