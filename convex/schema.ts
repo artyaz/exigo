@@ -135,6 +135,8 @@ export default defineSchema({
     currentModuleIndex: v.number(),
     currentLessonIndex: v.number(),
     baselineResults: v.optional(v.string()),
+    /** OCC lock: only one generateModule may hold this at a time (P5-C). */
+    generationInProgress: v.optional(v.boolean()),
   })
     .index("by_space", ["spaceId"])
     .index("by_user", ["userId"]),
