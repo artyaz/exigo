@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
-import {
-  ConvexAuthError,
-  createAuthedConvexClient,
-} from "../../../../lib/convexClientAuth";
+import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import { PLAN_LIMIT_CODE } from "../../../../../shared/planConfig";
 import {
   captureAiGenerationEvent,
@@ -69,21 +65,19 @@ export async function POST(req: NextRequest) {
   const requestId = createRequestId(req.headers);
   const startedAt = Date.now();
   try {
-    const { userId, getToken } = await auth();
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const convex = await createAuthedConvexClient(
-      getToken,
-      "api.tests.validate",
-    );
+    const authResult = await requireAuthedApi("api.tests.validate", {
+      requestId,
+      route: "/api/tests/validate",
+      duration_ms: Date.now() - startedAt,
+    });
+    if (authResult instanceof Response) return authResult;
+    const { userId, convex } = authResult;
 
     let rawBody: unknown;
     try {
       rawBody = await req.json();
     } catch {
-      return NextResponse.json({ error: "Malformed JSON" }, { status: 400 });
+      return jsonError(400, "Malformed JSON");
     }
 
     if (
@@ -91,7 +85,7 @@ export async function POST(req: NextRequest) {
       typeof rawBody !== "object" ||
       Array.isArray(rawBody)
     ) {
-      return NextResponse.json({ error: "Malformed JSON" }, { status: 400 });
+      return jsonError(400, "Malformed JSON");
     }
 
     const body = rawBody as Record<string, unknown>;
@@ -105,53 +99,36 @@ export async function POST(req: NextRequest) {
       typeof answer !== "string" ||
       typeof testType !== "string"
     ) {
-      return NextResponse.json(
-        { error: "Missing or invalid required fields" },
-        { status: 400 },
-      );
+      return jsonError(400, "Missing or invalid required fields");
     }
 
     if (
       knowledgePieceId !== undefined &&
       typeof knowledgePieceId !== "string"
     ) {
-      return NextResponse.json(
-        { error: "Invalid knowledgePieceId" },
-        { status: 400 },
-      );
+      return jsonError(400, "Invalid knowledgePieceId");
     }
 
     if (testType !== "select" && testType !== "write") {
-      return NextResponse.json(
-        { error: "Invalid testType — must be 'select' or 'write'" },
-        { status: 400 },
-      );
+      return jsonError(400, "Invalid testType — must be 'select' or 'write'");
     }
 
     // Validate active question directly
     const question = await convex.query(api.questions.get, {
       questionId: questionId as Id<"questions">,
     });
-    if (!question)
-      return NextResponse.json(
-        { error: "Question not found" },
-        { status: 404 },
-      );
+    if (!question) return jsonError(404, "Question not found");
 
     // Verify ownership via space
     const test = await convex.query(api.tests.get, { testId: question.testId });
-    if (!test)
-      return NextResponse.json({ error: "Test not found" }, { status: 404 });
+    if (!test) return jsonError(404, "Test not found");
 
     const space = await convex.query(api.spaces.get, {
       spaceId: test.spaceId,
       userId,
     });
     if (!space) {
-      return NextResponse.json(
-        { error: "Unauthorized access or space not found" },
-        { status: 403 },
-      );
+      return jsonError(403, "Unauthorized access or space not found");
     }
 
     let modelUsedResult: string | undefined;
@@ -167,20 +144,14 @@ export async function POST(req: NextRequest) {
     } else if (testType === "write") {
       const planStatus = await convex.query(api.planLimits.getPlan, {});
       if (planStatus.tier !== "educator") {
-        return NextResponse.json(
-          {
-            error:
-              "AI feedback for written answers is available on Educator plan. Please upgrade your plan.",
-          },
-          { status: 403 },
+        return jsonError(
+          403,
+          "AI feedback for written answers is available on Educator plan. Please upgrade your plan.",
         );
       }
 
       if (!process.env.GOOGLE_GEMINI_API_KEY) {
-        return NextResponse.json(
-          { error: "Server missing Gemini API key" },
-          { status: 500 },
-        );
+        return jsonError(500, "Server missing Gemini API key");
       }
       const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
 
@@ -390,15 +361,6 @@ export async function POST(req: NextRequest) {
       duration_ms: Date.now() - startedAt,
       ...getErrorAttributes(err),
     });
-    if (err instanceof ConvexAuthError) {
-      return NextResponse.json(
-        { error: "Unauthorized: Missing Convex auth token." },
-        { status: 401 },
-      );
-    }
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return jsonError(500, "Internal server error");
   }
 }

@@ -1,3 +1,5 @@
+// Convex + Next AI events only; not for general product analytics. (fetch transport — no posthog-node)
+
 export type AiMessage = {
   role: "user" | "system" | "assistant";
   content: string;
