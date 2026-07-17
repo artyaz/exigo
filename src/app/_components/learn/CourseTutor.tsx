@@ -17,6 +17,10 @@ import {
 import { useMutation } from "convex/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import {
+  iterateParsedSseBlocks,
+  parseJsonData,
+} from "~/lib/sseClient";
 
 interface CourseTutorProps {
   spaceId: Id<"spaces">;
@@ -106,6 +110,9 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
       textareaRef.current.style.height = "auto";
     }
 
+    // Tutor residual dialect: named SSE events (delta, chat_created, tool_*, error)
+    let streamError: string | null = null;
+
     try {
       const res = await fetch("/api/learn/tutor", {
         method: "POST",
@@ -123,89 +130,72 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
         throw new Error(`Tutor request failed: ${res.status}`);
       }
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response stream");
+      if (!res.body) throw new Error("No response stream");
 
-      const decoder = new TextDecoder();
-      let buffer = "";
       let accumulated = "";
       let nextToolActionIndex = 0;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      for await (const block of iterateParsedSseBlocks(res.body)) {
+        // Named-event dialect requires `event:`; skip data-only frames if any
+        if (!block.event) continue;
+        const data = parseJsonData<Record<string, unknown>>(block.data);
+        if (!data) continue;
 
-        buffer += decoder.decode(value, { stream: true });
+        const eventType = block.event;
+        if (eventType === "delta" && typeof data.text === "string") {
+          accumulated += data.text;
+          setStreamingContent(accumulated);
+        } else if (eventType === "chat_created" && typeof data.chatId === "string") {
+          setActiveChatId(data.chatId as Id<"courseTutorChats">);
+        } else if (eventType === "tool_call") {
+          const toolName = getSseString(data.name) ?? "tool";
+          const toolId =
+            getSseString(data.id) ?? `${toolName}-${nextToolActionIndex++}`;
 
-        // Parse SSE events from buffer
-        const eventBlocks = buffer.split("\n\n");
-        // Keep last incomplete block in buffer
-        buffer = eventBlocks.pop() ?? "";
+          setToolActions((prev) => [
+            ...prev,
+            { id: toolId, name: toolName },
+          ]);
+        } else if (eventType === "tool_result") {
+          const toolName = getSseString(data.name) ?? "tool";
+          const toolId = getSseString(data.id);
+          const toolMessage = getSseString(data.message) ?? "";
 
-        for (const block of eventBlocks) {
-          if (!block.trim()) continue;
-          let eventType = "";
-          let dataStr = "";
-          for (const line of block.split("\n")) {
-            if (line.startsWith("event: ")) eventType = line.slice(7).trim();
-            else if (line.startsWith("data: ")) dataStr = line.slice(6);
-          }
-          if (!eventType || !dataStr) continue;
+          setToolActions((prev) => {
+            const updated = [...prev];
+            const targetIndex = toolId
+              ? updated.findIndex((action) => action.id === toolId)
+              : updated.findIndex(
+                  (action) =>
+                    action.name === toolName &&
+                    action.success === undefined,
+                );
 
-          try {
-            const data = JSON.parse(dataStr) as Record<string, unknown>;
-            if (eventType === "delta" && typeof data.text === "string") {
-              accumulated += data.text;
-              setStreamingContent(accumulated);
-            } else if (eventType === "chat_created" && typeof data.chatId === "string") {
-              setActiveChatId(data.chatId as Id<"courseTutorChats">);
-            } else if (eventType === "tool_call") {
-              const toolName = getSseString(data.name) ?? "tool";
-              const toolId =
-                getSseString(data.id) ?? `${toolName}-${nextToolActionIndex++}`;
-
-              setToolActions((prev) => [
-                ...prev,
-                { id: toolId, name: toolName },
-              ]);
-            } else if (eventType === "tool_result") {
-              const toolName = getSseString(data.name) ?? "tool";
-              const toolId = getSseString(data.id);
-              const toolMessage = getSseString(data.message) ?? "";
-
-              setToolActions((prev) => {
-                const updated = [...prev];
-                const targetIndex = toolId
-                  ? updated.findIndex((action) => action.id === toolId)
-                  : updated.findIndex(
-                      (action) =>
-                        action.name === toolName &&
-                        action.success === undefined,
-                    );
-
-                if (targetIndex >= 0) {
-                  updated[targetIndex] = {
-                    ...updated[targetIndex]!,
-                    success: data.success === true,
-                    message: toolMessage,
-                  };
-                }
-
-                return updated;
-              });
-            } else if (eventType === "error") {
-              // Error already shown via streaming UI
+            if (targetIndex >= 0) {
+              updated[targetIndex] = {
+                ...updated[targetIndex]!,
+                success: data.success === true,
+                message: toolMessage,
+              };
             }
-          } catch {
-            // ignore parse errors
-          }
+
+            return updated;
+          });
+        } else if (eventType === "error") {
+          streamError =
+            getSseString(data.error) ?? "Tutor request failed";
+          setStreamingContent(streamError);
         }
       }
     } catch {
       // Stream aborted or network error — UI resets via finally
     } finally {
       setIsStreaming(false);
-      setStreamingContent("");
+      // Keep error text visible until the next send; success path clears
+      // once Convex hydrates the saved assistant message.
+      if (!streamError) {
+        setStreamingContent("");
+      }
     }
   }, [input, isStreaming, spaceId, courseId, activeChatId]);
 

@@ -17,7 +17,10 @@ import {
   isRequestedTopicCovered,
   parseInsertTopicRequestContent,
 } from "../shared/courseTopicRequests";
-import { MAX_MODULES } from "../shared/courseConfig";
+import {
+  MAX_MODULES,
+  MODULE_GENERATION_IN_PROGRESS_MSG,
+} from "../shared/courseConfig";
 
 function getAiClient() {
   if (!process.env.GOOGLE_GEMINI_API_KEY) {
@@ -329,11 +332,11 @@ export const evaluateBaselineAnswer = action({
 /**
  * Creates the next module + lessons. Entry guards:
  * - owner + educator
- * - course.phase must be "module_generation" (orchestrator claims this phase)
- * - modules.length < MAX_MODULES (terminal budget; orchestrator also enforces)
+ * - atomic claimModuleGeneration (phase === module_generation, !generationInProgress, under cap)
+ * - createInternal re-checks claim + sequential moduleIndex (single insert path)
  *
  * On success, patches currentModuleIndex / currentLessonIndex and phase → "lesson"
- * so the UI leaves GeneratingPhase. Structural transitions (incl. "completed")
+ * (clears generationInProgress). Structural transitions (incl. "completed")
  * remain orchestrator-owned.
  */
 export const generateModule = action({
@@ -350,158 +353,176 @@ export const generateModule = action({
       auth.userId,
     );
 
-    if (course.phase !== "module_generation") {
-      throw new Error(
-        `Cannot generate module while course phase is "${course.phase}" (expected "module_generation")`,
-      );
-    }
-
-    const existingModules: Doc<"courseModules">[] = await ctx.runQuery(
-      internal.courseModules.getForCourseInternal,
+    const claim = await ctx.runMutation(
+      internal.courses.claimModuleGeneration,
       { courseId: args.courseId },
     );
 
-    if (existingModules.length >= MAX_MODULES) {
+    if (!claim.claimed) {
+      if (claim.reason === "in_progress") {
+        throw new Error(MODULE_GENERATION_IN_PROGRESS_MSG);
+      }
+      if (claim.reason === "at_cap") {
+        throw new Error(
+          `Course already has the maximum of ${MAX_MODULES} modules`,
+        );
+      }
+      const phase =
+        claim.reason === "wrong_phase" ? claim.phase : course.phase;
       throw new Error(
-        `Course already has the maximum of ${MAX_MODULES} modules`,
+        `Cannot generate module while course phase is "${phase}" (expected "module_generation")`,
       );
     }
 
-    const completedTopics = existingModules.map(
-      (m: Doc<"courseModules">) => m.moduleTitle,
-    );
+    const moduleIndex = claim.moduleIndex;
 
-    // Batch-fetch all lessons for the course (avoids N+1 per-module queries)
-    const allLessons: Doc<"courseLessons">[] = await ctx.runQuery(
-      internal.courseLessons.getForCourseInternal,
-      { courseId: args.courseId },
-    );
-    const performanceSummaries: string[] = allLessons
-      .filter((lesson) => lesson.summaryMarkdown)
-      .map((lesson) => lesson.summaryMarkdown!);
-
-    // Collect active knowledge nodes for the course's space
-    const activeNodes = await ctx.runQuery(
-      internal.knowledgeNodes.getActiveNodesForSpaceInternal,
-      { spaceId: course.spaceId },
-    );
-    const pendingTopicRequest = getPendingModuleTopicRequest(
-      activeNodes,
-      completedTopics,
-    );
-    const knowledgeNodeLines = activeNodes
-      .map((node) => {
-        const request = parseInsertTopicRequestContent(node.content);
-        if (request) {
-          return null;
-        }
-
-        return `- [${node.type.toUpperCase()}] ${node.content}`;
-      })
-      .filter((line): line is string => line !== null);
-
-    if (pendingTopicRequest) {
-      knowledgeNodeLines.unshift(
-        `- [FEELS_HARD] Student explicitly requested that the next module cover "${pendingTopicRequest.topic}". Context: ${pendingTopicRequest.context}`,
+    try {
+      const existingModules: Doc<"courseModules">[] = await ctx.runQuery(
+        internal.courseModules.getForCourseInternal,
+        { courseId: args.courseId },
       );
-    }
 
-    const knowledgeNodesStr =
-      knowledgeNodeLines.length > 0
-        ? knowledgeNodeLines.join("\n")
-        : "No knowledge nodes yet";
+      const completedTopics = existingModules.map(
+        (m: Doc<"courseModules">) => m.moduleTitle,
+      );
 
-    const ai = getAiClient();
-    const model = getModelPro();
-    const promptDoc = await ctx.runQuery(
-      internal.coursePrompts.getPromptInternal,
-      {
-        name: "adaptive_syllabus",
-      },
-    );
-    const basePrompt = renderPrompt(promptDoc.content, {
-      courseTitle: course.refinedTitle,
-      courseDescription: course.courseDescription,
-      baselineResults: course.baselineResults ?? "No baseline data",
-      completedTopics: JSON.stringify(completedTopics),
-      performanceSummaries: JSON.stringify(performanceSummaries),
-      knowledgeNodes: knowledgeNodesStr,
-    });
-    const prompt = pendingTopicRequest
-      ? [
-          basePrompt,
-          "",
-          "Additional hard requirement:",
-          `The student explicitly requested that the very next module cover "${pendingTopicRequest.topic}".`,
-          `Honor this request directly. The generated module_title must clearly name or center that topic.`,
-          `Use this context when shaping the module: ${pendingTopicRequest.context}.`,
-          "In adaptation_rationale, mention that this module was prioritized because of the explicit topic-insert request.",
-        ].join("\n")
-      : basePrompt;
+      // Batch-fetch all lessons for the course (avoids N+1 per-module queries)
+      const allLessons: Doc<"courseLessons">[] = await ctx.runQuery(
+        internal.courseLessons.getForCourseInternal,
+        { courseId: args.courseId },
+      );
+      const performanceSummaries: string[] = allLessons
+        .filter((lesson) => lesson.summaryMarkdown)
+        .map((lesson) => lesson.summaryMarkdown!);
 
-    const startedAt = Date.now();
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-    });
-    captureAiGenerationEvent({
-      distinctId: auth.userId,
-      traceId: createAiTraceId(),
-      provider: "google",
-      model,
-      input: [{ role: "user", content: prompt }],
-      response,
-      latencySeconds: (Date.now() - startedAt) / 1000,
-    });
+      // Collect active knowledge nodes for the course's space
+      const activeNodes = await ctx.runQuery(
+        internal.knowledgeNodes.getActiveNodesForSpaceInternal,
+        { spaceId: course.spaceId },
+      );
+      const pendingTopicRequest = getPendingModuleTopicRequest(
+        activeNodes,
+        completedTopics,
+      );
+      const knowledgeNodeLines = activeNodes
+        .map((node) => {
+          const request = parseInsertTopicRequestContent(node.content);
+          if (request) {
+            return null;
+          }
 
-    const text = response.text?.trim() ?? "";
-    const parsed = safeParseJson<{
-      module_title: string;
-      adaptation_rationale: string;
-      sub_topics: Array<{
-        title: string;
-        focus_area: string;
-        targets_weakness: boolean;
-      }>;
-    }>(text);
+          return `- [${node.type.toUpperCase()}] ${node.content}`;
+        })
+        .filter((line): line is string => line !== null);
 
-    const moduleId: Id<"courseModules"> = await ctx.runMutation(
-      internal.courseModules.createInternal,
-      {
-        courseId: args.courseId,
-        moduleIndex: existingModules.length,
-        moduleTitle: parsed.module_title,
-        adaptationRationale: parsed.adaptation_rationale,
-        subTopics: JSON.stringify(parsed.sub_topics),
-      },
-    );
+      if (pendingTopicRequest) {
+        knowledgeNodeLines.unshift(
+          `- [FEELS_HARD] Student explicitly requested that the next module cover "${pendingTopicRequest.topic}". Context: ${pendingTopicRequest.context}`,
+        );
+      }
 
-    // Create lesson records for each sub-topic
-    for (let i = 0; i < parsed.sub_topics.length; i++) {
-      const st = parsed.sub_topics[i]!;
-      await ctx.runMutation(internal.courseLessons.createInternal, {
-        courseId: args.courseId,
-        moduleId,
-        lessonIndex: i,
-        title: st.title,
-        focusArea: st.focus_area,
-        targetsWeakness: st.targets_weakness,
-        status: "pending",
+      const knowledgeNodesStr =
+        knowledgeNodeLines.length > 0
+          ? knowledgeNodeLines.join("\n")
+          : "No knowledge nodes yet";
+
+      const ai = getAiClient();
+      const model = getModelPro();
+      const promptDoc = await ctx.runQuery(
+        internal.coursePrompts.getPromptInternal,
+        {
+          name: "adaptive_syllabus",
+        },
+      );
+      const basePrompt = renderPrompt(promptDoc.content, {
+        courseTitle: course.refinedTitle,
+        courseDescription: course.courseDescription,
+        baselineResults: course.baselineResults ?? "No baseline data",
+        completedTopics: JSON.stringify(completedTopics),
+        performanceSummaries: JSON.stringify(performanceSummaries),
+        knowledgeNodes: knowledgeNodesStr,
       });
+      const prompt = pendingTopicRequest
+        ? [
+            basePrompt,
+            "",
+            "Additional hard requirement:",
+            `The student explicitly requested that the very next module cover "${pendingTopicRequest.topic}".`,
+            `Honor this request directly. The generated module_title must clearly name or center that topic.`,
+            `Use this context when shaping the module: ${pendingTopicRequest.context}.`,
+            "In adaptation_rationale, mention that this module was prioritized because of the explicit topic-insert request.",
+          ].join("\n")
+        : basePrompt;
+
+      const startedAt = Date.now();
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+      });
+      captureAiGenerationEvent({
+        distinctId: auth.userId,
+        traceId: createAiTraceId(),
+        provider: "google",
+        model,
+        input: [{ role: "user", content: prompt }],
+        response,
+        latencySeconds: (Date.now() - startedAt) / 1000,
+      });
+
+      const text = response.text?.trim() ?? "";
+      const parsed = safeParseJson<{
+        module_title: string;
+        adaptation_rationale: string;
+        sub_topics: Array<{
+          title: string;
+          focus_area: string;
+          targets_weakness: boolean;
+        }>;
+      }>(text);
+
+      const moduleId: Id<"courseModules"> = await ctx.runMutation(
+        internal.courseModules.createInternal,
+        {
+          courseId: args.courseId,
+          moduleIndex,
+          moduleTitle: parsed.module_title,
+          adaptationRationale: parsed.adaptation_rationale,
+          subTopics: JSON.stringify(parsed.sub_topics),
+        },
+      );
+
+      // Create lesson records for each sub-topic
+      for (let i = 0; i < parsed.sub_topics.length; i++) {
+        const st = parsed.sub_topics[i]!;
+        await ctx.runMutation(internal.courseLessons.createInternal, {
+          courseId: args.courseId,
+          moduleId,
+          lessonIndex: i,
+          title: st.title,
+          focusArea: st.focus_area,
+          targetsWeakness: st.targets_weakness,
+          status: "pending",
+        });
+      }
+
+      await ctx.runMutation(internal.courses.updateProgress, {
+        courseId: args.courseId,
+        currentModuleIndex: moduleIndex,
+        currentLessonIndex: 0,
+        phase: "lesson",
+      });
+
+      return {
+        moduleId,
+        moduleTitle: parsed.module_title,
+        subTopicCount: parsed.sub_topics.length,
+      };
+    } catch (error) {
+      await ctx.runMutation(internal.courses.releaseModuleGeneration, {
+        courseId: args.courseId,
+      });
+      throw error;
     }
-
-    await ctx.runMutation(internal.courses.updateProgress, {
-      courseId: args.courseId,
-      currentModuleIndex: existingModules.length,
-      currentLessonIndex: 0,
-      phase: "lesson",
-    });
-
-    return {
-      moduleId,
-      moduleTitle: parsed.module_title,
-      subTopicCount: parsed.sub_topics.length,
-    };
   },
 });
 

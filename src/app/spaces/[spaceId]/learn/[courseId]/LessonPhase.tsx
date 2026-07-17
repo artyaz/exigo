@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import {
   advanceCourseAction,
-  verifyInputAction,
   completeLessonAction,
   summarizeLessonAction,
 } from "../../../../actions/learn";
@@ -19,21 +18,19 @@ import { createFeelsHardNodeAction, queueFeelsHardNodeAction } from "../../../..
 import { LessonMarkdown } from "~/app/_components/learn/LessonMarkdown";
 import { LessonPractice } from "~/app/_components/learn/LessonPractice";
 import { SelectionBubble } from "~/app/_components/learn/SelectionBubble";
-import { ClarificationThread, type ClarificationMessage } from "~/app/_components/learn/ClarificationThread";
+import { ClarificationThread } from "~/app/_components/learn/ClarificationThread";
 import { FocusModeToggle, useActiveFocusTargets } from "~/app/_components/learn/course/focusMode";
 import { unwrapActionResult } from "~/app/_components/learn/course/actionResult";
+import { useLessonClarifications } from "~/app/_components/learn/useLessonClarifications";
+import { useLessonCheckpoints } from "~/app/_components/learn/useLessonCheckpoints";
 import {
-  serializeCheckpointMap,
-  serializeVerification,
-} from "~/app/_components/learn/course/checkpointSerialize";
+  useLessonTeachStream,
+  type LessonTeachCheckpointBridge,
+} from "~/app/_components/learn/useLessonTeachStream";
 import {
   parseLessonSections,
   restoreLessonRuntimeState,
-  shouldMarkLessonComplete,
-  type LessonInputRequest,
-  type LessonVerification,
   type PersistedLessonCheckpointState,
-  type RestoredCheckpointState as CheckpointState,
 } from "~/lib/lessonCheckpoints";
 
 export function LessonPhase({
@@ -63,45 +60,12 @@ export function LessonPhase({
     .sort((a, b) => a.lessonIndex - b.lessonIndex);
   const currentLesson = moduleLessons[currentLessonIndex];
 
-  // Full streamed text from AI
-  const [fullText, setFullText] = useState("");
-  const [isTeaching, setIsTeaching] = useState(false);
-  // Progressive reveal: how many sections to show
-  const [revealedCount, setRevealedCount] = useState(0);
-  // Current input request state for retry flow
-  const [currentInputRequest, setCurrentInputRequest] = useState<LessonInputRequest | null>(null);
-  const [userInput, setUserInput] = useState("");
-  const [lastVerification, setLastVerification] = useState<LessonVerification | null>(null);
-  // Track answered/skipped checkpoints: sectionIndex → { answer?, skipped?, verification? }
-  const [answeredCheckpoints, setAnsweredCheckpoints] = useState<Map<number, CheckpointState>>(new Map());
-  const [isLessonComplete, setIsLessonComplete] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isAdvancingCourse, setIsAdvancingCourse] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ─── Clarification state ───
-  const [selectionState, setSelectionState] = useState<{
-    quote: string;
-    position: { top: number; left: number };
-    sectionIndex: number;
-    blockIndex: number;
-    /** If set, submission should reply to this thread instead of creating a new one */
-    replyThreadId?: string;
-  } | null>(null);
-  const [clarificationThreads, setClarificationThreads] = useState<Map<string, {
-    quote: string;
-    threadId: string;
-    sectionIndex: number;
-    blockIndex: number;
-    messages: ClarificationMessage[];
-    streamingText?: string;
-    isLoading: boolean;
-    isExpanded: boolean;
-  }>>(new Map());
-
   const lessonContentRef = useRef<HTMLDivElement>(null);
   const contentEndRef = useRef<HTMLDivElement>(null);
-  const teachStartedForLessonRef = useRef<string | null>(null);
 
   // ─── "Feels Hard" context menu ───
   const [contextMenu, setContextMenu] = useState<{
@@ -165,7 +129,6 @@ export function LessonPhase({
     api.courseLessonMessages.getForLesson,
     currentLesson ? { lessonId: currentLesson._id as Id<"courseLessons"> } : "skip"
   );
-  const saveCheckpointState = useMutation(api.courseLessons.saveCheckpointState);
   const currentLessonId = currentLesson?._id ?? null;
   const currentLessonCheckpointStates = currentLesson?.checkpointStates;
   const currentLessonVerifierLogs = currentLesson?.verifierLogs;
@@ -183,21 +146,72 @@ export function LessonPhase({
     currentLessonVerifierLogs,
     lessonMessages,
   ]);
-  const currentAnsweredCheckpointsKey = useMemo(
-    () => serializeCheckpointMap(answeredCheckpoints),
-    [answeredCheckpoints],
-  );
-  const restoredAnsweredCheckpointsKey = useMemo(
-    () => restoredLessonRuntime
-      ? serializeCheckpointMap(restoredLessonRuntime.answeredCheckpoints)
-      : "[]",
-    [restoredLessonRuntime],
-  );
 
-  // Parse sections from accumulated text
+  // Bridge teach SSE → checkpoint UI without circular hook order.
+  // Placeholders are replaced when useLessonCheckpoints mounts.
+  const checkpointBridgeRef = useRef<LessonTeachCheckpointBridge>({
+    resetForTeach: () => undefined,
+    revealFirstSection: () => undefined,
+    applyTeachDone: () => undefined,
+  });
+
+  const { fullText, setFullText, isTeaching } = useLessonTeachStream({
+    currentLesson,
+    currentLessonId,
+    lessonMessages,
+    restoredLessonRuntime,
+    setError,
+    checkpointBridgeRef,
+  });
+
   const sections = useMemo(() => parseLessonSections(fullText), [fullText]);
   const totalSections = sections.length;
   const hasLessonCompleteMarker = fullText.includes("[LESSON_COMPLETE]");
+
+  const {
+    revealedCount,
+    currentInputRequest,
+    userInput,
+    setUserInput,
+    lastVerification,
+    answeredCheckpoints,
+    handleSubmitInput,
+    handleSkip,
+    resetForTeach,
+    revealFirstSection,
+    applyTeachDone,
+  } = useLessonCheckpoints({
+    currentLesson,
+    fullText,
+    setFullText,
+    sections,
+    hasLessonCompleteMarker,
+    restoredLessonRuntime,
+    setError,
+  });
+
+  checkpointBridgeRef.current = {
+    resetForTeach,
+    revealFirstSection,
+    applyTeachDone,
+  };
+
+  const {
+    selectionState,
+    setSelectionState,
+    clarificationThreads,
+    bubbleInitialChars,
+    handleClarify,
+    handleClarificationReply,
+    toggleThreadExpanded,
+  } = useLessonClarifications({
+    currentLesson,
+    fullText,
+    lessonMessages,
+    lessonContentRef,
+    revealedCount,
+  });
+
   const focusContentVersion = `${revealedCount}:${fullText.length}:${currentInputRequest?.question ?? ""}:${lastVerification?.feedback_block ?? ""}`;
   const activeFocusTargets = useActiveFocusTargets({
     containerRef: lessonContentRef,
@@ -211,584 +225,6 @@ export function LessonPhase({
       contentEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [lastVerification]);
-
-  // ─── Text selection + keydown trigger ───
-  const [bubbleInitialChars, setBubbleInitialChars] = useState("");
-  const isClarifySubmitting = false;
-
-  // Ref-based pending in-thread reply to avoid forward dependency on handlers
-  const pendingInThreadReply = useRef<{ threadId: string; question: string } | null>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (selectionState) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key.length !== 1) return;
-
-      const active = document.activeElement;
-      if (
-        active instanceof HTMLInputElement ||
-        active instanceof HTMLTextAreaElement ||
-        active instanceof HTMLSelectElement ||
-        (active instanceof HTMLElement && active.isContentEditable)
-      ) {
-        return;
-      }
-
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed || !selection.rangeCount) return;
-
-      const selectedText = selection.toString().trim();
-      if (selectedText.length < 3 || selectedText.length > 500) return;
-
-      const container = lessonContentRef.current;
-      if (!container) return;
-      const range = selection.getRangeAt(0);
-      if (!container.contains(range.commonAncestorContainer)) return;
-
-      // Check if selection is inside a clarification thread — show the bubble
-      // but route submission as a reply to that thread instead of a new one.
-      let node: Node | null = range.commonAncestorContainer;
-      while (node && node !== container) {
-        if (node instanceof HTMLElement && node.hasAttribute("data-clarify-thread-id")) {
-          const existingThreadId = node.getAttribute("data-clarify-thread-id")!;
-          const thread = clarificationThreads.get(existingThreadId);
-          if (thread && !thread.isLoading) {
-            e.preventDefault();
-            const rect = range.getBoundingClientRect();
-            const containerRect = container.getBoundingClientRect();
-            setBubbleInitialChars(e.key);
-            setSelectionState({
-              quote: selectedText,
-              position: {
-                top: rect.bottom - containerRect.top,
-                left: rect.left - containerRect.left + rect.width / 2,
-              },
-              sectionIndex: thread.sectionIndex,
-              blockIndex: thread.blockIndex,
-              replyThreadId: existingThreadId,
-            });
-          }
-          return;
-        }
-        node = node.parentNode;
-      }
-
-      e.preventDefault();
-
-      // Find section index by walking DOM to parent [data-section-index]
-      let sectionIndex = Math.max(0, revealedCount - 1);
-      let sectionEl: HTMLElement | null = null;
-      let el: Node | null = range.commonAncestorContainer;
-      while (el && el !== container) {
-        if (el instanceof HTMLElement && el.hasAttribute("data-section-index")) {
-          sectionIndex = parseInt(el.getAttribute("data-section-index")!, 10);
-          sectionEl = el;
-          break;
-        }
-        el = el.parentNode;
-      }
-
-      let blockIndex = 0;
-      if (sectionEl) {
-        let blockNode: Node | null = range.commonAncestorContainer;
-        if (blockNode.nodeType !== Node.ELEMENT_NODE) blockNode = blockNode.parentNode;
-        
-        while (blockNode && (blockNode as Element).hasAttribute && !(blockNode as Element).hasAttribute("data-block-index")) {
-          if ((blockNode as Element).classList?.contains("lesson-content")) break;
-          blockNode = blockNode.parentNode;
-        }
-        
-        if (blockNode && (blockNode as Element).hasAttribute?.("data-block-index")) {
-          blockIndex = parseInt((blockNode as Element).getAttribute("data-block-index")!, 10);
-        }
-      }
-
-      const rect = range.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-
-      setBubbleInitialChars(e.key);
-      setSelectionState({
-        quote: selectedText,
-        position: {
-          top: rect.bottom - containerRect.top,
-          left: rect.left - containerRect.left + rect.width / 2,
-        },
-        sectionIndex,
-        blockIndex,
-      });
-
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [selectionState, clarificationThreads, revealedCount]);
-
-  // Restore clarification threads from DB on mount
-  useEffect(() => {
-    if (!lessonMessages) return;
-    const clarificationMsgs = lessonMessages.filter(
-      (m) => m.messageType === "clarification" && m.threadId
-    );
-    if (clarificationMsgs.length === 0) return;
-
-    const threadMap = new Map<string, {
-      quote: string;
-      threadId: string;
-      sectionIndex: number;
-      blockIndex: number;
-      messages: ClarificationMessage[];
-      isLoading: boolean;
-      isExpanded: boolean;
-    }>();
-
-    for (const msg of clarificationMsgs) {
-      const tid = msg.threadId!;
-      if (!threadMap.has(tid)) {
-        threadMap.set(tid, {
-          quote: msg.clarificationQuote ?? "",
-          threadId: tid,
-          sectionIndex: msg.clarificationSectionIndex ?? 0,
-          blockIndex: msg.clarificationBlockIndex ?? 0,
-          messages: [],
-          isLoading: false,
-          isExpanded: false, // Default restored threads to collapsed
-        });
-      }
-      threadMap.get(tid)!.messages.push({
-        role: msg.role,
-        content: msg.content,
-      });
-    }
-
-    setClarificationThreads((prev) => {
-      const next = new Map(prev);
-      for (const [tid, dbThread] of threadMap.entries()) {
-        const existing = next.get(tid);
-        if (existing) {
-          next.set(tid, {
-            ...dbThread,
-            // Preserve strictly active UI streaming states
-            isLoading: existing.isLoading,
-            streamingText: existing.streamingText,
-            // Don't let DB's potential `undefined` fallback override the live UI position
-            blockIndex: existing.isLoading ? existing.blockIndex : dbThread.blockIndex,
-            // Keep optimistic messages while loading (Convex sync might be slightly behind)
-            messages: existing.isLoading ? existing.messages : dbThread.messages,
-            // Preserve the user's expand/collapse preference across DB syncs,
-            // but only if this thread actually has history in the UI (not a fresh shell)
-            isExpanded: existing.messages.length > 0 ? existing.isExpanded : false,
-          });
-        } else {
-          next.set(tid, { ...dbThread, isExpanded: false });
-        }
-      }
-      return next;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessonMessages?.length]);
-
-  /** Stream a clarification request via SSE */
-  const streamClarification = useCallback(async (
-    quote: string,
-    question: string,
-    threadId: string,
-    sectionIndex: number,
-    blockIndex: number,
-  ) => {
-    if (!currentLesson) return;
-
-    // Optimistically add user message
-    setClarificationThreads(prev => {
-      const next = new Map(prev);
-      const existing = next.get(threadId);
-      if (existing) {
-        next.set(threadId, {
-          ...existing,
-          messages: [...existing.messages, { role: "user", content: question }],
-          isLoading: true,
-          streamingText: "",
-        });
-      } else {
-        next.set(threadId, {
-          quote,
-          threadId,
-          sectionIndex,
-          blockIndex,
-          messages: [{ role: "user", content: question }],
-          streamingText: "",
-          isLoading: true,
-          isExpanded: true,
-        });
-      }
-      return next;
-    });
-
-    try {
-      const res = await fetch("/api/learn/clarify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lessonId: currentLesson._id,
-          quote,
-          question,
-          threadId,
-          blockIndex,
-          sectionIndex,
-          lessonContext: fullText,
-        }),
-      });
-
-      if (!res.ok || !res.body) {
-        throw new Error("Stream failed");
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const payload = JSON.parse(line.slice(6)) as {
-              type: string;
-              text?: string;
-              fullText?: string;
-              error?: string;
-            };
-
-            if (payload.type === "delta" && payload.text) {
-              accumulated += payload.text;
-              const snap = accumulated; // capture for closure
-              setClarificationThreads(prev => {
-                const next = new Map(prev);
-                const t = next.get(threadId);
-                if (t) {
-                  next.set(threadId, { ...t, streamingText: snap });
-                }
-                return next;
-              });
-            } else if (payload.type === "done") {
-              const finalText = payload.fullText ?? accumulated;
-              setClarificationThreads(prev => {
-                const next = new Map(prev);
-                const t = next.get(threadId);
-                if (t) {
-                  next.set(threadId, {
-                    ...t,
-                    messages: [...t.messages, { role: "teacher", content: finalText }],
-                    streamingText: undefined,
-                    isLoading: false,
-                  });
-                }
-                return next;
-              });
-            } else if (payload.type === "error") {
-              setClarificationThreads(prev => {
-                const next = new Map(prev);
-                const t = next.get(threadId);
-                if (t) {
-                  next.set(threadId, {
-                    ...t,
-                    messages: [...t.messages, { role: "teacher", content: "Something went wrong. Please try again." }],
-                    streamingText: undefined,
-                    isLoading: false,
-                  });
-                }
-                return next;
-              });
-            }
-          } catch { /* skip malformed SSE */ }
-        }
-      }
-    } catch {
-      setClarificationThreads(prev => {
-        const next = new Map(prev);
-        const t = next.get(threadId);
-        if (t) {
-          next.set(threadId, {
-            ...t,
-            messages: [...t.messages, { role: "teacher", content: "Something went wrong. Please try again." }],
-            streamingText: undefined,
-            isLoading: false,
-          });
-        }
-        return next;
-      });
-    }
-  }, [currentLesson, fullText]);
-
-  const handleClarify = useCallback((quote: string, question: string, sectionIndex: number, blockIndex: number) => {
-    const threadId = `clarify-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setSelectionState(null);
-    void streamClarification(quote, question, threadId, sectionIndex, blockIndex);
-  }, [streamClarification]);
-
-  // Process pending in-thread reply (set by keydown handler via ref)
-  useEffect(() => {
-    const pending = pendingInThreadReply.current;
-    if (!pending) return;
-    pendingInThreadReply.current = null;
-    const thread = clarificationThreads.get(pending.threadId);
-    if (thread && !thread.isLoading) {
-      void streamClarification(thread.quote, pending.question, pending.threadId, thread.sectionIndex, thread.blockIndex);
-    }
-  }, [clarificationThreads, streamClarification]);
-
-  const handleClarificationReply = useCallback((threadId: string, question: string) => {
-    const thread = clarificationThreads.get(threadId);
-    if (!thread) return;
-    void streamClarification(thread.quote, question, threadId, thread.sectionIndex, thread.blockIndex);
-  }, [clarificationThreads, streamClarification]);
-
-  // Restore from DB whenever the active lesson snapshot changes.
-  useEffect(() => {
-    if (!restoredLessonRuntime) return;
-
-    const currentInputQuestion = currentInputRequest?.question ?? null;
-    const restoredInputQuestion = restoredLessonRuntime.currentInputRequest?.question ?? null;
-    const waitingForLocalAdvance =
-      lastVerification?.is_correct === true
-      && currentInputQuestion !== null
-      && currentInputQuestion !== restoredInputQuestion;
-
-    if (waitingForLocalAdvance) return;
-
-    const needsRestore =
-      fullText !== restoredLessonRuntime.fullText
-      || revealedCount !== restoredLessonRuntime.revealedCount
-      || currentInputQuestion !== restoredInputQuestion
-      || currentAnsweredCheckpointsKey !== restoredAnsweredCheckpointsKey
-      || serializeVerification(lastVerification) !== serializeVerification(restoredLessonRuntime.lastVerification)
-      || isLessonComplete !== restoredLessonRuntime.isLessonComplete;
-
-    if (!needsRestore) return;
-
-    setFullText(restoredLessonRuntime.fullText);
-    setAnsweredCheckpoints(new Map(restoredLessonRuntime.answeredCheckpoints));
-    setIsLessonComplete(restoredLessonRuntime.isLessonComplete);
-    setRevealedCount(restoredLessonRuntime.revealedCount);
-    setCurrentInputRequest(restoredLessonRuntime.currentInputRequest);
-    setLastVerification(restoredLessonRuntime.lastVerification);
-    setUserInput("");
-  }, [
-    currentAnsweredCheckpointsKey,
-    currentInputRequest,
-    fullText,
-    isLessonComplete,
-    lastVerification,
-    restoredAnsweredCheckpointsKey,
-    restoredLessonRuntime,
-    revealedCount,
-  ]);
-
-  const teach = useCallback(async () => {
-    if (!currentLesson) return;
-    setIsTeaching(true);
-    setError(null);
-    setFullText("");
-    setAnsweredCheckpoints(new Map());
-    setCurrentInputRequest(null);
-    setIsLessonComplete(false);
-    setLastVerification(null);
-    setRevealedCount(0);
-    setUserInput("");
-
-    try {
-      const res = await fetch("/api/learn/teach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonId: currentLesson._id }),
-      });
-
-      if (!res.ok) {
-        const errBody = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errBody.error ?? `Server error (${res.status})`);
-      }
-
-      if (!res.body) throw new Error("No stream body");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let accumulated = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const payload = JSON.parse(line.slice(6)) as {
-              type: string;
-              text?: string;
-              error?: string;
-              isComplete?: boolean;
-              inputRequest?: { type: string; question: string; expectedAnswer: string } | null;
-              fullText?: string;
-            };
-
-            if (payload.type === "delta" && payload.text) {
-              accumulated += payload.text;
-              setFullText(accumulated);
-
-              // Auto-reveal: check if we've streamed past the current revealed section
-              // and we're not waiting on an input request
-              const currentSections = parseLessonSections(accumulated);
-              // Reveal the first section immediately while streaming
-              if (currentSections.length > 0) {
-                setRevealedCount(prev => Math.max(prev, 1));
-              }
-            } else if (payload.type === "done") {
-              const final = payload.fullText ?? accumulated;
-              setFullText(final);
-
-              // Pause at first input request
-              const parsed = parseLessonSections(final);
-              const nextInputRequest = payload.inputRequest ?? parsed[0]?.inputRequest ?? null;
-              setIsLessonComplete(shouldMarkLessonComplete({
-                hasCompletionSignal: payload.isComplete ?? false,
-                currentInputRequest: nextInputRequest,
-              }));
-
-              if (nextInputRequest) {
-                setCurrentInputRequest(nextInputRequest);
-                setRevealedCount(1);
-              } else {
-                setCurrentInputRequest(null);
-                setRevealedCount(parsed.length);
-              }
-            } else if (payload.type === "error") {
-              setError(payload.error ?? "Teaching failed");
-            }
-          } catch { /* skip malformed SSE */ }
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Teaching failed");
-    } finally {
-      setIsTeaching(false);
-    }
-  }, [currentLesson]);
-
-  // Start teaching only after the lesson snapshot has definitively loaded empty.
-  useEffect(() => {
-    if (!currentLessonId || lessonMessages === undefined) return;
-    if (restoredLessonRuntime?.fullText) return;
-    if (fullText.length > 0 || isTeaching) return;
-    if (teachStartedForLessonRef.current === currentLessonId) return;
-
-    teachStartedForLessonRef.current = currentLessonId;
-    void teach();
-  }, [currentLessonId, fullText, isTeaching, lessonMessages, restoredLessonRuntime, teach]);
-
-  // Advance past the current checkpoint, revealing content until the next checkpoint or end
-  const advanceToNextCheckpoint = (opts?: { answer?: string; skipped?: boolean; verification?: LessonVerification }) => {
-    // Record the current checkpoint as answered/skipped
-    const currentSectionIdx = revealedCount - 1;
-    if (currentSectionIdx >= 0 && sections[currentSectionIdx]?.inputRequest) {
-      setAnsweredCheckpoints(prev => {
-        const next = new Map(prev);
-        next.set(currentSectionIdx, {
-          answer: opts?.answer,
-          skipped: opts?.skipped,
-          verification: opts?.verification,
-        });
-        return next;
-      });
-    }
-
-    setCurrentInputRequest(null);
-    setLastVerification(null);
-    setUserInput("");
-
-    // Reveal sections one at a time, but skip through content-only sections
-    let nextIdx = revealedCount;
-    while (nextIdx < sections.length) {
-      const upcoming = sections[nextIdx];
-      nextIdx += 1;
-      // If the next section has a checkpoint, pause there
-      if (upcoming?.inputRequest) {
-        setRevealedCount(nextIdx);
-        setCurrentInputRequest(upcoming.inputRequest);
-        return;
-      }
-    }
-    setRevealedCount(sections.length);
-    setIsLessonComplete(shouldMarkLessonComplete({
-      hasCompletionSignal: hasLessonCompleteMarker,
-      currentInputRequest: null,
-    }));
-  };
-
-  const handleSubmitInput = async () => {
-    if (!userInput.trim() || !currentInputRequest || !currentLesson) return;
-
-    const input = userInput.trim();
-    const currentSectionIdx = revealedCount - 1;
-    setUserInput("");
-
-    try {
-      const verifyResult = await verifyInputAction(
-        currentLesson._id,
-        currentSectionIdx,
-        currentInputRequest.question,
-        currentInputRequest.expectedAnswer,
-        input,
-      );
-
-      if (verifyResult.ok) {
-        setLastVerification(verifyResult.data);
-
-        if (verifyResult.data.is_correct) {
-          // Correct: advance to next checkpoint after brief delay
-          setTimeout(() => {
-            advanceToNextCheckpoint({
-              answer: input,
-              verification: verifyResult.data,
-            });
-          }, 1200);
-        }
-        // If incorrect: keep currentInputRequest active for retry
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Verification failed");
-    }
-  };
-
-  const handleSkip = async () => {
-    if (!currentLesson) return;
-
-    const currentSectionIdx = revealedCount - 1;
-    const currentSection = sections[currentSectionIdx];
-    if (!currentSection?.inputRequest) return;
-
-    try {
-      await saveCheckpointState({
-        lessonId: currentLesson._id as Id<"courseLessons">,
-        checkpointState: {
-          sectionIndex: currentSectionIdx,
-          question: currentSection.inputRequest.question,
-          status: "skipped",
-        },
-      });
-      advanceToNextCheckpoint({ skipped: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save checkpoint");
-    }
-  };
 
   const handleSummarize = async () => {
     if (!currentLesson) return;
@@ -856,7 +292,7 @@ export function LessonPhase({
             position={selectionState.position}
             quote={selectionState.quote}
             initialChars={bubbleInitialChars}
-            isSubmitting={isClarifySubmitting}
+            isSubmitting={false}
             onSubmit={(question) => {
               if (selectionState.replyThreadId) {
                 // Reply inside an existing thread — include the selected text as context
@@ -909,14 +345,7 @@ export function LessonPhase({
                               onReply={(q) => handleClarificationReply(t.threadId, q)}
                               isLoading={t.isLoading}
                               isExpanded={t.isExpanded}
-                              onToggleExpanded={() => {
-                                setClarificationThreads(prev => {
-                                  const next = new Map(prev);
-                                  const thread = next.get(t.threadId);
-                                  if (thread) next.set(t.threadId, { ...thread, isExpanded: !thread.isExpanded });
-                                  return next;
-                                });
-                              }}
+                              onToggleExpanded={() => toggleThreadExpanded(t.threadId)}
                             />
                           </div>
                         </div>
@@ -950,7 +379,6 @@ export function LessonPhase({
                   ) : null}
                 </div>
               )}
-              {/* Threads for this section are rendered via portal — see below */}
 
               {isCurrentCheckpoint && (
                 <motion.div
@@ -989,13 +417,13 @@ export function LessonPhase({
                         type="text"
                         value={userInput}
                         onChange={(e) => setUserInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleSubmitInput()}
+                        onKeyDown={(e) => e.key === "Enter" && void handleSubmitInput()}
                         placeholder="Type your answer..."
                         className="flex-1 bg-neutral-950 border border-white/10 rounded-lg px-3 py-2.5 text-[15px] text-primary placeholder:text-neutral-600 focus-ring"
                       />
                       <button
                         disabled={!userInput.trim()}
-                        onClick={handleSubmitInput}
+                        onClick={() => { void handleSubmitInput(); }}
                         className="bg-white text-black font-medium px-4 py-2.5 rounded-lg spring-interact disabled:opacity-50 hover:opacity-90 text-sm flex items-center gap-1.5"
                       >
                         <CornerDownLeft className="w-3.5 h-3.5" />
@@ -1073,7 +501,6 @@ export function LessonPhase({
         <LessonPractice content={fullText} title={currentLesson?.title} />
       )}
 
-      {/* Lesson complete */}
       {/* Lesson complete — show when all sections revealed and not streaming */}
       {!currentInputRequest && (hasLessonCompleteMarker || (revealedCount >= totalSections && totalSections > 0)) && revealedCount >= totalSections && !isTeaching && !isSummarizing && (
         currentLesson && ["summarized", "integrated"].includes(currentLesson.status) ? (
