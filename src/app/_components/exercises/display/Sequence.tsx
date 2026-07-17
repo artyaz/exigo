@@ -9,17 +9,7 @@ import React from "react";
 import type { Env } from "../runtime/expr";
 import { run } from "../runtime/expr";
 import type { ToneToken, Value } from "../runtime/types";
-
-const TONE: Record<string, string> = {
-  amber: "254 240 138",
-  azure: "191 219 254",
-  violet: "249 168 212",
-  emerald: "52 211 153",
-  ok: "52 211 153",
-  no: "251 113 133",
-  muted: "255 255 255",
-  ghost: "255 255 255",
-};
+import { toneRgb } from "./visual";
 
 function itemRecord(it: Value): Record<string, Value> | null {
   return it && typeof it === "object" && !Array.isArray(it) ? (it as Record<string, Value>) : null;
@@ -72,7 +62,8 @@ export function Sequence({
         {list.length === 0 ? <span className="exg-seq__empty">∅</span> : null}
         {list.map((it, i) => {
           const tone = itemTone(it);
-          const rgb = (tone && TONE[tone]) ?? "255 255 255";
+          // Untoned chips stay ink-neutral white; named tones share visual.ts.
+          const rgb = tone ? toneRgb(tone) : "255 255 255";
           const isCur = cur === i;
           return (
             <div

@@ -6,19 +6,11 @@ import React from "react";
 import type { Env } from "../runtime/expr";
 import { run } from "../runtime/expr";
 import type { ShapeSpec, ToneToken, TokenizedSceneSpec } from "../runtime/types";
+import { toneRgb, toneSolid } from "./visual";
 
-const TONE: Record<string, string> = {
-  amber: "#fde047",
-  azure: "#bfdbfe",
-  violet: "#f9a8d4",
-  emerald: "#34d399",
-  muted: "rgba(255,255,255,0.45)",
-  ghost: "rgba(255,255,255,0.18)",
-  ok: "#34d399",
-  no: "#fb7185",
-};
 function toneColor(t?: ToneToken): string {
-  return (t && TONE[t]) ?? "rgba(255,255,255,0.7)";
+  // Named tones → shared solid; untinted shapes stay soft slate, not invented white.
+  return t ? toneSolid(t) : `rgb(${toneRgb("muted")} / 0.7)`;
 }
 
 export function DiagramScene({ scene, env }: { scene: TokenizedSceneSpec; env: Env }): React.JSX.Element {

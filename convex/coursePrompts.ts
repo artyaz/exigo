@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { getAuthenticatedUserId } from "./authDecorators";
 import { internalQuery, query } from "./_generated/server";
 
 /**
@@ -6,6 +7,7 @@ import { internalQuery, query } from "./_generated/server";
  * Prompts are now stored in the database to allow for easy updating without deploying code.
  */
 
+/** Trusted Convex backends (actions) only — no client JWT. */
 export const getPromptInternal = internalQuery({
   args: { name: v.string() },
   handler: async (ctx, args) => {
@@ -74,11 +76,14 @@ export function renderPrompt(
 }
 
 /**
- * Public query for fetching prompts from Next.js API routes via ConvexHttpClient.
+ * Authenticated query for Next.js API routes via user-JWT ConvexHttpClient.
+ * Anonymous clients cannot enumerate / exfiltrate system prompts.
  */
 export const getPrompt = query({
   args: { name: v.string() },
   handler: async (ctx, args) => {
+    await getAuthenticatedUserId(ctx);
+
     const prompt = await ctx.db
       .query("prompts")
       .withIndex("by_name", (q) => q.eq("name", args.name))

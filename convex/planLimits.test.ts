@@ -4,7 +4,13 @@ import {
   parseSlugToAccessLevel,
   ACCESS_LEVELS,
 } from "./subscriptionService";
-import { UNLIMITED_LIMIT } from "../shared/planConfig";
+import {
+  UNLIMITED_LIMIT,
+  LIMITS_BY_TIER,
+  getLimitsForTier,
+  getMarketingPerksForTier,
+  type PlanTier,
+} from "../shared/planConfig";
 
 describe("parseSlugToAccessLevel", () => {
   it("returns FREE for undefined slug", () => {
@@ -36,25 +42,77 @@ describe("parseSlugToAccessLevel", () => {
   });
 });
 
-describe("getLimitsForAccessLevel", () => {
-  it("returns free tier limits", () => {
+describe("getLimitsForAccessLevel (lookup into LIMITS_BY_TIER)", () => {
+  it("returns free tier limits from SSOT", () => {
     const limits = getLimitsForAccessLevel(ACCESS_LEVELS.FREE);
-    expect(limits.maxSpaces).toBe(3);
+    expect(limits).toEqual(LIMITS_BY_TIER.free);
     expect(limits.maxTestsPerMonth).toBe(3);
-    expect(limits.maxKnowledgePiecesPerSpace).toBe(20);
   });
 
-  it("returns pro tier limits", () => {
+  it("returns pro tier limits from SSOT", () => {
     const limits = getLimitsForAccessLevel(ACCESS_LEVELS.PRO_SCHOLAR);
+    expect(limits).toEqual(LIMITS_BY_TIER.pro);
     expect(limits.maxSpaces).toBe(UNLIMITED_LIMIT);
     expect(limits.maxTestsPerMonth).toBe(100);
-    expect(limits.maxKnowledgePiecesPerSpace).toBe(200);
   });
 
-  it("returns educator tier limits", () => {
+  it("returns educator tier limits from SSOT", () => {
     const limits = getLimitsForAccessLevel(ACCESS_LEVELS.EDUCATOR);
-    expect(limits.maxSpaces).toBe(UNLIMITED_LIMIT);
+    expect(limits).toEqual(LIMITS_BY_TIER.educator);
     expect(limits.maxTestsPerMonth).toBe(300);
     expect(limits.maxKnowledgePiecesPerSpace).toBe(UNLIMITED_LIMIT);
+  });
+
+  it("matches getLimitsForTier for every access level", () => {
+    const pairs: Array<[number, PlanTier]> = [
+      [ACCESS_LEVELS.FREE, "free"],
+      [ACCESS_LEVELS.PRO_SCHOLAR, "pro"],
+      [ACCESS_LEVELS.EDUCATOR, "educator"],
+    ];
+    for (const [level, tier] of pairs) {
+      expect(getLimitsForAccessLevel(level as 0 | 1 | 2)).toEqual(
+        getLimitsForTier(tier),
+      );
+    }
+  });
+});
+
+describe("marketing perks match LIMITS_BY_TIER (no drift)", () => {
+  const tiers: PlanTier[] = ["free", "pro", "educator"];
+
+  it("free marketing advertises 3 AI tests / month, not 10", () => {
+    const texts = getMarketingPerksForTier("free").map((p) => p.text);
+    expect(texts).toContain("3 AI tests / month");
+    expect(texts.some((t) => t.includes("10 AI tests"))).toBe(false);
+  });
+
+  it("each tier's perk strings include that tier's numeric limits", () => {
+    for (const tier of tiers) {
+      const L = LIMITS_BY_TIER[tier];
+      const texts = getMarketingPerksForTier(tier).map((p) => p.text);
+      const joined = texts.join(" | ");
+
+      expect(joined).toContain(`${L.maxTestsPerMonth} AI tests / month`);
+
+      if (L.maxSpaces === UNLIMITED_LIMIT) {
+        expect(joined).toContain("Unlimited spaces");
+      } else {
+        expect(joined).toContain(`${L.maxSpaces} spaces`);
+      }
+
+      if (L.maxKnowledgePiecesPerSpace === UNLIMITED_LIMIT) {
+        expect(joined).toContain("Unlimited knowledge pieces");
+      } else {
+        expect(joined).toContain(
+          `${L.maxKnowledgePiecesPerSpace} knowledge pieces / space`,
+        );
+      }
+
+      if (L.deepDiveLimit > 0) {
+        expect(texts.some((t) => t === "Deep dive analysis")).toBe(true);
+      } else {
+        expect(texts.some((t) => t === "Deep dive analysis")).toBe(false);
+      }
+    }
   });
 });
