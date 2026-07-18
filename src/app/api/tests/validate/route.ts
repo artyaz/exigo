@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
+import { resolveAiProvider } from "../../../../server/ai";
 import { PLAN_LIMIT_CODE } from "../../../../../shared/planConfig";
 import {
   captureAiGenerationEvent,
@@ -149,11 +149,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (!process.env.GOOGLE_GEMINI_API_KEY) {
-        return jsonError(500, "Server missing Gemini API key");
-      }
-      const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
-
+      const provider = await resolveAiProvider(convex);
       const promptDoc = await convex.query(api.coursePrompts.getPrompt, {
         name: "answer_evaluator",
       });
@@ -163,11 +159,10 @@ export async function POST(req: NextRequest) {
         userAnswer: answer,
       });
 
-      // Enhanced model selection with fallback strategy
-      const primaryModel = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+      const primaryModel = provider.config.model;
       const fallbackModel = "gemini-2.5-flash";
       let modelUsed = primaryModel;
-      let response;
+      let responseText = "{}";
 
       try {
         const aiStartedAt = Date.now();
@@ -177,21 +172,22 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: "google",
+          ai_provider: provider.config.label,
           ai_model: primaryModel,
         });
-        response = await ai.models.generateContent({
+        const result = await provider.generate({
+          prompt,
           model: primaryModel,
-          contents: prompt,
-          config: { responseMimeType: "application/json" },
+          json: true,
         });
+        responseText = result.text || "{}";
         captureAiGenerationEvent({
           distinctId: userId,
           traceId: aiTraceId,
-          provider: "google",
+          provider: provider.config.label,
           model: primaryModel,
           input: [{ role: "user", content: prompt }],
-          response,
+          response: result.raw,
           latencySeconds: (Date.now() - aiStartedAt) / 1000,
         });
         logInfo("Answer validation AI generation succeeded", {
@@ -200,7 +196,7 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: "google",
+          ai_provider: provider.config.label,
           ai_model: primaryModel,
           duration_ms: Date.now() - aiStartedAt,
         });
@@ -211,7 +207,7 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: "google",
+          ai_provider: provider.config.label,
           ai_model: primaryModel,
           fallback_model: fallbackModel,
           ...getErrorAttributes(err),
@@ -224,21 +220,22 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: "google",
+          ai_provider: provider.config.label,
           ai_model: fallbackModel,
         });
-        response = await ai.models.generateContent({
+        const result = await provider.generate({
+          prompt,
           model: fallbackModel,
-          contents: prompt,
-          config: { responseMimeType: "application/json" },
+          json: true,
         });
+        responseText = result.text || "{}";
         captureAiGenerationEvent({
           distinctId: userId,
           traceId: aiTraceId,
-          provider: "google",
+          provider: provider.config.label,
           model: fallbackModel,
           input: [{ role: "user", content: prompt }],
-          response,
+          response: result.raw,
           latencySeconds: (Date.now() - aiStartedAt) / 1000,
         });
         logInfo("Fallback validation AI generation succeeded", {
@@ -247,14 +244,13 @@ export async function POST(req: NextRequest) {
           route: "/api/tests/validate",
           userId,
           questionId,
-          ai_provider: "google",
+          ai_provider: provider.config.label,
           ai_model: fallbackModel,
           duration_ms: Date.now() - aiStartedAt,
         });
       }
 
       try {
-        const responseText = response.text ?? "{}";
         const parsed = JSON.parse(responseText) as unknown;
         const validated = validateAIResponse(parsed);
 

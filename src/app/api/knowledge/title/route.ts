@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import {
     captureAiGenerationEvent,
@@ -15,17 +14,7 @@ import {
 } from "../../../../lib/otlpLogger";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { createAuthedConvexClient } from "../../../../lib/convexClientAuth";
-
-let aiInstance: GoogleGenAI | null = null;
-function getGoogleAI() {
-    if (!aiInstance) {
-        if (!process.env.GOOGLE_GEMINI_API_KEY) {
-            throw new Error("Missing API Key");
-        }
-        aiInstance = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
-    }
-    return aiInstance;
-}
+import { resolveAiProvider } from "../../../../server/ai";
 
 function normalizeTitle(raw: string): string {
     return raw
@@ -84,29 +73,31 @@ export async function POST(req: NextRequest) {
 
     const fallbackTitle = fallbackTitleFromContent(content);
 
-    if (!process.env.GOOGLE_GEMINI_API_KEY) {
-        return Response.json({ title: fallbackTitle });
-    }
-
-    const modelCandidates = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-    ] as const;
-
     try {
-        const ai = getGoogleAI();
+        const convex = await createAuthedConvexClient(getToken, "api.knowledge.title");
+        const provider = await resolveAiProvider(convex);
         const aiTraceId = createAiTraceId();
 
-        // Try to fetch prompt from DB, fall back to inline if no convex client
         let titlePrompt: string;
         try {
-            const convex = await createAuthedConvexClient(getToken, "api.knowledge.title");
-            const promptDoc = await convex.query(api.coursePrompts.getPrompt, { name: "knowledge_title_generator" });
-            titlePrompt = renderPrompt(promptDoc.content, { content: content.slice(0, 2000) });
+            const promptDoc = await convex.query(api.coursePrompts.getPrompt, {
+                name: "knowledge_title_generator",
+            });
+            titlePrompt = renderPrompt(promptDoc.content, {
+                content: content.slice(0, 2000),
+            });
         } catch {
             titlePrompt = `Generate a concise title (2-5 words, no quotes) for this knowledge note.\n\n${content.slice(0, 2000)}`;
         }
+
+        // Prefer user/provider default model, then a couple of Gemini fallbacks
+        const modelCandidates = Array.from(
+            new Set([
+                provider.config.model,
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+            ]),
+        );
 
         for (const model of modelCandidates) {
             const modelStartedAt = Date.now();
@@ -116,24 +107,22 @@ export async function POST(req: NextRequest) {
                     requestId,
                     route: "/api/knowledge/title",
                     userId,
-                    ai_provider: "google",
+                    ai_provider: provider.config.label,
                     ai_model: model,
                 });
-                const result = await ai.models.generateContent({
+                const result = await provider.generate({
+                    prompt: titlePrompt,
                     model,
-                    contents: titlePrompt,
-                    config: {
-                        maxOutputTokens: 20,
-                        temperature: 0.2,
-                    },
+                    temperature: 0.2,
+                    maxOutputTokens: 20,
                 });
                 captureAiGenerationEvent({
                     distinctId: userId,
                     traceId: aiTraceId,
-                    provider: "google",
+                    provider: provider.config.label,
                     model,
                     input: [{ role: "user", content: titlePrompt }],
-                    response: result,
+                    response: result.raw,
                     latencySeconds: (Date.now() - modelStartedAt) / 1000,
                 });
                 logInfo("Knowledge title generation succeeded", {
@@ -141,7 +130,7 @@ export async function POST(req: NextRequest) {
                     requestId,
                     route: "/api/knowledge/title",
                     userId,
-                    ai_provider: "google",
+                    ai_provider: provider.config.label,
                     ai_model: model,
                     duration_ms: Date.now() - modelStartedAt,
                 });
@@ -161,7 +150,7 @@ export async function POST(req: NextRequest) {
                     requestId,
                     route: "/api/knowledge/title",
                     userId,
-                    ai_provider: "google",
+                    ai_provider: provider.config.label,
                     ai_model: model,
                     duration_ms: Date.now() - modelStartedAt,
                     ...getErrorAttributes(modelErr),
