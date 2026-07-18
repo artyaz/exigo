@@ -4,30 +4,32 @@
 
 | Field | Value |
 |-------|--------|
-| **State** | in_progress (Waves 6–8 shipped main; Wave 9 started) |
-| **Branch** | `fix/wave9-product` |
-| **Last updated** | 2026-07-18 (ship protocol executed; Wave 9 tutor split) |
+| **State** | in_progress (product waves 6–13 **shipped** main+develop; LOOP harness ship in flight) |
+| **Branch** | `fix/cd-review-loop-harness` |
+| **Last updated** | 2026-07-18 (catch-up: RECORD truth + LOOP §0.5/§10.2 ship) |
 | **Continues from** | Same calendar window as product work started 2026-07-17 (UTC/session) |
 | **RUN_ROOT** | `agents/cd-review/2026-07-18` |
 
 ## Goal this run
 
-Hostile codebase review → brainstorm → fix for Exigo, prioritizing readability, clarity, brevity, consistency, then correctness. Ship via develop/main PR policy. Later: reorganize all loop artifacts under `agents/cd-review/` with dated runs and strict Wave A/B separation.
+Hostile codebase review → brainstorm → fix for Exigo, prioritizing readability, clarity, brevity, consistency, then correctness. Ship via develop/main PR policy + CodeRabbit iteration. Protocol lives in `agents/cd-review/LOOP.md`.
 
-## Waves (product execution — completed before reorg)
+## Waves (product execution)
 
 | Wave | Status | Notes |
 |------|--------|-------|
-| A Audit | **done** | 11 slices (S1–S11); ~115 findings; artifacts now in `audits/slices/` |
-| B Brainstorm | **done** | 59 packages; originally nested under audits/brainstorm — now `brainstorms/` |
-| C Fix | **done** | P0 (5 packs), P1 (5), P3 (6), P4 (5), P5 (5) |
-| Verify | **done** per ship | tests 270–281; CI build green after lint fixes |
-| Ship | **done** | See PR list below |
-| Artifact reorg | **done** | Moved into this RUN_ROOT; LOOP.md polished |
-| Wave 6 residual | **PR open** | #77 develop, #78 main; P6-A–D |
-| Wave 7 residual | **PR open** | #79 develop, #80 main; P7-A–D |
-| Wave 8 residual | **shipped** | #81 develop, #83 main (via #84 main→develop merge) |
-| Wave 9 residual | **in progress** | P9-A tutor route split (813→~330) |
+| A Audit | **done** | 11 slices (S1–S11); ~115 findings; artifacts in `audits/slices/` |
+| B Brainstorm | **done** | 59 packages in `brainstorms/` |
+| C Fix P0–P5 | **shipped** | early waves → main |
+| Wave 6 residual | **shipped** | P6-A–D; #81 develop path, #83 main (stack with 7–8) |
+| Wave 7 residual | **shipped** | P7-A–D; included in #83 main stack |
+| Wave 8 residual | **shipped** | P8-A–B; #81 develop, #83 main (#84 main→develop sync) |
+| Wave 9 | **shipped** | P9-A tutor route split; #85 develop, #86 main |
+| Wave 10 | **shipped** | P10-A default_user quarantine; #87 develop, #88 main |
+| Wave 11 | **shipped** | P11-A resolveAiProvider teach/clarify; P11-B tutor SSE; #89/#90 |
+| Wave 12 | **shipped** | P12-A remaining Next AI routes; P12-B vector memory; #91/#92 |
+| Wave 13 | **shipped** | throwUnauthorized helpers (F-W7-012); #93 develop, #94 main |
+| LOOP harness | **shipping** | L-1 launcher + L0 day-scope CLI + CodeRabbit 5m/10m iteration |
 
 ## Done (chronological)
 
@@ -36,139 +38,72 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 - Consolidated remote branches to **main** + **develop** only.
 - Merged exercise UX / develop divergence via PRs (branch protection required PR path).
 
-### Wave 1 — P0 security / dead surface
+### Waves 1–5
 
-| Pack | Outcome |
-|------|---------|
-| P0-A | `userSettings` identity-first auth (no client `userId`) |
-| P0-B | `questions` identity + space ownership; soft-fail reads |
-| P0-C | Public message send forces `role: user`; teacher/tutor writers |
-| P0-D | Course/space ownership on normalize + baseline; dead `updatePhase` removed |
-| P0-E | Deleted ungated `usageService` + dead cron/helpers |
-
-**CodeRabbit (#61):** default_user write hole closed; `getAuthedContext`; AI writers require `EXIGO_SERVER_MUTATION_SECRET`.
-
-**Shipped:** #58 develop, #61 main (product-scoped after #59 file-limit skip).
-
-### Wave 2 — P1 clarity
-
-| Pack | Outcome |
-|------|---------|
-| P1-B | `src/lib/sse.ts` + `apiAuth.ts`; learn/tests routes |
-| P1-C | Shared `SandboxedFrame` for open/embed + host CSS |
-| P1-D | Killed liar/shadow Convex tests |
-| P1-E | Middleware: settings, knowledge-nodes, checkout, playground |
-| P1-F | Tests use `test.knowledgePieceId` (no dead sessionStorage) |
-
-**Shipped:** #63 develop, #64 main.
-
-### Wave 3
-
-| Pack | Outcome |
-|------|---------|
-| P3-A | Plan limits SSOT in `shared/planConfig`; free marketing 10→3 |
-| P3-B | Tone palette via `visual.toneRgb`; unique Arena marker ids |
-| P3-C | Single Next PostHog client (`posthog-server`) |
-| P3-D | Typed `/tests` + `TestStackCard` |
-| P3-E | Auth on public `getPrompt` |
-| P3-F | validate/tutor on `requireAuthedApi` |
-
-**Shipped:** #68 develop, #69 main.
-
-### Wave 4
-
-| Pack | Outcome |
-|------|---------|
-| P4-A | Paddle webhook: `PADDLE_CONVEX_WEBHOOK_SECRET`, accessLevel from planSlug, userId mismatch 409 |
-| P4-B | `MAX_MODULES=5` → phase `completed`; generateModule guards |
-| P4-C | Learn page **2080 → 301** lines |
-| P4-D | Test detail **985 → 499** lines |
-| P4-E | AGENTS.md SSOT docs + seed stale-perk notes |
-
-**Shipped:** #70 develop, #71 main.
+See earlier session history: P0–P5 product fixes shipped via #58–#74 (security, SSE, plan SSOT, god-page splits, lesson hooks, gen lock).
 
 ### Ops / Vercel
 
 - Root cause of deploy fails: `api/generate/atlas` `maxDuration = 800` (Hobby max 300) → fixed #66/#67.
-- Secrets set (not committed): `EXIGO_SERVER_MUTATION_SECRET`, `PADDLE_CONVEX_WEBHOOK_SECRET` on Convex dev+prod, Vercel prod/preview/dev, local `.env.local`.
-- Production reached READY after maxDuration fix.
+- Secrets set (not committed): `EXIGO_SERVER_MUTATION_SECRET`, `PADDLE_CONVEX_WEBHOOK_SECRET` on Convex dev+prod, Vercel, local `.env.local`.
 
-### Wave 5
-
-| Pack | Outcome |
-|------|---------|
-| P5-A | LessonPhase **1139 → 565** (teach/checkpoint/clarify hooks) |
-| P5-B | Space page **635 → 214**; KnowledgeTab + Esc modal; dead test-gen deleted |
-| P5-C | Atomic `generationInProgress` claim (double-advance race) |
-| P5-D | Client `sseClient` for CourseTutor/teach/clarify |
-| P5-E | LessonMarkdown heading factory |
-
-**CI:** first #73 lint fail (empty methods, redundant union, unnecessary assert) → fixed #74 + push; **#73 merged**.
-
-**Shipped:** #72/#74 develop, #73 main.
-
-### Wave 6 — residual product (same RUN_ROOT)
+### Wave 6 — residual product
 
 | Pack | Outcome |
 |------|---------|
-| P6-A | `generationClaimedAt` + `GENERATION_LOCK_TTL_MS` (15m); stale lock steal on claim; clear on release/phase leave |
-| P6-B | `useTestQuestionGeneration` on `iterateParsedSseBlocks` / majority dialect |
-| P6-C | AGENTS.md documents dual AI paths (Next `resolveAiProvider` vs Convex direct Gemini) — no runtime merge |
-| P6-D | `seedPlans.syncPerksFromSsot` internalMutation for stale free “10” perk copy |
-| P6-E | LessonPhase further split **deferred** (still ~566 lines, optional P3) |
-
-**Verify:** `npm run check` green (pre-existing warnings only); `npm run test` **281** passed. See `audits/verify-wave6.md`.
-
-**Ship:** #77 → develop, #78 → main (open).
+| P6-A | `generationClaimedAt` + 15m lock TTL / steal |
+| P6-B | `useTestQuestionGeneration` on majority SSE dialect |
+| P6-C | AGENTS.md dual AI paths documented |
+| P6-D | `seedPlans.syncPerksFromSsot` |
+| P6-E | LessonPhase further split **deferred** (optional P3) |
 
 ### Wave 7 — residual hostile + fix
 
 | Pack | Outcome |
 |------|---------|
-| Audit S-W7 | 16 findings (3 P1, 11 P2, 2 P3) → `audits/slices/S-W7.md` |
-| P7-A | Teach/clarify hooks back on `sseClient` (F-W7-001) |
-| P7-B | Deleted dead `teachLesson`/`clarifyConcept` + shadow `chat`/`generateImprovements` (F-W7-005/006) |
-| P7-C | Shared secret assert + Next fail-fast before AI (F-W7-014/015) |
-| P7-D | Identity-first spaces/tests; drop knowledge piece limit console.log (F-W7-003/016) |
+| S-W7 audit | 16 findings |
+| P7-A–D | sseClient remigrate; dead duals deleted; secret fail-fast; identity-first spaces/tests |
 
-**Verify:** `npm run check` green; `npm run test` **280** passed. See `audits/verify-wave7.md`.
-
-**Ship:** #79 → develop, #80 → main (open; stacked on wave6).
-
-### Wave 8 — readability residual
+### Wave 8 — readability
 
 | Pack | Outcome |
 |------|---------|
-| P8-A | `useFeelsHardMenu` + `LessonCompletePanel`; LessonPhase **566 → ~483** |
-| P8-B | Shared `getEnvGeminiClient` / `getEnvGeminiModel` on teach/clarify/tutor |
+| P8-A | `useFeelsHardMenu` + `LessonCompletePanel`; LessonPhase ~483 |
+| P8-B | Shared `getEnvGeminiClient` / `getEnvGeminiModel` |
 
-**Verify:** check green; tests **280**. See `audits/verify-wave8.md`.
+### Artifact reorg
 
-**Ship:** branch `fix/wave8-product`.
+- `agents/cd-review/LOOP.md` + dated `2026-07-18/` run tree.
+- Wave A/B separation: auditors write audits only.
 
-### Artifact reorg (this step)
+### Waves 9–13 (shipped after RECORD went stale)
 
-- Created `agents/cd-review/LOOP.md` (protocol).
-- Moved all prior `audits/**` and brainstorm packages into `agents/cd-review/2026-07-18/`.
-- Documented Wave A/B separation: auditors write audits only; separate brainstorm agents consume audits.
+| Wave | Packs | Main PR |
+|------|-------|---------|
+| 9 | P9-A tutor tools + context modules (813→~330) | #86 |
+| 10 | P10-A `default_user` read quarantine / write strict | #88 |
+| 11 | P11-A teach/clarify `resolveAiProvider`; P11-B majority SSE tutor | #90 |
+| 12 | P12-A remaining Next routes BYOK path; P12-B vector memory search | #92 |
+| 13 | ConvexError `throwUnauthorized` helpers across ownership paths | #94 |
+
+**Catch-up note (2026-07-18 later session):** On resume, open PRs from early “Stopped at” were already merged; `gh` keyring token was stale but git osxkeychain OAuth still works for API. No open product PRs remained. Local unfinished work was **LOOP.md harness protocol** + this RECORD truth-up.
+
+### LOOP harness protocol (this ship)
+
+- §0.5 L-1 launcher (user-triggered) vs L0 day-scope CLI agent (~300k–350k scope, no HITL).
+- §10.2 ship: land develop → PR main → sleep 5m → CodeRabbit complete pass → 10m if pending → fix/push iterate; empty CR is suspicious.
+- `audits/day-status.json` for thin launcher polls.
 
 ## In flight
 
-- Merge stack: Wave 6 (#77/#78) → Wave 7 (#79/#80) → Wave 8 (to open).
-- Ops `syncPerksFromSsot` after Wave 6 deploy.
+- Ship `fix/cd-review-loop-harness` → develop + main (LOOP.md + RECORD + day-status).
+- Prefer develop←main sync after main merge if develop tip lacks main merge commits (content already aligned through #93).
 
 ## Stopped at
 
-1. **Merge PR stack** develop then main (wave6 → wave7 → wave8).
-2. **Ops:** `seedPlans.syncPerksFromSsot` on Convex after Wave 6 lands.
-3. **Wave 9 backlog** (same RUN_ROOT):
-   - Product Next → full `resolveAiProvider` / BYOK (F-W7-002, L)
-   - Tutor route module split + dialect unify (F-W7-007/010)
-   - courseAi further phase split (F-W7-008)
-   - LessonPhase section/checkpoint JSX if still >400 (P8-A residual)
-   - `default_user` policy (F-W7-004)
-   - ConvexError helpers (F-W7-012)
-   - Tutor memory vector search (F-W7-013)
+1. **Ship** LOOP harness branch through develop + main + CodeRabbit iteration (§10.2).
+2. **Ops (if not yet on prod):** `npx convex run --prod seedPlans:syncPerksFromSsot '{}'` after Wave 6+ code is deployed.
+3. **Next product residual (Wave 14+ backlog, same RUN_ROOT):** see table below — not blocking this ship.
 
 ## Residual / backlog (priority)
 
@@ -177,14 +112,20 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | P1 | TTL generation lock | P5-C | **done** P6-A |
 | P1 | Teach/clarify sseClient | F-W7-001 | **done** P7-A |
 | P1 | Identity-first spaces/tests | F-W7-003 | **done** P7-D |
-| P1 | Product Next → resolveAiProvider | F-W7-002 | Wave 9 |
+| P1 | Product Next → resolveAiProvider | F-W7-002 | **done** P11-A + P12-A (tutor tools still env Gemini) |
 | P2 | Dead dual AI delete | F-W7-005/006 | **done** P7-B |
 | P2 | Secret fail-fast | F-W7-014/015 | **done** P7-C |
-| P2 | Shared env Gemini helpers | F-W7-011 | **done** P8-B (partial) |
-| P2 | LessonPhase feels-hard + complete extract | F-W7-009 | **done** P8-A |
-| P2 | Tutor god route split | F-W7-007 | **done** P9-A (dialect F-W7-010 still open) |
-| P2 | default_user policy | F-W7-004 | Wave 9 (product) |
-| P3 | CodeRabbit PR scope | ops | open |
+| P2 | Shared env Gemini helpers | F-W7-011 | **done** P8-B |
+| P2 | LessonPhase feels-hard + complete | F-W7-009 | **done** P8-A (~483 lines; further split optional) |
+| P2 | Tutor god route split | F-W7-007 | **done** P9-A |
+| P2 | Tutor SSE dialect unify | F-W7-010 | **done** P11-B |
+| P2 | default_user policy | F-W7-004 | **done** P10-A |
+| P2 | ConvexError helpers | F-W7-012 | **done** wave 13 |
+| P2 | Tutor memory vector search | F-W7-013 | **done** P12-B |
+| P2 | Tutor tool-calling / embeddings on AiProvider | P12 residual | **open** (function calling not on AiProvider yet) |
+| P3 | courseAi further phase split | F-W7-008 | **open** (`courseAi.ts` still ~937 lines) |
+| P3 | LessonPhase section/checkpoint JSX | P8 residual | **open** optional (~483 lines) |
+| P3 | CodeRabbit PR scope / path filters | ops | ongoing |
 
 ## Valuable notes
 
@@ -198,47 +139,47 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | Variable | Purpose |
 |----------|---------|
 | `EXIGO_SERVER_MUTATION_SECRET` | Next + Convex; teacher/tutor AI role writes |
-| `PADDLE_CONVEX_WEBHOOK_SECRET` | Next + Convex paddle hop (falls back to deploy key with warn) |
-| Hobby Vercel | `maxDuration` ≤ 300 (atlas was 800) |
+| `PADDLE_CONVEX_WEBHOOK_SECRET` | Next + Convex paddle hop |
+| Hobby Vercel | `maxDuration` ≤ 300 |
 
 ### Process lessons
 
-- Protected `main`/`develop` → always PR; product-scoped PRs avoid CodeRabbit “too many files” when audits are huge.
-- Nested subagent spawn was unreliable; **file-based Wave A → Wave B** is the supported protocol.
-- Prefer disjoint fix packs by file ownership for parallel Wave C.
+- Protected `main`/`develop` → always PR; product-scoped PRs avoid CodeRabbit “too many files”.
+- **Launcher vs day-scope:** spawn separate `grok` CLI for large scopes; poll RECORD + day-status only.
+- File-based Wave A → Wave B is the supported audit→brainstorm protocol.
+- `gh auth` keyring can rot while `git credential-osxkeychain` OAuth still works — use the latter for API if needed.
 
 ### Artifact paths (this run)
 
 ```text
 agents/cd-review/LOOP.md
-agents/cd-review/2026-07-18/RECORD.md          ← you are here
-agents/cd-review/2026-07-18/audits/
-  slices.md, slices/S1–S11.md, fixes/P0–P5*.md
-  cb-review-20260717.md, cb-review-20260717-verify.md
-agents/cd-review/2026-07-18/brainstorms/S*-B*.md
+agents/cd-review/2026-07-18/RECORD.md
+agents/cd-review/2026-07-18/audits/day-status.json
+agents/cd-review/2026-07-18/audits/slices/…
+agents/cd-review/2026-07-18/audits/fixes/P0–P12*.md
+agents/cd-review/2026-07-18/brainstorms/…
 ```
 
 ## PRs / commits (index)
 
 | PR | Target | Topic |
 |----|--------|--------|
-| #58 | develop | P0 product |
-| #59 | main | closed (too many files) |
-| #60 | develop | CodeRabbit path filters |
-| #61 | main | P0 + CR fixes |
-| #62 | develop | CR follow-up |
-| #63–64 | develop/main | wave 2 |
-| #66–67 | main/develop | atlas maxDuration |
-| #68–69 | develop/main | wave 3 |
-| #70–71 | develop/main | wave 4 |
-| #72–74 | develop/main | wave 5 + lint |
+| #58–#74 | develop/main | waves 1–5 + layout + maxDuration |
+| #81 / #83 | develop/main | waves 6–8 residual |
+| #84 | develop | main→develop sync |
+| #85 / #86 | develop/main | wave 9 tutor split |
+| #87 / #88 | develop/main | wave 10 default_user |
+| #89 / #90 | develop/main | wave 11 AI provider + SSE |
+| #91 / #92 | develop/main | wave 12 routes + vector memory |
+| #93 / #94 | develop/main | wave 13 throwUnauthorized |
+| (this ship) | develop/main | LOOP harness + RECORD catch-up |
 
-## How to resume product work
+## How to resume
 
 ```text
-1. Read agents/cd-review/LOOP.md
+1. Read agents/cd-review/LOOP.md (§0.5 launcher / day-scope, §10.2 ship)
 2. Read this RECORD.md (Stopped at + Residual)
-3. Either continue fixes from Residual as Wave 6 under THIS date folder
-   OR create agents/cd-review/YYYY-MM-DD/ for a clean audit pass using Wave A→B→C
-4. Update RECORD after every wave/ship
+3. Finish LOOP harness PR CodeRabbit iteration if open
+4. Next product: Wave 14 from residual (tutor AiProvider tools, courseAi split, optional LessonPhase)
+5. Update RECORD + day-status after every wave/ship
 ```
