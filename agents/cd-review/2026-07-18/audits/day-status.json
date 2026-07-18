@@ -1,10 +1,10 @@
 {
-  "state": "shipping",
+  "state": "complete",
   "scope_id": "day-scope-ship-catchup",
-  "last_step": "shipping_loop_harness_and_record_catchup",
-  "branch": "fix/cd-review-loop-harness",
-  "prs": { "develop": null, "main": null },
+  "last_step": "merged_95_develop_96_main_sync_perks_dev",
+  "branch": "main",
+  "prs": { "develop": 95, "main": 96 },
   "blocked_reason": null,
-  "updated_at": "2026-07-18T12:00:00Z",
-  "notes": "Waves 6-13 product already on main; shipping LOOP.md L-1/L0 harness + RECORD catch-up"
+  "updated_at": "2026-07-18T10:10:00Z",
+  "notes": "Ship catch-up complete. Next: Wave 14 residual product (tutor AiProvider tools, courseAi split)."
 }

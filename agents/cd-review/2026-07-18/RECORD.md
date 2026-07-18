@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|--------|
-| **State** | in_progress (product waves 6–13 **shipped** main+develop; LOOP harness ship in flight) |
-| **Branch** | `fix/cd-review-loop-harness` |
-| **Last updated** | 2026-07-18 (catch-up: RECORD truth + LOOP §0.5/§10.2 ship) |
+| **State** | in_progress (product waves 6–13 **shipped**; LOOP harness **shipped** #95/#96; residual Wave 14+ open) |
+| **Branch** | `main` (post #96) |
+| **Last updated** | 2026-07-18 (harness merged; `syncPerksFromSsot` dev patched 5 plans) |
 | **Continues from** | Same calendar window as product work started 2026-07-17 (UTC/session) |
 | **RUN_ROOT** | `agents/cd-review/2026-07-18` |
 
@@ -29,7 +29,7 @@ Hostile codebase review → brainstorm → fix for Exigo, prioritizing readabili
 | Wave 11 | **shipped** | P11-A resolveAiProvider teach/clarify; P11-B tutor SSE; #89/#90 |
 | Wave 12 | **shipped** | P12-A remaining Next AI routes; P12-B vector memory; #91/#92 |
 | Wave 13 | **shipped** | throwUnauthorized helpers (F-W7-012); #93 develop, #94 main |
-| LOOP harness | **shipping** | L-1 launcher + L0 day-scope CLI + CodeRabbit 5m/10m iteration |
+| LOOP harness | **shipped** | L-1 launcher + L0 day-scope CLI + CodeRabbit 5m/10m iteration; #95 develop, #96 main |
 
 ## Done (chronological)
 
@@ -96,14 +96,13 @@ See earlier session history: P0–P5 product fixes shipped via #58–#74 (securi
 
 ## In flight
 
-- Ship `fix/cd-review-loop-harness` → develop + main (LOOP.md + RECORD + day-status).
-- Prefer develop←main sync after main merge if develop tip lacks main merge commits (content already aligned through #93).
+- None for ship. Next work is **Wave 14+ product residual** (implement, not merge debt).
 
 ## Stopped at
 
-1. **Ship** LOOP harness branch through develop + main + CodeRabbit iteration (§10.2).
-2. **Ops (if not yet on prod):** `npx convex run --prod seedPlans:syncPerksFromSsot '{}'` after Wave 6+ code is deployed.
-3. **Next product residual (Wave 14+ backlog, same RUN_ROOT):** see table below — not blocking this ship.
+1. **Wave 14+ residual** (same RUN_ROOT): tutor tool-calling/embeddings on `AiProvider`; `courseAi.ts` phase split (~937 lines); optional LessonPhase further extract (~483).
+2. **Ops prod (if not yet):** `npx convex run --prod seedPlans:syncPerksFromSsot '{}'` — **dev already run** this session (`patched: 5`).
+3. Launcher may open a new day-scope for Wave 14 when ready.
 
 ## Residual / backlog (priority)
 
@@ -172,7 +171,7 @@ agents/cd-review/2026-07-18/brainstorms/…
 | #89 / #90 | develop/main | wave 11 AI provider + SSE |
 | #91 / #92 | develop/main | wave 12 routes + vector memory |
 | #93 / #94 | develop/main | wave 13 throwUnauthorized |
-| (this ship) | develop/main | LOOP harness + RECORD catch-up |
+| #95 / #96 | develop/main | LOOP harness + RECORD catch-up (CR: no actionable; md path-filtered) |
 
 ## How to resume
 
