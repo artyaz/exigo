@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { canReadSpace } from "./spaceAccess";
-import { getAuthedContext } from "./authDecorators";
+import {getAuthedContext, throwUnauthorized } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 function getStartOfMonthUTC(): number {
@@ -30,7 +30,7 @@ export const create = mutation({
       !space ||
       (!canReadSpace(space, userId))
     ) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     const question = await ctx.db.get(args.questionId);

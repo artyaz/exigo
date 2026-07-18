@@ -6,7 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { getAuthedContext } from "./authDecorators";
+import {getAuthedContext, throwUnauthorized } from "./authDecorators";
 import { canReadSpace, canWriteSpace } from "./spaceAccess";
 
 type DbCtx = QueryCtx | MutationCtx;
@@ -29,7 +29,7 @@ async function requireTestWriteAccess(
 
   const space = await ctx.db.get(test.spaceId);
   if (!space || !canWriteSpace(space, userId)) {
-    throw new Error("Unauthorized access to this test");
+    throwUnauthorized("Unauthorized access to this test");
   }
 
   return { test, space };

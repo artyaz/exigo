@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { getAuthedContextForAction } from "./authDecorators";
+import {getAuthedContextForAction, throwUnauthorized } from "./authDecorators";
 import { canReadSpace } from "./spaceAccess";
 
 type MemoryHit = {
@@ -28,7 +28,7 @@ export const searchMemoriesForSpace = action({
       spaceId: args.spaceId,
     });
     if (!space || !canReadSpace(space, auth.userId)) {
-      throw new Error("Unauthorized");
+      throwUnauthorized();
     }
     return await ctx.runAction(internal.courseTutor.searchMemories, {
       spaceId: args.spaceId,

@@ -10,16 +10,10 @@ import {
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { canReadSpace } from "./spaceAccess";
-
-async function getAuthenticatedUserId(
-  ctx: QueryCtx | MutationCtx,
-): Promise<string> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity?.subject) {
-    throw new Error("Not authenticated");
-  }
-  return identity.subject;
-}
+import {
+  getAuthenticatedUserId,
+  throwUnauthorized,
+} from "./authDecorators";
 
 async function authorizeQuestionAccess(
   ctx: QueryCtx | MutationCtx,
@@ -38,7 +32,7 @@ async function authorizeQuestionAccess(
 
   const space = await ctx.db.get(test.spaceId);
   if (!space || (!canReadSpace(space, userId))) {
-    throw new Error("Unauthorized access to this question");
+    throwUnauthorized("Unauthorized access to this question");
   }
 
   return { question, test };

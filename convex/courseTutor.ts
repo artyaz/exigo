@@ -8,7 +8,7 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
+import {getAuthedContext, getAuthenticatedUserId, throwUnauthorized } from "./authDecorators";
 import { assertServerMutationSecret } from "./serverMutationSecret";
 
 // ─── Chat CRUD ───
@@ -96,12 +96,12 @@ export const createChat = mutation({
     const auth = await getAuthedContext(ctx);
     const space = await ctx.db.get(args.spaceId);
     if (!space || space.userId !== auth.userId) {
-      throw new Error("Unauthorized");
+      throwUnauthorized();
     }
     if (args.courseId) {
       const course = await ctx.db.get(args.courseId);
       if (!course || course.userId !== auth.userId) {
-        throw new Error("Unauthorized");
+        throwUnauthorized();
       }
     }
     return await ctx.db.insert("courseTutorChats", {
@@ -118,7 +118,7 @@ export const deleteChat = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx);
     const chat = await ctx.db.get(args.chatId);
-    if (!chat || chat.userId !== userId) throw new Error("Unauthorized");
+    if (!chat || chat.userId !== userId) throwUnauthorized();
 
     // Delete all messages in the chat
     const messages = await ctx.db
@@ -175,7 +175,7 @@ export const sendMessage = mutation({
   handler: async (ctx, args) => {
     const { userId } = await getAuthedContext(ctx);
     const chat = await ctx.db.get(args.chatId);
-    if (!chat || chat.userId !== userId) throw new Error("Unauthorized");
+    if (!chat || chat.userId !== userId) throwUnauthorized();
     return await ctx.db.insert("courseTutorMessages", {
       chatId: args.chatId,
       role: "user",
@@ -198,7 +198,7 @@ export const sendTutorMessage = mutation({
     assertServerMutationSecret(args.serverSecret);
     const { userId } = await getAuthedContext(ctx);
     const chat = await ctx.db.get(args.chatId);
-    if (!chat || chat.userId !== userId) throw new Error("Unauthorized");
+    if (!chat || chat.userId !== userId) throwUnauthorized();
     return await ctx.db.insert("courseTutorMessages", {
       chatId: args.chatId,
       role: "tutor",
@@ -268,7 +268,7 @@ export const addMemory = mutation({
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx);
     const space = await ctx.db.get(args.spaceId);
-    if (!space || space.userId !== userId) throw new Error("Unauthorized");
+    if (!space || space.userId !== userId) throwUnauthorized();
     return await ctx.db.insert("spaceTutorMemories", {
       ...args,
       userId,

@@ -6,7 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
+import {getAuthedContext, getAuthenticatedUserId, throwUnauthorized } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 const QUESTION_TYPE = v.union(v.literal("select"), v.literal("write"));
@@ -107,7 +107,7 @@ export const createEmptyTest = mutation({
     }
 
     if (space.userId !== auth.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     const count = await countForUserThisMonthInternal(ctx, auth.userId);
@@ -153,7 +153,7 @@ export const create = mutation({
     }
 
     if (space.userId !== auth.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     const count = await countForUserThisMonthInternal(ctx, auth.userId);
@@ -200,7 +200,7 @@ export const updateStatus = mutation({
 
     const space = await ctx.db.get(test.spaceId);
     if (!space || space.userId !== userId) {
-      throw new Error("Unauthorized access to this test");
+      throwUnauthorized("Unauthorized access to this test");
     }
 
     await ctx.db.patch(args.testId, { status: args.status });
@@ -216,7 +216,7 @@ export const getForSpace = query({
 
     const space = await ctx.db.get(args.spaceId);
     if (!space || space.userId !== userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     return await ctx.db
@@ -275,7 +275,7 @@ export const get = query({
 
     const space = await ctx.db.get(test.spaceId);
     if (!space || space.userId !== userId) {
-      throw new Error("Unauthorized access to this test");
+      throwUnauthorized("Unauthorized access to this test");
     }
 
     return test;
@@ -311,7 +311,7 @@ export const createWithQuestions = mutation({
     }
 
     if (space.userId !== auth.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     const count = await countForUserThisMonthInternal(ctx, auth.userId);
