@@ -5,7 +5,7 @@ import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import { requireServerMutationSecret } from "../../../../lib/serverMutationSecret";
 import { getEnvGeminiClient, getEnvGeminiModel } from "../../../../server/ai/geminiEnv";
-import { sseNamedEvent } from "../../../../lib/sse";
+import { sseData } from "../../../../lib/sse";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -47,11 +47,11 @@ export async function POST(req: Request) {
   const courseId = body.courseId ? (body.courseId as Id<"courses">) : null;
   const userMessage = body.message.trim();
 
-  // Residual named-event dialect (tool_call / chat_created / …) — see src/lib/sse.ts
+  // Majority type-in-JSON dialect (F-W7-010 / P11-B) — same as teach/clarify
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (event: string, data: unknown) => {
-        controller.enqueue(sseNamedEvent(event, data));
+      const send = (type: string, data: Record<string, unknown> = {}) => {
+        controller.enqueue(sseData({ type, ...data }));
       };
 
       try {

@@ -2,16 +2,12 @@
  * Shared SSE framing for AI stream routes (server → wire).
  * Client readers live in `src/lib/sseClient.ts` (block parse + adapters).
  *
- * ## Majority dialect (teach / clarify / tests/generate)
+ * ## Dialect (all product streams, including tutor after P11-B)
  * Single `data:` line with type-in-JSON payload:
- *   data: {"type":"delta"|"done"|"error", ...}\n\n
- * Matches AGENTS.md (`delta` / `done` / `error`).
+ *   data: {"type":"delta"|"done"|"error"|"tool_call"|"tool_result"|"chat_created", ...}\n\n
  *
- * ## Residual dialect (learn/tutor only)
- * Named SSE events for tool_call / tool_result / chat_created:
- *   event: <name>\ndata: <json>\n\n
- * Use `sseNamedEvent`. Client keeps a named-event adapter in CourseTutor.
- * Do not force tutor onto type-in-payload without co-changing the client.
+ * `sseNamedEvent` remains for any external/legacy callers but product routes
+ * should use `sseData` / `sseDelta` / `sseDone` / `sseError` only.
  */
 
 export const SSE_HEADERS = {

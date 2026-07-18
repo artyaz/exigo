@@ -3,7 +3,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import { requireServerMutationSecret } from "../../../../lib/serverMutationSecret";
-import { getEnvGeminiClient, getEnvGeminiModel } from "../../../../server/ai/geminiEnv";
+import { resolveAiProvider } from "../../../../server/ai";
 import {
   enqueueSseError,
   sseData,
@@ -148,8 +148,8 @@ export async function POST(req: Request) {
       });
     }
 
-    const ai = getEnvGeminiClient();
-    const model = getEnvGeminiModel();
+    const provider = await resolveAiProvider(convex);
+    const model = provider.config.model;
     const aiTraceId = createAiTraceId();
 
     logInfo("Teach stream started", {
@@ -157,7 +157,7 @@ export async function POST(req: Request) {
       requestId,
       route: "/api/learn/teach",
       userId,
-      ai_provider: "google",
+      ai_provider: provider.config.label,
       ai_model: model,
       lessonId,
     });
@@ -166,28 +166,23 @@ export async function POST(req: Request) {
       async start(controller) {
         try {
           const requestStartedAt = Date.now();
-          const stream = await ai.models.generateContentStream({
-            model,
-            contents: prompt,
-          });
           let fullText = "";
           let firstTokenAt: number | undefined;
           let lastChunk: unknown;
 
-          for await (const chunk of stream) {
-            lastChunk = chunk;
-            const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (part) {
+          for await (const chunk of provider.stream({ prompt })) {
+            lastChunk = chunk.raw;
+            if (chunk.text) {
               firstTokenAt ??= Date.now();
-              fullText += part;
-              controller.enqueue(sseDelta(part));
+              fullText += chunk.text;
+              controller.enqueue(sseDelta(chunk.text));
             }
           }
 
           captureAiGenerationEvent({
             distinctId: userId,
             traceId: aiTraceId,
-            provider: "google",
+            provider: provider.config.label,
             model,
             input: [{ role: "user", content: prompt }],
             response: lastChunk,
@@ -204,7 +199,7 @@ export async function POST(req: Request) {
             requestId,
             route: "/api/learn/teach",
             userId,
-            ai_provider: "google",
+            ai_provider: provider.config.label,
             ai_model: model,
             duration_ms: Date.now() - requestStartedAt,
             lessonId,

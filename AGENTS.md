@@ -42,8 +42,8 @@ Two call sites (intentionally separate runtimes — do not force-share clients a
 
 | Path | Where | How |
 |------|--------|-----|
-| **Next API routes** (`src/app/api/**`) | Streaming SSE (teach, tutor, tests generate/validate, atlas, …) | `resolveAiProvider` / `defaultGeminiProvider` from `src/server/ai/` — honors user custom OpenAI-compatible settings when present; otherwise Gemini |
-| **Convex actions** (`convex/courseAi.ts`, `knowledgeNodes`, `testMessages`, …) | Backend-only generation (module syllabus, improvements, …) | Direct `@google/genai` + `GOOGLE_GEMINI_API_KEY` / `GEMINI_MODEL` — no user BYOK; Convex cannot import `src/server` |
+| **Next API routes** (`src/app/api/**`) | Streaming SSE (teach, clarify, playground generate, …) | Prefer `resolveAiProvider` / `defaultGeminiProvider` from `src/server/ai/` — honors user custom OpenAI-compatible settings when present; otherwise Gemini. Tutor tool-calling still uses env Gemini for function-calling + embeddings. |
+| **Convex actions** (`convex/courseAi.ts`, `knowledgeNodesActions`, …) | Backend-only generation (module syllabus, improvements, …) | Direct `@google/genai` + `GOOGLE_GEMINI_API_KEY` / `GEMINI_MODEL` — no user BYOK; Convex cannot import `src/server` |
 
 Shared conventions on both paths:
 - Prompts are stored in the Convex `prompts` table and fetched via `convex/coursePrompts.ts` (`getPrompt`/`renderPrompt` with `{{variable}}` placeholders)
