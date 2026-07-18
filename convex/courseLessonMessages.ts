@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
-import { getAuthedContext } from "./authDecorators";
+import {getAuthedContext, throwUnauthorized } from "./authDecorators";
 import { assertServerMutationSecret } from "./serverMutationSecret";
 
 type LessonMessageRole = "teacher" | "user" | "system";
@@ -18,7 +18,7 @@ async function assertLessonOwner(
   }
   const course = await ctx.db.get(lesson.courseId);
   if (!course || course.userId !== userId) {
-    throw new Error("Unauthorized");
+    throwUnauthorized();
   }
   return lesson;
 }

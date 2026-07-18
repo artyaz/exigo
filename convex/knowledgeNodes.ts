@@ -7,11 +7,9 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { canReadSpace } from "./spaceAccess";
-import {
-  getAuthedContext,
+import {getAuthedContext,
   requireEducatorAccess,
-  getAuthenticatedUserId,
-} from "./authDecorators";
+  getAuthenticatedUserId, throwUnauthorized } from "./authDecorators";
 import { RESOLUTION_THRESHOLD } from "../shared/planConfig";
 
 export const create = mutation({
@@ -34,7 +32,7 @@ export const create = mutation({
       !space ||
       (!canReadSpace(space, auth.userId))
     ) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     const knowledgePiece = await ctx.db.get(args.knowledgePieceId);

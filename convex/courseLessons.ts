@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
-import { getAuthenticatedUserId, getAuthedContext, requireEducatorAccess } from "./authDecorators";
+import { getAuthenticatedUserId, getAuthedContext, requireEducatorAccess, throwUnauthorized } from "./authDecorators";
 import {
   getCurrentLessonIndexAfterInsertion,
   planCurrentModuleLessonInsertion,
@@ -132,7 +132,7 @@ export const insertIntoCurrentModule = mutation({
 
     const course = await ctx.db.get(args.courseId);
     if (course?.userId !== auth.userId) {
-      throw new Error("Unauthorized");
+      throwUnauthorized();
     }
 
     if (course.phase !== "lesson" && course.phase !== "lesson_summary") {
@@ -285,7 +285,7 @@ export const saveCheckpointState = mutation({
 
     const course = await ctx.db.get(lesson.courseId);
     if (course?.userId !== userId) {
-      throw new Error("Unauthorized");
+      throwUnauthorized();
     }
 
     await ctx.db.patch(args.lessonId, {
@@ -345,7 +345,7 @@ export const markCompleted = mutation({
     if (!lesson) throw new Error("Lesson not found");
 
     const course = await ctx.db.get(lesson.courseId);
-    if (course?.userId !== auth.userId) throw new Error("Unauthorized");
+    if (course?.userId !== auth.userId) throwUnauthorized();
 
     await ctx.db.patch(args.lessonId, { status: "completed" });
   },
@@ -368,7 +368,7 @@ export const addPendingFeelsHard = mutation({
     const lesson = await ctx.db.get(args.lessonId);
     if (!lesson) throw new Error("Lesson not found");
     const course = await ctx.db.get(lesson.courseId);
-    if (course?.userId !== userId) throw new Error("Unauthorized");
+    if (course?.userId !== userId) throwUnauthorized();
 
     const existing = lesson.pendingFeelsHardNodes ?? [];
     await ctx.db.patch(args.lessonId, {

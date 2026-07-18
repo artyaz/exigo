@@ -3,10 +3,8 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel";
 import { GoogleGenAI } from "@google/genai";
-import {
-  getAuthedContextForAction,
-  requireEducatorAccess,
-} from "./authDecorators";
+import {getAuthedContextForAction,
+  requireEducatorAccess, throwUnauthorized } from "./authDecorators";
 import { requireOwnedCourseForAction } from "./courseAuth";
 import {
   captureAiGenerationEvent,
@@ -105,7 +103,7 @@ export const normalizeTopic = action({
       spaceId: args.spaceId,
     });
     if (!space || space.userId !== auth.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     const ai = getAiClient();
@@ -548,7 +546,7 @@ export const setMasteryGoals = action({
       },
     );
     if (!course || course.userId !== auth.userId)
-      throw new Error("Unauthorized");
+      throwUnauthorized();
 
     const ai = getAiClient();
     const model = getModel();
@@ -617,7 +615,7 @@ export const verifyInput = action({
       },
     );
     if (!course || course.userId !== auth.userId)
-      throw new Error("Unauthorized");
+      throwUnauthorized();
 
     const ai = getAiClient();
     const model = getModel();
@@ -729,7 +727,7 @@ export const summarizeLesson = action({
       },
     );
     if (!course || course.userId !== auth.userId)
-      throw new Error("Unauthorized");
+      throwUnauthorized();
 
     let masteryGoals: string[] = [];
     try {

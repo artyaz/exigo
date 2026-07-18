@@ -105,3 +105,18 @@ export async function getAuthenticatedUserId(
   }
   return identity.subject;
 }
+
+export function throwUnauthorized(message = "Unauthorized"): never {
+  throw new ConvexError({
+    code: "UNAUTHORIZED",
+    message,
+  });
+}
+
+export function throwForbidden(message = "Forbidden"): never {
+  throw new ConvexError({
+    code: "FORBIDDEN",
+    message,
+  });
+}
+
