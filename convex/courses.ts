@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
-import { getAuthedContext, getAuthenticatedUserId, requireEducatorAccess } from "./authDecorators";
+import { getAuthedContext, getAuthenticatedUserId, requireEducatorAccess, throwUnauthorized } from "./authDecorators";
 import { GENERATION_LOCK_TTL_MS, MAX_MODULES } from "../shared/courseConfig";
 
 const COURSE_PHASE = v.union(
@@ -25,7 +25,7 @@ export const create = mutation({
 
     const space = await ctx.db.get(args.spaceId);
     if (!space || space.userId !== auth.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     return await ctx.db.insert("courses", {
@@ -84,7 +84,7 @@ export const updateBaseline = mutation({
     const userId = await getAuthenticatedUserId(ctx);
     const course = await ctx.db.get(args.courseId);
     if (!course || course.userId !== userId) {
-      throw new Error("Unauthorized");
+      throwUnauthorized();
     }
     await ctx.db.patch(args.courseId, { baselineResults: args.baselineResults });
   },
@@ -202,7 +202,7 @@ export const createCourseFromNormalized = mutation({
 
     const space = await ctx.db.get(args.spaceId);
     if (!space || space.userId !== auth.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     return await ctx.db.insert("courses", {
@@ -229,7 +229,7 @@ export const createInternal = internalMutation({
   handler: async (ctx, args) => {
     const space = await ctx.db.get(args.spaceId);
     if (!space || space.userId !== args.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     return await ctx.db.insert("courses", {

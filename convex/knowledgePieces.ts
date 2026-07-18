@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { canReadSpace } from "./spaceAccess";
-import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
+import {getAuthedContext, getAuthenticatedUserId, throwUnauthorized } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
 export const getForSpace = query({
@@ -38,7 +38,7 @@ export const add = mutation({
 
     const space = await ctx.db.get(args.spaceId);
     if (space?.userId !== auth.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     const existingPieces = await ctx.db
@@ -102,7 +102,7 @@ export const bulkImport = mutation({
 
     const space = await ctx.db.get(args.spaceId);
     if (space?.userId !== auth.userId) {
-      throw new Error("Unauthorized access to this space");
+      throwUnauthorized("Unauthorized access to this space");
     }
 
     const existingPieces = await ctx.db
