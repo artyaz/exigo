@@ -1,0 +1,10 @@
+{
+  "state": "shipping",
+  "scope_id": "day-scope-ship-catchup",
+  "last_step": "shipping_loop_harness_and_record_catchup",
+  "branch": "fix/cd-review-loop-harness",
+  "prs": { "develop": null, "main": null },
+  "blocked_reason": null,
+  "updated_at": "2026-07-18T12:00:00Z",
+  "notes": "Waves 6-13 product already on main; shipping LOOP.md L-1/L0 harness + RECORD catch-up"
+}

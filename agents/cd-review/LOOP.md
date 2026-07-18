@@ -18,6 +18,11 @@ This file is the **single source of truth** for the loop. Dated run artifacts li
 agents/cd-review/YYYY-MM-DD/
 ```
 
+**Two agent layers** run this protocol (details §0.5):
+
+1. **Launcher session** (user-triggered, thin) — inspects the latest dated run, decides remaining work, spawns a **separate** day-scope agent via CLI / harness, wakes it if it stalls.
+2. **Day-scope agent** (autonomous, no human in the loop) — owns a large scoped chunk of the day, runs waves, spawns **subagents**, ships via develop → main + CodeRabbit iteration.
+
 ---
 
 ## 0. Directory layout
@@ -38,6 +43,94 @@ agents/cd-review/
 ```
 
 **Do not nest brainstorms under `audits/`.** Audits = findings. Brainstorms = how to fix.
+
+---
+
+## 0.5 Harness: launcher vs day-scope agent
+
+### 0.5.1 Roles
+
+| Layer | How it starts | Job | Context discipline |
+|-------|---------------|-----|--------------------|
+| **Launcher** | User triggers the loop in an interactive agent session | Find latest run, research remaining work, spawn a **separate** Grok process, re-wake it until day scope is closed | Keep thin: status files + short summaries only — **do not** ingest the worker’s full transcript |
+| **Day-scope agent** | Spawned by launcher (CLI / harness) | Execute this `LOOP.md` end-to-end for a large scoped chunk: waves, subagents, verify, ship, CodeRabbit iteration | Full working context; **no human in the loop** |
+
+Subagents of the day-scope agent (Wave A/B/C workers) stay as described in §3 — they do **not** replace the day-scope agent.
+
+### 0.5.2 Launcher protocol (user-triggered)
+
+When the user starts or continues the loop in the launcher session:
+
+```text
+1. RESOLVE RUN
+   - Prefer user-specified date; else pick the latest agents/cd-review/YYYY-MM-DD/.
+   - Read RECORD.md (Status, Stopped at, Residual, In flight, PRs).
+   - Skim audits/ + brainstorms/ only enough to know what is unfinished
+     (pending packs, open findings, open PRs). Do not re-read entire day history.
+
+2. DECIDE SCOPE FOR ONE DAY-AGENT
+   - Package a chunk of remaining work sized for roughly **300k–350k** tokens of
+     agent context for the worker (large: multi-pack / multi-slice progress is OK).
+   - Prefer contiguous ownership (same wave, disjoint file packs, or residual ship).
+   - Write the scope into the spawn prompt and optionally
+     $RUN_ROOT/audits/day-scope-{N}.md (goal, pack IDs, branch, PR links, stop conditions).
+
+3. SPAWN SEPARATE AGENT (not a subagent of the launcher)
+   - Default harness: terminal `grok` headless (or project-equivalent CLI).
+   - Example (adapt flags to the local harness):
+
+     grok -p "$(cat <<'EOF'
+     You are the cd-review DAY-SCOPE agent for Exigo.
+     Read and obey agents/cd-review/LOOP.md entirely.
+     RUN_ROOT=agents/cd-review/YYYY-MM-DD
+     SCOPE: … (pack IDs / residual / ship state)
+     NO HUMAN IN THE LOOP. Do not wait for user confirmation.
+     Use subagents for Wave A/B/C as LOOP.md allows.
+     When a wave/part is done, follow §10.2 ship + CodeRabbit iteration.
+     Write progress to RECORD.md and $RUN_ROOT/audits/day-status.json
+     {state, scope_id, last_step, prs, blocked_reason?}.
+     If you stop before scope is closed, leave Stopped at + next action in RECORD.
+     EOF
+     )" --cwd <repo> --output-format json --yolo
+
+   - Prefer backgrounding the process so the launcher can poll artifacts only.
+   - If the harness provides worktrees / session IDs, use them; still keep the worker
+     as a **peer process**, not spawn_subagent of the launcher.
+
+4. SUPERVISE WITHOUT STEALING CONTEXT
+   - Poll process alive? + day-status.json / RECORD.md “Stopped at” — not the worker’s
+     full session JSONL.
+   - If the worker exits or stalls **before the day scope is closed**, it is the
+     **launcher’s responsibility** to wake it again with further instructions
+     (resume same RUN_ROOT + residual scope; use grok -c / -r session id when useful,
+     or a new process with an explicit resume brief).
+   - Repeat spawn/wake until scope is complete or the user cancels the loop.
+   - On scope complete: update launcher notes; optionally open next scope or stop.
+```
+
+### 0.5.3 Day-scope agent rules
+
+- **No human in the loop.** Do not pause for “should I continue?” — continue, ship, or leave a precise `Stopped at` + `day-status.json` if truly blocked (permissions, missing secrets, merge conflict needing human).
+- **Orchestrate at this level:** dispatch Wave A/B/C via subagents (or sequential work if harness forbids children); consolidate; verify; ship (§10.2).
+- **Scope size:** one spawn should attempt a large, coherent chunk (~300k–350k context budget). Do not under-scope into tiny one-file chores unless residual is tiny.
+- **Artifacts are truth:** always keep `RECORD.md` current so a cold launcher can re-wake you correctly.
+- **Nested CLI agents:** optional. Prefer in-process subagents for waves; use another `grok` CLI only if the harness benefits (isolation). Never require the human to re-enter.
+
+### 0.5.4 Progress file (recommended)
+
+`$RUN_ROOT/audits/day-status.json` (launcher-readable):
+
+```json
+{
+  "state": "running|shipping|waiting_coderabbit|blocked|complete",
+  "scope_id": "day-scope-1",
+  "last_step": "short machine-readable step",
+  "branch": "fix/waveN-product",
+  "prs": { "develop": null, "main": 123 },
+  "blocked_reason": null,
+  "updated_at": "ISO-8601"
+}
+```
 
 ---
 
@@ -105,11 +198,18 @@ Never write review artifacts under `audits/` at repo root or `loops/`.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  L0  ORCHESTRATOR                                               │
-│  create run dir · map slices · dispatch waves · consolidate     │
-│  verify · ship · update RECORD.md                               │
+│  L-1  LAUNCHER (user-triggered session)                         │
+│  latest date folder · remaining work · spawn/wake CLI day agent │
+│  thin polls only (RECORD + day-status) — not worker transcript  │
 └────────────────────────────┬────────────────────────────────────┘
-                             │
+                             │ grok CLI / harness (separate process)
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  L0  DAY-SCOPE ORCHESTRATOR (no human in the loop)              │
+│  create/select run dir · map slices · dispatch waves · verify   │
+│  ship develop→main · CodeRabbit iterate · update RECORD.md      │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ subagents (in-process)
           ┌──────────────────┼──────────────────┐
           ▼                  ▼                  ▼
    WAVE A — AUDIT      WAVE B — BRAINSTORM   WAVE C — FIX
@@ -126,7 +226,7 @@ Never write review artifacts under `audits/` at repo root or `loops/`.
 | **B** | Brainstorm / design options | Slice findings + code locations | `$RUN_ROOT/brainstorms/{ID}.md` | **No** (research tools OK) |
 | **C** | Surgical fixer | Master packs + brainstorm packages | Product code + `$RUN_ROOT/audits/fixes/P*.md` | **No** (unless orchestrator re-dispatches) |
 
-Orchestrator (L0) is the only layer that decides sequencing and consolidates.
+**L0 (day-scope)** is the only layer that decides sequencing, consolidates, ships, and re-dispatches waves. **L-1 (launcher)** only scopes work and keeps the day agent alive until that scope closes.
 
 ---
 
@@ -312,8 +412,8 @@ Write {RUN_ROOT}/audits/fixes/{PACK_ID}.md
 1. `npm run check` and/or `npx tsc --noEmit` + lint on touched paths  
 2. `npm run test`  
 3. Write `$RUN_ROOT/audits/verify.md`  
-4. Ship via PR policy for the repo (protected branches → PR to develop/main as needed)  
-5. Update `RECORD.md`
+4. Ship via §10.2 (develop → main + CodeRabbit iteration)  
+5. Update `RECORD.md` and `day-status.json`
 
 ---
 
@@ -373,9 +473,10 @@ Every run **must** maintain `$RUN_ROOT/RECORD.md`. Orchestrator updates it at:
 ### 8.2 Resume protocol
 
 1. Open latest `agents/cd-review/*/RECORD.md` (or user-specified date).  
-2. Read **Stopped at** and **Residual**.  
-3. Continue that run **or** create a new dated folder (§1) and link “continues from”.  
-4. Never invent status — update RECORD after every material step.
+2. Read **Stopped at**, **Residual**, and `$RUN_ROOT/audits/day-status.json` if present.  
+3. **Launcher:** re-wake a day-scope agent with the residual scope (§0.5). **Day-scope:** continue mid-wave / mid-ship without waiting for a human.  
+4. Continue that run **or** create a new dated folder (§1) and link “continues from”.  
+5. Never invent status — update RECORD (and day-status) after every material step.
 
 ---
 
@@ -395,10 +496,24 @@ Local skill paths when present: `~/.agents/skills/brainstorming`, `coding-guidel
 
 ## 10. Orchestrator checklist
 
+### 10.0 Launcher checklist (L-1, user-triggered)
+
+```text
+[ ] User triggered loop in this session
+[ ] Latest (or specified) RUN_ROOT selected; RECORD.md read
+[ ] Remaining work researched; day scope sized ~300k–350k context
+[ ] Separate day-scope agent spawned via grok CLI / harness (not subagent)
+[ ] day-status.json / RECORD polled only (no full worker transcript)
+[ ] If worker stops early: wake with further instructions until scope closed
+[ ] Scope complete or user cancelled
+```
+
+### 10.1 Day-scope checklist (L0)
+
 ```text
 [ ] Create or select RUN_ROOT (agents/cd-review/YYYY-MM-DD)
-[ ] RECORD.md scaffolded / updated
-[ ] slices.md written
+[ ] RECORD.md scaffolded / updated; day-status.json current
+[ ] slices.md written (if new run)
 [ ] Wave A: dispatch all slice auditors (parallel, no children)
 [ ] Collect audits/slices/*
 [ ] Wave B: dispatch brainstormers on findings (parallel, no children)
@@ -406,13 +521,13 @@ Local skill paths when present: `~/.agents/skills/brainstorming`, `coding-guidel
 [ ] Consolidate master.md + fix packs (disjoint files)
 [ ] Wave C: dispatch fixers
 [ ] Verify (check + test) → audits/verify.md
-[ ] Ship (see §10.1 ship protocol)
-[ ] RECORD.md final: done, residual, stopped at
+[ ] Ship (see §10.2 ship + CodeRabbit iteration)
+[ ] RECORD.md: done / residual / stopped at; day-status complete or blocked
 ```
 
-### 10.1 Ship protocol (required after each product wave)
+### 10.2 Ship protocol (required after each product wave / scope part)
 
-When the user says ship / merge / continue waves, the orchestrator follows this **exactly**. Do not skip CodeRabbit wait. Do not invent a new dated run folder unless asked.
+Runs **autonomously** inside the day-scope agent after a wave or scoped part of product work is done. Do **not** skip CodeRabbit waits. Do **not** invent a new dated run folder unless the launcher scoped a new day.
 
 ```text
 1. SEED / OPS (when residual ops exist)
@@ -423,41 +538,81 @@ When the user says ship / merge / continue waves, the orchestrator follows this 
      `npx convex run --prod seedPlans:syncPerksFromSsot '{}'`
    - Record ops result in RECORD.md.
 
-2. MERGE INTO DEVELOP
-   - Open or reuse PR: product branch → `develop`.
-   - Ensure CI green (`check` + tests).
+2. LAND ON DEVELOP
+   - Push the product branch; open or reuse PR: product branch → `develop` (development branch).
+   - Ensure CI green (`check` + tests) before merge when protection requires it.
    - Merge into `develop` (squash or merge per repo default).
    - If multiple stacked wave branches exist, merge bottom-up (wave N then N+1) or one cumulative PR.
+   - Prefer: changes live on `develop` before the main PR is treated as the ship vehicle.
 
 3. OPEN PR INTO MAIN
-   - Open PR: `develop` → `main` (or the cumulative product branch → `main` if that is the active ship path).
+   - Open or update PR: `develop` → `main` (or the cumulative product branch → `main`
+     if that is the active ship path for this wave).
    - Body: wave summary + test plan + any ops follow-ups.
+   - Update day-status.json: state=shipping, prs.main=<number>.
 
-4. WAIT FOR CODERABBIT
-   - Poll PR reviews/comments until CodeRabbit has posted (or ~10–15 min with no bot if CI still running — recheck).
-   - **Exigo config:** auto-review runs on the **default branch (`main`) only**. Develop-base PRs often get “Review skipped” — still open develop PR for CI, but the real CodeRabbit pass is on the develop→main PR.
-   - If CodeRabbit returns **rate limited**, wait for the stated window and re-invoke `@coderabbitai review`. If still limited after a second wait and CI is green with **no prior open findings**, record that in the merge commit body and proceed (do not block forever).
-   - Do not merge main before reviewing bot findings when a full review is available.
-   - Tools: GitHub API issue comments + reviews (CLI token ok if `gh` keyring is broken). Prefer short polls; avoid MCP `functionSpec`.
+4. CODERABBIT WAIT + ITERATION (mandatory loop)
+   **Exigo config:** auto-review runs on the **default branch (`main`) only**.
+   Develop-base PRs often get “Review skipped” — still use develop for CI/landing,
+   but treat **develop→main** (or the main-targeted PR) as the real CodeRabbit surface.
 
-5. FIX IF NEEDED
-   - Address CodeRabbit (and human) blocking findings surgically.
-   - Push fixes to the PR branch; re-run verify.
-   - Reply/resolve only when code is fixed or finding is explicitly out of scope with reason in RECORD.
+   4a. After opening/updating the main PR: **sleep ~5 minutes**, then fetch **all**
+       PR reviews, review comments, and issue comments (GitHub API or `gh`).
 
-6. MERGE INTO MAIN
-   - Merge the main PR when CI green and CodeRabbit residual is empty or accepted.
+   4b. Detect “review still pending”:
+       - CodeRabbit “review pending” / “in progress” / queued messages
+       - only placeholder or “Review skipped” with no real findings yet when a full
+         review is expected
+       - CI still running and bot has not finished
+       If pending: **sleep ~10 minutes**, recheck. Repeat until it is clear that
+       CodeRabbit has **finished** this pass (or a documented rate-limit path below).
+
+   4c. Rate limits / flaky bot / API errors:
+       - If CodeRabbit (or GitHub) rate-limits: wait the stated or a generous window
+         (often 10–30+ minutes), then re-request review (`@coderabbitai review`) if needed.
+       - Network/API failures: backoff and retry; record attempts in RECORD.md.
+       - It is the **agent’s** job to wait properly — do not abandon the PR half-reviewed
+         and do not ask a human to “check later” unless truly blocked on secrets/access.
+
+   4d. Confirm the review is real before deciding “nothing to fix”:
+       - CodeRabbit **usually does not leave a full PR empty**. Expect at least a few
+         minor findings on non-trivial product diffs.
+       - If you find **no** issue-related CodeRabbit comments (inline or review body),
+         assume something is wrong first:
+         - wrong PR number / wrong base branch
+         - looking only at issue comments and missing review threads
+         - review not finished yet (go back to 4b)
+         - bot skipped (file limits, path filters) — check for skip messages and fix scope
+       - Only after a **completed** review pass with evidence (review submitted state,
+         summary comment, and/or threaded findings) may you conclude residual is empty
+         or accept remaining nits with reasons in RECORD.
+
+   4e. Fix → push → wait again:
+       - Iterate CodeRabbit (and human) findings surgically.
+       - Push fixes to the branch that feeds the main PR (typically `develop` and/or
+         the product branch, keeping develop→main current).
+       - Re-run verify as needed.
+       - Update the PR; **sleep ~5 minutes** again; re-enter from 4a until the completed
+         review residual is empty or explicitly accepted in RECORD.
+       - Reply/resolve threads only when code is fixed or out-of-scope with reason.
+
+5. MERGE INTO MAIN
+   - Merge the main PR when CI is green and CodeRabbit residual is empty or accepted.
    - Confirm deploy health if Convex/Vercel auto-deploy.
 
-7. CONTINUE NEXT WAVE
-   - Update RECORD.md: ship links, residual, next wave id.
-   - Start next wave under the **same** RUN_ROOT unless user asked for a new date.
-   - Repeat from Wave A/C residual packs or § residual backlog — then this ship protocol again.
+6. CONTINUE NEXT PART OF SCOPE
+   - Update RECORD.md: ship links, residual, next wave/pack id; day-status.json.
+   - Stay under the **same** RUN_ROOT for the day scope.
+   - Continue remaining packs / waves without human approval, then ship again via this section.
+   - If day scope is closed: set day-status state=complete and stop cleanly.
+   - If you must stop early: set blocked/stopped_at precisely so the **launcher** can wake you.
 ```
 
-**Branch naming:** `fix/waveN-product` (or scoped fix names). Prefer stacking on `develop` after each develop merge.
+**Branch naming:** `fix/waveN-product` (or scoped fix names). Prefer landing on `develop` after each wave part, then PR to `main`.
 
 **PR hygiene:** product-scoped diffs; keep audits out of giant mixed PRs when CodeRabbit file limits apply.
+
+**Tools:** GitHub API issue comments + pull reviews + review comments (CLI token ok if `gh` keyring is broken). Prefer short status polls and documented sleeps; avoid MCP `functionSpec` bulk dumps.
 
 ---
 
@@ -480,7 +635,8 @@ When the user says ship / merge / continue waves, the orchestrator follows this 
 |------|------|
 | 2026-07-17 | Original loop under `loops/cb-review.md` + root `audits/` |
 | 2026-07-18 | Relocated to `agents/cd-review/`; Wave A/B separation (no nested brainstorm spawn); dated run folders + RECORD |
-| 2026-07-18 | Ship protocol §10.1: seed → merge develop → PR main → wait CodeRabbit → fix → merge main → next wave |
+| 2026-07-18 | Ship protocol: seed → merge develop → PR main → wait CodeRabbit → fix → merge main → next wave |
+| 2026-07-18 | L-1 launcher + L0 day-scope CLI agent (§0.5); ~300k–350k scope; no HITL; ship §10.2 CodeRabbit 5m/10m iteration |
 
 For the first full multi-wave execution and ship history, see:
 
