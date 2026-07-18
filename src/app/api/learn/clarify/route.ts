@@ -3,7 +3,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import { requireServerMutationSecret } from "../../../../lib/serverMutationSecret";
-import { getEnvGeminiClient, getEnvGeminiModel } from "../../../../server/ai/geminiEnv";
+import { resolveAiProvider } from "../../../../server/ai";
 import {
   enqueueSseError,
   sseDelta,
@@ -127,32 +127,27 @@ export async function POST(req: Request) {
       history: historyStr || "No previous conversation in this thread.",
     });
 
-    const ai = getEnvGeminiClient();
-    const model = getEnvGeminiModel();
+    const provider = await resolveAiProvider(convex);
+    const model = provider.config.model;
     const aiTraceId = createAiTraceId();
 
     const readable = new ReadableStream({
       async start(controller) {
         try {
           const requestStartedAt = Date.now();
-          const stream = await ai.models.generateContentStream({
-            model,
-            contents: prompt,
-          });
           let fullText = "";
 
-          for await (const chunk of stream) {
-            const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (part) {
-              fullText += part;
-              controller.enqueue(sseDelta(part));
+          for await (const chunk of provider.stream({ prompt })) {
+            if (chunk.text) {
+              fullText += chunk.text;
+              controller.enqueue(sseDelta(chunk.text));
             }
           }
 
           captureAiGenerationEvent({
             distinctId: userId,
             traceId: aiTraceId,
-            provider: "google",
+            provider: provider.config.label,
             model,
             input: [{ role: "user", content: prompt }],
             response: undefined,
