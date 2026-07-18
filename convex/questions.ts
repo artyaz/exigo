@@ -7,6 +7,7 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getAuthedContext } from "./authDecorators";
+import { canReadSpace, canWriteSpace } from "./spaceAccess";
 
 type DbCtx = QueryCtx | MutationCtx;
 
@@ -16,16 +17,6 @@ async function loadTestSpace(ctx: DbCtx, testId: Id<"tests">) {
   const space = await ctx.db.get(test.spaceId);
   if (!space) return null;
   return { test, space };
-}
-
-/** Shared template spaces may be read by any authenticated user. */
-function canReadSpace(space: Doc<"spaces">, userId: string): boolean {
-  return space.userId === userId || space.userId === "default_user";
-}
-
-/** Writes require strict ownership — never the default_user exception. */
-function canWriteSpace(space: Doc<"spaces">, userId: string): boolean {
-  return space.userId === userId;
 }
 
 async function requireTestWriteAccess(

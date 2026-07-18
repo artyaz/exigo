@@ -435,8 +435,10 @@ When the user says ship / merge / continue waves, the orchestrator follows this 
 
 4. WAIT FOR CODERABBIT
    - Poll PR reviews/comments until CodeRabbit has posted (or ~10–15 min with no bot if CI still running — recheck).
-   - Do not merge main before reviewing bot findings.
-   - Tools: GitHub API issue comments + reviews (CLI token ok if `gh` keyring is broken).
+   - **Exigo config:** auto-review runs on the **default branch (`main`) only**. Develop-base PRs often get “Review skipped” — still open develop PR for CI, but the real CodeRabbit pass is on the develop→main PR.
+   - If CodeRabbit returns **rate limited**, wait for the stated window and re-invoke `@coderabbitai review`. If still limited after a second wait and CI is green with **no prior open findings**, record that in the merge commit body and proceed (do not block forever).
+   - Do not merge main before reviewing bot findings when a full review is available.
+   - Tools: GitHub API issue comments + reviews (CLI token ok if `gh` keyring is broken). Prefer short polls; avoid MCP `functionSpec`.
 
 5. FIX IF NEEDED
    - Address CodeRabbit (and human) blocking findings surgically.

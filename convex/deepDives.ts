@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { canReadSpace } from "./spaceAccess";
 import { getAuthedContext } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
 
@@ -27,7 +28,7 @@ export const create = mutation({
     const space = await ctx.db.get(args.spaceId);
     if (
       !space ||
-      (space.userId !== userId && space.userId !== "default_user")
+      (!canReadSpace(space, userId))
     ) {
       throw new Error("Unauthorized access to this space");
     }
