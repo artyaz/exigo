@@ -136,12 +136,12 @@ export function CourseTutor({ spaceId, courseId }: CourseTutorProps) {
       let nextToolActionIndex = 0;
 
       for await (const block of iterateParsedSseBlocks(res.body)) {
-        // Named-event dialect requires `event:`; skip data-only frames if any
-        if (!block.event) continue;
+        // Majority dialect: type in JSON data payload (named-event residual removed)
+        if (block.event) continue;
         const data = parseJsonData<Record<string, unknown>>(block.data);
         if (!data) continue;
 
-        const eventType = block.event;
+        const eventType = getSseString(data.type);
         if (eventType === "delta" && typeof data.text === "string") {
           accumulated += data.text;
           setStreamingContent(accumulated);

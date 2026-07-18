@@ -1,12 +1,12 @@
 /**
  * Client-side SSE block framing for AI stream consumers.
  *
- * Server dialects (see `src/lib/sse.ts` — do not unify here):
- * - **Majority** (teach / clarify / tests): `data: {"type":"delta"|"done"|"error",...}\n\n`
- * - **Residual tutor**: `event: <name>\ndata: <json>\n\n` (named events)
+ * Product servers emit majority dialect (see `src/lib/sse.ts`):
+ *   data: {"type":"delta"|"done"|"error"|…}\n\n
+ * Named `event:` lines may still appear from residual/legacy streams; callers
+ * can ignore them when using type-in-JSON payloads.
  *
  * This module only splits buffers and extracts `event` / `data` fields.
- * Callers keep dialect-specific handlers (adapters).
  */
 
 export type SseBlock = {

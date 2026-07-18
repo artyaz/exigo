@@ -34,6 +34,7 @@ import type * as questions from "../questions.js";
 import type * as seedPlans from "../seedPlans.js";
 import type * as seedPrompts from "../seedPrompts.js";
 import type * as serverMutationSecret from "../serverMutationSecret.js";
+import type * as spaceAccess from "../spaceAccess.js";
 import type * as spaces from "../spaces.js";
 import type * as subscriptionService from "../subscriptionService.js";
 import type * as subscriptionServiceInternal from "../subscriptionServiceInternal.js";
@@ -77,6 +78,7 @@ declare const fullApi: ApiFromModules<{
   seedPlans: typeof seedPlans;
   seedPrompts: typeof seedPrompts;
   serverMutationSecret: typeof serverMutationSecret;
+  spaceAccess: typeof spaceAccess;
   spaces: typeof spaces;
   subscriptionService: typeof subscriptionService;
   subscriptionServiceInternal: typeof subscriptionServiceInternal;
