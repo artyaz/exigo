@@ -7,7 +7,7 @@ import {
   internalAction,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { getAuthedContext, getAuthenticatedUserId } from "./authDecorators";
 import { assertServerMutationSecret } from "./serverMutationSecret";
 
@@ -289,10 +289,11 @@ export const searchMemories = internalAction({
     _score: number;
     _id: Id<"spaceTutorMemories">;
   }>> => {
+    // Filter userId on the vector index; enforce spaceId after document fetch.
     const results = await ctx.vectorSearch("spaceTutorMemories", "by_embedding", {
       vector: args.embedding,
-      limit: args.limit ?? 10,
-      filter: (q) => q.eq("spaceId", args.spaceId),
+      limit: Math.max((args.limit ?? 10) * 3, 15),
+      filter: (q) => q.eq("userId", args.userId),
     });
 
     // Fetch full documents via a helper query
@@ -301,12 +302,14 @@ export const searchMemories = internalAction({
       { ids: results.map((r: { _id: Id<"spaceTutorMemories"> }) => r._id) },
     );
     const memories = memoriesRaw.filter(
-      (m): m is NonNullable<typeof m> => m !== null,
+      (m): m is Doc<"spaceTutorMemories"> =>
+        m != null && m.spaceId === args.spaceId,
     );
     // Resolve scores by memory id, not array index — filtering out nulls
     // above can shift positional indices and misalign scores.
     const scoreById = new Map(results.map((r) => [r._id, r._score]));
-    return memories.map((m) => ({
+    const limit = args.limit ?? 10;
+    return memories.slice(0, limit).map((m) => ({
       content: m.content,
       category: m.category,
       _id: m._id,
@@ -317,9 +320,8 @@ export const searchMemories = internalAction({
 
 export const getMemoriesByIds = internalQuery({
   args: { ids: v.array(v.id("spaceTutorMemories")) },
-  handler: async (ctx, args) => {
-    const docs = await Promise.all(args.ids.map((id) => ctx.db.get(id)));
-    return docs.filter(Boolean);
+  handler: async (ctx, args): Promise<Array<Doc<"spaceTutorMemories"> | null>> => {
+    return await Promise.all(args.ids.map((id) => ctx.db.get(id)));
   },
 });
 

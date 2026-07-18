@@ -1,11 +1,11 @@
 import type { NextRequest } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 import type { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
+import { resolveAiProvider, type AiProvider } from "../../../../server/ai";
 import {
   enqueueSseError,
   sseDelta,
@@ -67,32 +67,33 @@ const writeQuestionSchema = z.object({
  * The endpoint also returns 400 responses(JSON error body) when required parameters or knowledge pieces are missing.
  */
 
-async function fetchGeminiStream<T extends z.ZodSchema>(
-  ai: GoogleGenAI,
+async function* streamWithRetry(
+  provider: AiProvider,
   prompt: string,
-  schema: T,
+  jsonSchema: object,
   model: string,
   context: { requestId: string; userId: string; route: string },
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await ai.models.generateContentStream({
+      for await (const chunk of provider.stream({
+        prompt,
         model,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseJsonSchema: zodToJsonSchema(schema),
-        },
-      });
+        json: true,
+        jsonSchema,
+      })) {
+        yield chunk;
+      }
+      return;
     } catch (retryErr: unknown) {
       const apiErr = retryErr as { status?: number };
       if (apiErr.status === 429 && attempt < 2) {
-        logWarn("Gemini stream rate-limited, retrying", {
+        logWarn("AI stream rate-limited, retrying", {
           source: "api.tests.generate",
           requestId: context.requestId,
           route: context.route,
           userId: context.userId,
-          ai_provider: "google",
+          ai_provider: provider.config.label,
           ai_model: model,
           attempt: attempt + 1,
           http_status: 429,
@@ -307,7 +308,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
+  const provider = await resolveAiProvider(convex);
 
   // Verify space ownership before accessing data
   const space = await convex.query(api.spaces.get, {
@@ -414,7 +415,8 @@ export async function POST(req: NextRequest) {
 
   const schema =
     testType === "select" ? selectQuestionSchema : writeQuestionSchema;
-  const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+  const model = provider.config.model;
+  const jsonSchema = zodToJsonSchema(schema);
   const aiTraceId = createAiTraceId();
 
   // Create a streaming response back to the client
@@ -422,39 +424,43 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       try {
         const requestStartedAt = Date.now();
-        logInfo("Gemini stream generation started", {
+        logInfo("AI stream generation started", {
           source: "api.tests.generate",
           requestId,
           route: "/api/tests/generate",
           userId,
-          ai_provider: "google",
+          ai_provider: provider.config.label,
           ai_model: model,
           testId: String(activeTestId),
-        });
-        const stream = await fetchGeminiStream(ai, prompt, schema, model, {
-          requestId,
-          userId,
-          route: "/api/tests/generate",
         });
 
         let fullText = "";
         let firstTokenAt: number | undefined;
         let lastChunk: unknown;
 
-        for await (const chunk of stream) {
-          lastChunk = chunk;
-          const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (part) {
+        for await (const chunk of streamWithRetry(
+          provider,
+          prompt,
+          jsonSchema,
+          model,
+          {
+            requestId,
+            userId,
+            route: "/api/tests/generate",
+          },
+        )) {
+          lastChunk = chunk.raw;
+          if (chunk.text) {
             firstTokenAt ??= Date.now();
-            fullText += part;
-            controller.enqueue(sseDelta(part));
+            fullText += chunk.text;
+            controller.enqueue(sseDelta(chunk.text));
           }
         }
 
         captureAiGenerationEvent({
           distinctId: userId,
           traceId: aiTraceId,
-          provider: "google",
+          provider: provider.config.label,
           model,
           input: [{ role: "user", content: prompt }],
           response: lastChunk,
@@ -465,12 +471,12 @@ export async function POST(req: NextRequest) {
             ? (firstTokenAt - requestStartedAt) / 1000
             : undefined,
         });
-        logInfo("Gemini stream generation succeeded", {
+        logInfo("AI stream generation succeeded", {
           source: "api.tests.generate",
           requestId,
           route: "/api/tests/generate",
           userId,
-          ai_provider: "google",
+          ai_provider: provider.config.label,
           ai_model: model,
           duration_ms: Date.now() - requestStartedAt,
           testId: String(activeTestId),

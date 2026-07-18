@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
+import { resolveAiProvider } from "../../../../server/ai";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
         )
         .join("\n") || "No prior conversation.";
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
+    const provider = await resolveAiProvider(convex);
     const promptDoc = await convex.query(api.coursePrompts.getPrompt, {
       name: "feels_hard_note",
     });
@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
     });
 
     const aiTraceId = createAiTraceId();
-    const model = process.env.GEMINI_MODEL ?? "gemini-3-flash-preview";
+    const model = provider.config.model;
     const aiStartedAt = Date.now();
     logInfo("Feels-hard AI generation started", {
       source: "api.tests.feels-hard",
@@ -165,20 +165,17 @@ export async function POST(req: NextRequest) {
       userId,
       testId,
       questionId,
-      ai_provider: "google",
+      ai_provider: provider.config.label,
       ai_model: model,
     });
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-    });
+    const result = await provider.generate({ prompt, model });
     captureAiGenerationEvent({
       distinctId: userId,
       traceId: aiTraceId,
-      provider: "google",
+      provider: provider.config.label,
       model,
       input: [{ role: "user", content: prompt }],
-      response,
+      response: result.raw,
       latencySeconds: (Date.now() - aiStartedAt) / 1000,
     });
     logInfo("Feels-hard AI generation succeeded", {
@@ -188,12 +185,12 @@ export async function POST(req: NextRequest) {
       userId,
       testId,
       questionId,
-      ai_provider: "google",
+      ai_provider: provider.config.label,
       ai_model: model,
       duration_ms: Date.now() - aiStartedAt,
     });
     const struggleNote =
-      response.text?.trim() ?? "User had an issue with this topic.";
+      result.text?.trim() ?? "User had an issue with this topic.";
 
     await convex.mutation(api.knowledgeNodes.create, {
       spaceId: test.spaceId,
