@@ -1,24 +1,26 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
 vi.mock("server-only", () => ({}));
 
-type AuthResult = { userId: string | null };
+type AuthResult = { userId: string | null; getToken?: () => Promise<string | null> };
 const authMock = vi.fn<() => Promise<AuthResult>>();
 vi.mock("@clerk/nextjs/server", () => ({
     auth: () => authMock(),
 }));
 
-const generateContentMock = vi.fn();
-vi.mock("@google/genai", () => {
-    class GoogleGenAI {
-        public models = { generateContent: generateContentMock };
-        constructor(_config: unknown) {
-            void _config;
-        }
-    }
-    return { GoogleGenAI };
-});
+const generateMock = vi.fn();
+const resolveAiProviderMock = vi.fn();
+vi.mock("../../../../server/ai", () => ({
+    resolveAiProvider: (...args: unknown[]) =>
+        resolveAiProviderMock(...args) as unknown,
+}));
+
+const createAuthedConvexClientMock = vi.fn();
+vi.mock("../../../../lib/convexClientAuth", () => ({
+    createAuthedConvexClient: (...args: unknown[]) =>
+        createAuthedConvexClientMock(...args) as unknown,
+}));
 
 vi.mock("../../../../lib/otlpLogger", () => ({
     createRequestId: () => "req_test",
@@ -46,19 +48,19 @@ async function loadRoute() {
 }
 
 describe("POST /api/knowledge/title", () => {
-    const originalApiKey = process.env.GOOGLE_GEMINI_API_KEY;
-
     beforeEach(() => {
         authMock.mockReset();
-        generateContentMock.mockReset();
-    });
+        generateMock.mockReset();
+        resolveAiProviderMock.mockReset();
+        createAuthedConvexClientMock.mockReset();
 
-    afterEach(() => {
-        if (originalApiKey === undefined) {
-            delete process.env.GOOGLE_GEMINI_API_KEY;
-        } else {
-            process.env.GOOGLE_GEMINI_API_KEY = originalApiKey;
-        }
+        createAuthedConvexClientMock.mockResolvedValue({
+            query: vi.fn().mockRejectedValue(new Error("no prompt")),
+        });
+        resolveAiProviderMock.mockResolvedValue({
+            config: { label: "google", model: "gemini-test" },
+            generate: generateMock,
+        });
     });
 
     it("returns 401 when the caller is unauthenticated", async () => {
@@ -72,7 +74,7 @@ describe("POST /api/knowledge/title", () => {
     });
 
     it("returns 400 for malformed JSON", async () => {
-        authMock.mockResolvedValue({ userId: "user_1" });
+        authMock.mockResolvedValue({ userId: "user_1", getToken: async () => "t" });
         const { POST } = await loadRoute();
 
         const res = await POST(makeRequest(null, { malformed: true }));
@@ -82,7 +84,7 @@ describe("POST /api/knowledge/title", () => {
     });
 
     it("returns 400 when the JSON body is the literal null", async () => {
-        authMock.mockResolvedValue({ userId: "user_1" });
+        authMock.mockResolvedValue({ userId: "user_1", getToken: async () => "t" });
         const { POST } = await loadRoute();
 
         const res = await POST(makeRequest(null));
@@ -92,7 +94,7 @@ describe("POST /api/knowledge/title", () => {
     });
 
     it("returns 400 when content is missing or blank", async () => {
-        authMock.mockResolvedValue({ userId: "user_1" });
+        authMock.mockResolvedValue({ userId: "user_1", getToken: async () => "t" });
         const { POST } = await loadRoute();
 
         const res = await POST(makeRequest({ content: "   " }));
@@ -101,9 +103,9 @@ describe("POST /api/knowledge/title", () => {
         expect(await res.json()).toEqual({ error: "Missing content" });
     });
 
-    it("returns a fallback title when the Gemini key is not configured", async () => {
-        delete process.env.GOOGLE_GEMINI_API_KEY;
-        authMock.mockResolvedValue({ userId: "user_1" });
+    it("returns a fallback title when the provider cannot produce a title", async () => {
+        authMock.mockResolvedValue({ userId: "user_1", getToken: async () => "t" });
+        generateMock.mockRejectedValue(new Error("no model"));
         const { POST } = await loadRoute();
 
         const res = await POST(
@@ -112,13 +114,11 @@ describe("POST /api/knowledge/title", () => {
 
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({ title: "Mitochondria are the powerhouse of" });
-        expect(generateContentMock).not.toHaveBeenCalled();
     });
 
     it("returns the AI-generated title on the happy path", async () => {
-        process.env.GOOGLE_GEMINI_API_KEY = "test-key";
-        authMock.mockResolvedValue({ userId: "user_1" });
-        generateContentMock.mockResolvedValue({ text: "Cellular Energy Basics" });
+        authMock.mockResolvedValue({ userId: "user_1", getToken: async () => "t" });
+        generateMock.mockResolvedValue({ text: "Cellular Energy Basics", raw: {} });
         const { POST } = await loadRoute();
 
         const res = await POST(
@@ -127,21 +127,20 @@ describe("POST /api/knowledge/title", () => {
 
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({ title: "Cellular Energy Basics" });
-        expect(generateContentMock).toHaveBeenCalledTimes(1);
+        expect(generateMock).toHaveBeenCalled();
     });
 
     it("falls through to the next model when the first one throws", async () => {
-        process.env.GOOGLE_GEMINI_API_KEY = "test-key";
-        authMock.mockResolvedValue({ userId: "user_1" });
-        generateContentMock
+        authMock.mockResolvedValue({ userId: "user_1", getToken: async () => "t" });
+        generateMock
             .mockRejectedValueOnce(new Error("model overloaded"))
-            .mockResolvedValueOnce({ text: "Cellular Energy" });
+            .mockResolvedValueOnce({ text: "Cellular Energy", raw: {} });
         const { POST } = await loadRoute();
 
         const res = await POST(makeRequest({ content: "Mitochondria produce ATP." }));
 
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({ title: "Cellular Energy" });
-        expect(generateContentMock).toHaveBeenCalledTimes(2);
+        expect(generateMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
 });

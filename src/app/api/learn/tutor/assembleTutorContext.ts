@@ -26,29 +26,19 @@ export async function assembleContext(
           .join("\n")
       : "No active knowledge nodes yet";
 
-  // Semantic memory search
+  // Semantic memory search via Convex vector index (not O(n) cosine in the route)
   let relevantMemories: Array<{ content: string; category: string; _score?: number }> = [];
   try {
     const queryEmbedding = await generateEmbedding(ai, userMessage);
     if (queryEmbedding.length > 0) {
-      const memories = await convex.query(api.courseTutor.getMemoriesForSpace, { spaceId });
-      relevantMemories = memories
-        .filter((m: { embedding: number[] }) => m.embedding && m.embedding.length > 0)
-        .map((m: { embedding: number[]; content: string; category: string }) => {
-          const dotProduct = m.embedding.reduce(
-            (sum: number, val: number, i: number) => sum + val * (queryEmbedding[i] ?? 0),
-            0,
-          );
-          const magA = Math.sqrt(m.embedding.reduce((sum: number, val: number) => sum + val * val, 0));
-          const magB = Math.sqrt(queryEmbedding.reduce((sum: number, val: number) => sum + val * val, 0));
-          const score = magA && magB ? dotProduct / (magA * magB) : 0;
-          return { content: m.content, category: m.category, _score: score };
-        })
-        .sort((a: { _score?: number }, b: { _score?: number }) => (b._score ?? 0) - (a._score ?? 0))
-        .slice(0, 5);
+      relevantMemories = await convex.action(api.courseTutorSearch.searchMemoriesForSpace, {
+        spaceId,
+        embedding: queryEmbedding,
+        limit: 5,
+      });
     }
   } catch {
-    // Embedding search failed — continue without memories
+    // Embedding / vector search failed — continue without memories
   }
 
   const memoriesContext =
