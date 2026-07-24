@@ -1,0 +1,33 @@
+{
+  "registry_version": 1,
+  "loops": [
+    {
+      "loop_id": "loop-forge",
+      "loop_num": 0,
+      "authored_at": "2026-07-25",
+      "run_root": "agents/loop-forge",
+      "parent_loops": ["cd-review", "brainstorm"],
+      "mutation_operator": "compose",
+      "ports": {
+        "inputs": [
+          {"name": "target-domain-port", "type": "text", "required": true},
+          {"name": "prior-constraints-port", "type": "archive-constraints.jsonl", "required": false}
+        ],
+        "outputs": [
+          {"name": "loop-md-port", "type": "file", "path": "agents/<name>/LOOP.md"},
+          {"name": "loop-registry-port", "type": "file", "path": "agents/<name>/loop-registry.json"}
+        ]
+      },
+      "lens_scores": {"L1": 0.85, "L2": 0.78, "L3": 0.72, "L4": 0.80},
+      "composition_count": 0,
+      "status": "active",
+      "stop_reason": null,
+      "remaining_extraction_depth": 3,
+      "lineage": {
+        "parent_loops": ["cd-review", "brainstorm"],
+        "no_self_composition": true,
+        "no_parent_mutation": true
+      }
+    }
+  ]
+}
