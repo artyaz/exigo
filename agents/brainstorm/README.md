@@ -1,4 +1,4 @@
-# Brainstorming Loop (`agents/loop/`)
+# Brainstorming Loop (`agents/brainstorm/`)
 
 Continuous **brainstorm → research → synthesize → brainstorm** loop for Exigo.
 
@@ -25,9 +25,9 @@ Read `LOOP.md` §0.5 (launcher protocol) and §1 (starting a new cycle). In shor
 
 ```bash
 grok -p "$(cat <<'EOF'
-You are the brainstorming-loop CYCLE-SCOPE ORCHESTRATOR for Exigo.
-Read and obey agents/loop/LOOP.md entirely.
-RUN_ROOT=agents/loop/runs/2026-07-25-C001
+You are the brainstorm CYCLE-SCOPE ORCHESTRATOR for Exigo.
+Read and obey agents/brainstorm/LOOP.md entirely.
+RUN_ROOT=agents/brainstorm/runs/2026-07-25-C001
 CYCLE_ID=cycle-001
 PROBLEM_STATEMENT={…}
 INHERITED_CONSTRAINTS={from archive/constraints.jsonl, decay_score >= 0.3}
@@ -55,7 +55,7 @@ EOF
 
 ## Relationship to cd-review
 
-| Aspect | `agents/cd-review/` (cb-review) | `agents/loop/` (brainstorming) |
+| Aspect | `agents/cd-review/` (cb-review) | `agents/brainstorm/` (brainstorming) |
 |---|---|---|
 | Mode | Critical (review existing code) | Divergent (generate new ideas) |
 | Wave 1 | Wave A: hostile audit (slices) | Wave α: brainstorm (persona×seed) |
@@ -67,4 +67,4 @@ EOF
 | Stop condition | Day scope closed | Goal-anchored + novelty-decay + budget cap |
 | Two-layer harness | Launcher + day-scope agent | Launcher + cycle-scope agent (same pattern) |
 
-The two loops share the same autonomy model (`LOOP.md` canonical, `RECORD.md` + `day-status.json` resume, separate-process launcher, no HITL inside the worker). They differ in what they produce: cd-review ships code fixes; brainstorming-loop ships verified ideas.
+The two loops share the same autonomy model (`LOOP.md` canonical, `RECORD.md` + `day-status.json` resume, separate-process launcher, no HITL inside the worker). They differ in what they produce: cd-review ships code fixes; brainstorm ships verified ideas.

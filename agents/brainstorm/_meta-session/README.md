@@ -1,6 +1,6 @@
 # _meta-session/ — design rationale for the brainstorming loop
 
-This directory contains the artifacts of the **meta-brainstorming session** that designed `agents/loop/LOOP.md` before writing it. The user asked: "before you proceed, do same session as I described for a loop with subagents to reach better goals" — so the loop design itself was produced by running a small version of the loop.
+This directory contains the artifacts of the **meta-brainstorming session** that designed `agents/brainstorm/LOOP.md` before writing it. The user asked: "before you proceed, do same session as I described for a loop with subagents to reach better goals" — so the loop design itself was produced by running a small version of the loop.
 
 ## What's here
 

@@ -35,11 +35,11 @@ Per `../LOOP.md` §1.5 (invariant rule #7), prior `runs/YYYY-MM-DD-CNNN/` folder
 ## How to find the latest run
 
 ```bash
-ls -d agents/loop/runs/*/ | sort | tail -1
+ls -d agents/brainstorm/runs/*/ | sort | tail -1
 ```
 
-Or read `agents/loop/archive/cycles.json` and look at the last entry in `cycles[]`.
+Or read `agents/brainstorm/archive/cycles.json` and look at the last entry in `cycles[]`.
 
 ## How to resume a stopped cycle
 
-Read `agents/loop/runs/<latest>/RECORD.md` and `agents/loop/runs/<latest>/day-status.json`. The `Stopped at` field in RECORD.md + `phase` + `last_checkpoint` in day-status.json tell the launcher exactly what work remains. See `../LOOP.md` §8.2 (resume protocol).
+Read `agents/brainstorm/runs/<latest>/RECORD.md` and `agents/brainstorm/runs/<latest>/day-status.json`. The `Stopped at` field in RECORD.md + `phase` + `last_checkpoint` in day-status.json tell the launcher exactly what work remains. See `../LOOP.md` §8.2 (resume protocol).

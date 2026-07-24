@@ -70,7 +70,7 @@
 
 - **cb-review:** Preamble: *"This file is the single source of truth for the loop. Dated run artifacts live under: `agents/cd-review/YYYY-MM-DD/`."* §1.5: *"Never write review artifacts under `audits/` at repo root or `loops/`."* §12 history table documents relocations (2026-07-17 original under `loops/cb-review.md` + root `audits/`; 2026-07-18 relocated to `agents/cd-review/`). `LOOP.md` is always-current protocol; dated folders are immutable history.
 - **Reuse verbatim.** This is invariant rule #7 of autonomy.
-- **Adaptation for brainstorming loop:** New loop lives at `agents/loop/brainstorming-loop/LOOP.md` (per the worklog preamble). Dated runs under `agents/loop/brainstorming-loop/YYYY-MM-DD/`. Nothing canonical at repo root or under `loops/`. Same history-table convention at the end of LOOP.md.
+- **Adaptation for brainstorming loop:** New loop lives at `agents/brainstorm/LOOP.md` (per the worklog preamble). Dated runs under `agents/brainstorm/YYYY-MM-DD/`. Nothing canonical at repo root or under `loops/`. Same history-table convention at the end of LOOP.md.
 
 ### 12. North-star ordered criteria
 

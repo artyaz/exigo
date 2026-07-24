@@ -20,7 +20,7 @@ The architecture is a two-layer harness (L-1 launcher + L0 cycle-scope orchestra
 
 The launcher is the user's interactive session. It is **the only place a human appears**. Its jobs are bounded and small:
 
-1. **Resolve run** — pick the latest `agents/loop/brainstorming-loop/runs/YYYY-MM-DD-CNNN/` (or user-specified). Read `RECORD.md` (`Status`, `Stopped at`, `Residual`, `Shortlist / verdicts`) and `day-status.json`. Skim the latest synthesis doc + novelty archive *only enough* to know whether the prior cycle closed cleanly and what constraints the next cycle inherits.
+1. **Resolve run** — pick the latest `agents/brainstorm/runs/YYYY-MM-DD-CNNN/` (or user-specified). Read `RECORD.md` (`Status`, `Stopped at`, `Residual`, `Shortlist / verdicts`) and `day-status.json`. Skim the latest synthesis doc + novelty archive *only enough* to know whether the prior cycle closed cleanly and what constraints the next cycle inherits.
 2. **Decide cycle scope** — package one cycle's worth of work (problem statement + inherited constraints + stop condition) sized for ~350k tokens of agent context. Write the scope into `$RUN_ROOT/cycle-scope.md` (goal, problem statement, inherited constraints, stop conditions, cycle type = scout|deep).
 3. **Spawn separate agent** — invoke the cycle-scope orchestrator as a peer `grok` process (NOT a subagent of the launcher). Background it.
 4. **Supervise without stealing context** — poll `day-status.json` + `RECORD.md` "Stopped at" only. Never ingest the worker's session JSONL. If the worker exits or stalls before the cycle is closed, re-wake with a resume brief.
@@ -47,8 +47,8 @@ The launcher spawns the cycle-scope orchestrator as a peer process:
 ```bash
 grok -p "$(cat <<'EOF'
 You are the brainstorming-loop CYCLE-SCOPE ORCHESTRATOR for Exigo.
-Read and obey agents/loop/brainstorming-loop/LOOP.md entirely.
-RUN_ROOT=agents/loop/brainstorming-loop/runs/YYYY-MM-DD-CNNN
+Read and obey agents/brainstorm/LOOP.md entirely.
+RUN_ROOT=agents/brainstorm/runs/YYYY-MM-DD-CNNN
 CYCLE_ID=cycle-NNN
 PROBLEM_STATEMENT={…}
 INHERITED_CONSTRAINTS={from archive/constraints.jsonl, latest K}
@@ -231,7 +231,7 @@ This resolves 2-B's C10 contradiction: the 350k budget holds for the default cyc
 ## C. Directory layout (port + adapt from cb-review §0)
 
 ```text
-agents/loop/brainstorming-loop/
+agents/brainstorm/
   LOOP.md                          ← canonical protocol (separate task to write)
   archive/
     novelty.jsonl                  ← idea hashes + status (proven/refuted/inconclusive)
@@ -281,7 +281,7 @@ agents/loop/brainstorming-loop/
 - **`archive/` is the cross-cycle memory.** It is the ONLY thing that persists across `runs/` folders. `novelty.jsonl` grows monotonically (idea hashes + status); `constraints.jsonl` grows monotonically (new constraints appended, never deleted — decay is by *tagging*, see §F); `cycles.json` is the cycle index.
 - **Do not nest `brainstorm/` under `research/`.** Brainstorm = idea-docs (divergent); research = dossiers (convergent). Same separation discipline as cb-review's "do not nest brainstorms under audits/".
 - **`checkpoints/` is a phase-state-machine artifact store** (gap G5). Each checkpoint file is a small JSON snapshot of the orchestrator's durable-progress state at a checkpoint-worthy transition. Not human-readable; only used by the resume protocol (§E).
-- **RUN_ROOT discipline:** `RUN_ROOT=agents/loop/brainstorming-loop/runs/YYYY-MM-DD-CNNN` is the only path agents write to during a cycle. Never write artifacts at `archive/` *during* a cycle except via the orchestrator's end-of-cycle archive-update step.
+- **RUN_ROOT discipline:** `RUN_ROOT=agents/brainstorm/runs/YYYY-MM-DD-CNNN` is the only path agents write to during a cycle. Never write artifacts at `archive/` *during* a cycle except via the orchestrator's end-of-cycle archive-update step.
 
 ### C.2 Cross-cycle artifacts (`archive/`)
 
@@ -334,7 +334,7 @@ One line per constraint ever extracted:
 - Cycle type: scout | deep
 - Last updated: ISO timestamp
 - Continues from: (prior cycle-id or none)
-- RUN_ROOT: agents/loop/brainstorming-loop/runs/YYYY-MM-DD-CNNN
+- RUN_ROOT: agents/brainstorm/runs/YYYY-MM-DD-CNNN
 
 ## Goal this cycle
 - Problem statement: …
@@ -410,7 +410,7 @@ The orchestrator updates `RECORD.md` at: cycle start, end of each wave, after ea
 
 ### E.1 Between-cycle resume (cb-review §8.2 ported verbatim, wave names adapted)
 
-1. Open latest `agents/loop/brainstorming-loop/runs/*/RECORD.md` (or user-specified cycle-id).
+1. Open latest `agents/brainstorm/runs/*/RECORD.md` (or user-specified cycle-id).
 2. Read `Stopped at`, `Residual`, and `$RUN_ROOT/day-status.json` if present.
 3. **Launcher:** re-wake a cycle-scope orchestrator with the residual scope (§A.3). **Cycle-scope:** continue mid-wave / mid-verdict without waiting for a human.
 4. Continue that run **or** create a new dated folder (`runs/YYYY-MM-DD-C{NNN+1}/`) and link "continues from" cycle-NNN in the new `RECORD.md`.
@@ -602,7 +602,7 @@ These are the load-bearing rules. Remove any one and the loop stops being autono
 ### H.7 Single source of truth
 
 - **cb-review:** `LOOP.md` is canonical protocol; dated `YYYY-MM-DD/` folders are immutable run history; nothing canonical at repo root. (Preamble, §0, §1.4, §1.5)
-- **Brainstorming-loop adaptation:** Holds verbatim. New loop lives at `agents/loop/brainstorming-loop/LOOP.md`. Dated runs under `runs/YYYY-MM-DD-CNNN/`. The cross-cycle `archive/` directory is canonical for *cross-cycle memory* (novelty, constraints, cycle index) — it is the only thing that persists across runs. Nothing canonical at repo root or under `loops/`. Same history-table convention at the end of `LOOP.md`.
+- **Brainstorming-loop adaptation:** Holds verbatim. New loop lives at `agents/brainstorm/LOOP.md`. Dated runs under `runs/YYYY-MM-DD-CNNN/`. The cross-cycle `archive/` directory is canonical for *cross-cycle memory* (novelty, constraints, cycle index) — it is the only thing that persists across runs. Nothing canonical at repo root or under `loops/`. Same history-table convention at the end of `LOOP.md`.
 - **Verdict:** ✅ holds (verbatim principle, new path).
 
 ### H.8 (NEW) Structural diversity pressure — the brainstorming loop's 8th invariant
@@ -658,12 +658,12 @@ This file specifies the outer-loop architecture. The following are out of scope 
 ### Primary (read in full for this task)
 
 - `/home/z/my-project/worklog.md` (1-A through 2-B Stage Summaries — full context)
-- `/home/z/my-project/repo/exigo/agents/loop/_meta/phase-1-brainstorm/1-D-cb-review-autonomy-extraction.md` (full — 14-item extraction + 7 invariant rules)
-- `/home/z/my-project/repo/exigo/agents/loop/_meta/phase-1-research/2-B-contradictions-gaps-premortem.md` (full — 10 contradictions, 13 gaps, 12 assumptions, 16 pre-mortem scenarios, 7 must-address gaps, 7 design-question answers)
+- `/home/z/my-project/repo/exigo/agents/brainstorm/_meta-session/phase-1-brainstorm/1-D-cb-review-autonomy-extraction.md` (full — 14-item extraction + 7 invariant rules)
+- `/home/z/my-project/repo/exigo/agents/brainstorm/_meta-session/phase-1-research/2-B-contradictions-gaps-premortem.md` (full — 10 contradictions, 13 gaps, 12 assumptions, 16 pre-mortem scenarios, 7 must-address gaps, 7 design-question answers)
 - `/home/z/my-project/repo/exigo/agents/cd-review/LOOP.md` (§0–§12, for house style + spawn shape + RECORD template + ship protocol + history-table convention)
-- `/home/z/my-project/repo/exigo/agents/loop/_meta/phase-1-brainstorm/1-A-ai-brainstorming-methods.md` (persona set, lines 201-207; lateral-thinking family)
-- `/home/z/my-project/repo/exigo/agents/loop/_meta/phase-1-brainstorm/1-C-subagent-coordination-patterns.md` (orchestrator-worker topology, persona×seed matrix, lines 189-199)
-- `/home/z/my-project/repo/exigo/agents/loop/_meta/phase-1-brainstorm/1-E-verification-and-research-methods.md` (Toulmin-shaped 4-state dossier, anti-sycophancy mechanisms, full vs reduced protocol)
+- `/home/z/my-project/repo/exigo/agents/brainstorm/_meta-session/phase-1-brainstorm/1-A-ai-brainstorming-methods.md` (persona set, lines 201-207; lateral-thinking family)
+- `/home/z/my-project/repo/exigo/agents/brainstorm/_meta-session/phase-1-brainstorm/1-C-subagent-coordination-patterns.md` (orchestrator-worker topology, persona×seed matrix, lines 189-199)
+- `/home/z/my-project/repo/exigo/agents/brainstorm/_meta-session/phase-1-brainstorm/1-E-verification-and-research-methods.md` (Toulmin-shaped 4-state dossier, anti-sycophancy mechanisms, full vs reduced protocol)
 
 ### Secondary (re-cited from 2-B's source list for the gap resolutions)
 

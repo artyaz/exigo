@@ -1,4 +1,4 @@
-# Brainstorming Loop (`brainstorming-loop`)
+# Brainstorming Loop (`brainstorm`)
 
 Continuous **brainstorm → research → synthesize → brainstorm** loop for Exigo.
 
@@ -14,7 +14,7 @@ The loop alternates two phases forever (until a stop condition fires):
 This file is the **single source of truth** for the loop. Dated run artifacts live under:
 
 ```text
-agents/loop/runs/YYYY-MM-DD-CNNN/
+agents/brainstorm/runs/YYYY-MM-DD-CNNN/
 ```
 
 **Two agent layers** run this protocol (mirrors `agents/cd-review/LOOP.md` §0.5, adapted for cycle-scope rather than day-scope):
@@ -27,7 +27,7 @@ agents/loop/runs/YYYY-MM-DD-CNNN/
 ## 0. Directory layout
 
 ```text
-agents/loop/
+agents/brainstorm/
   LOOP.md                              ← this file (always current protocol)
   README.md                            ← short overview + pointer to LOOP.md
   archive/                             ← cross-cycle memory (persists across runs)
@@ -65,7 +65,7 @@ agents/loop/
 
 **Do not nest `brainstorm/` under `research/`.** Brainstorm = idea-docs (divergent). Research = dossiers (convergent). Same separation discipline as `agents/cd-review/LOOP.md` §0 ("Audits = findings. Brainstorms = how to fix.").
 
-**RUN_ROOT discipline:** during a cycle, agents write ONLY to `$RUN_ROOT` (`agents/loop/runs/YYYY-MM-DD-CNNN/`). The cross-cycle `archive/` is updated **only** by the orchestrator's end-of-cycle archive-update step. Mid-cycle reads from `archive/` are allowed (novelty dedup, constraint retrieval, citation cache lookup); mid-cycle writes to `archive/` are forbidden.
+**RUN_ROOT discipline:** during a cycle, agents write ONLY to `$RUN_ROOT` (`agents/brainstorm/runs/YYYY-MM-DD-CNNN/`). The cross-cycle `archive/` is updated **only** by the orchestrator's end-of-cycle archive-update step. Mid-cycle reads from `archive/` are allowed (novelty dedup, constraint retrieval, citation cache lookup); mid-cycle writes to `archive/` are forbidden.
 
 ---
 
@@ -86,7 +86,7 @@ When the user starts or continues the loop in the launcher session:
 
 ```text
 1. RESOLVE RUN
-   - Prefer user-specified cycle-id; else pick the latest agents/loop/runs/YYYY-MM-DD-CNNN/.
+   - Prefer user-specified cycle-id; else pick the latest agents/brainstorm/runs/YYYY-MM-DD-CNNN/.
    - Read RECORD.md (Status, Stopped at, Residual, Shortlist/verdicts) and day-status.json.
    - Skim the latest synthesis/S-001-claims.md + S-002-constraints.md only enough to know
      whether the prior cycle closed cleanly and what constraints the next cycle inherits.
@@ -105,9 +105,9 @@ When the user starts or continues the loop in the launcher session:
    - Example (adapt flags to the local harness):
 
      grok -p "$(cat <<'EOF'
-     You are the brainstorming-loop CYCLE-SCOPE ORCHESTRATOR for Exigo.
-     Read and obey agents/loop/LOOP.md entirely.
-     RUN_ROOT=agents/loop/runs/YYYY-MM-DD-CNNN
+     You are the brainstorm CYCLE-SCOPE ORCHESTRATOR for Exigo.
+     Read and obey agents/brainstorm/LOOP.md entirely.
+     RUN_ROOT=agents/brainstorm/runs/YYYY-MM-DD-CNNN
      CYCLE_ID=cycle-NNN
      PROBLEM_STATEMENT={…}
      INHERITED_CONSTRAINTS={from archive/constraints.jsonl, decay_score >= 0.3,
@@ -205,10 +205,10 @@ When the user says **start**, **new cycle**, **new run**, or **continue on a new
 
 ```bash
 DATE=$(date +%Y-%m-%d)        # or use the date the user gives
-# Cycle counter: read agents/loop/archive/cycles.json, increment the highest cycle NNN.
-NEXT_CYCLE=$(($(jq '.cycles | map(.cycle_num // 0) | max' agents/loop/archive/cycles.json) + 1))
+# Cycle counter: read agents/brainstorm/archive/cycles.json, increment the highest cycle NNN.
+NEXT_CYCLE=$(($(jq '.cycles | map(.cycle_num // 0) | max' agents/brainstorm/archive/cycles.json) + 1))
 CYCLE_ID="cycle-$(printf '%03d' "$NEXT_CYCLE")"
-RUN_ROOT="agents/loop/runs/${DATE}-${CYCLE_ID}"
+RUN_ROOT="agents/brainstorm/runs/${DATE}-${CYCLE_ID}"
 mkdir -p "$RUN_ROOT/brainstorm" "$RUN_ROOT/research" "$RUN_ROOT/synthesis" \
          "$RUN_ROOT/citations" "$RUN_ROOT/checkpoints"
 ```
@@ -234,7 +234,7 @@ Prior `runs/YYYY-MM-DD-CNNN/` folders are history. Only create new ones. Optiona
 All agent briefs must use:
 
 ```text
-RUN_ROOT=agents/loop/runs/YYYY-MM-DD-CNNN
+RUN_ROOT=agents/brainstorm/runs/YYYY-MM-DD-CNNN
 ```
 
 Never write cycle artifacts under `archive/` mid-cycle, at repo root, or under `loops/`.
@@ -837,7 +837,7 @@ Every cycle **must** maintain `$RUN_ROOT/RECORD.md`. The orchestrator updates it
 ### 8.1 Template
 
 ```markdown
-# brainstorming-loop RECORD — YYYY-MM-DD-CNNN
+# brainstorm RECORD — YYYY-MM-DD-CNNN
 
 ## Status
 | Field | Value |
@@ -847,7 +847,7 @@ Every cycle **must** maintain `$RUN_ROOT/RECORD.md`. The orchestrator updates it
 | **Cycle type** | scout | deep |
 | **Last updated** | ISO timestamp |
 | **Continues from** | (prior cycle-id or none) |
-| **RUN_ROOT** | agents/loop/runs/YYYY-MM-DD-CNNN |
+| **RUN_ROOT** | agents/brainstorm/runs/YYYY-MM-DD-CNNN |
 | **Tokens used / target / kill-switch** | N / 350000 / 380000 |
 
 ## Goal this cycle
@@ -928,7 +928,7 @@ Every cycle **must** maintain `$RUN_ROOT/RECORD.md`. The orchestrator updates it
 
 #### 8.2.1 Between-cycle resume
 
-1. Open latest `agents/loop/runs/*/RECORD.md` (or user-specified cycle-id).
+1. Open latest `agents/brainstorm/runs/*/RECORD.md` (or user-specified cycle-id).
 2. Read `Stopped at`, `Residual`, and `$RUN_ROOT/day-status.json`.
 3. **Launcher:** re-wake a cycle-scope orchestrator with the residual scope (§0.5.2). **Cycle-scope:** continue mid-wave / mid-verdict without waiting for a human.
 4. Continue that run **or** create a new cycle folder (`runs/YYYY-MM-DD-C{NNN+1}/`) and link "continues from" cycle-NNN in the new RECORD.
@@ -1102,7 +1102,7 @@ Local skill paths when present: `~/.agents/skills/brainstorming`, `coding-guidel
 ### 10.1 Cycle-scope checklist (L0)
 
 ```text
-[ ] Create or select RUN_ROOT (agents/loop/runs/YYYY-MM-DD-CNNN)
+[ ] Create or select RUN_ROOT (agents/brainstorm/runs/YYYY-MM-DD-CNNN)
 [ ] RECORD.md scaffolded / updated; day-status.json current
 [ ] cycle-scope.md read; inherited constraints filtered (decay_score >= 0.3 + [soft] tagged)
 [ ] persona-seed-matrix.md written BEFORE Wave α dispatch
@@ -1176,8 +1176,8 @@ The brainstorming loop's "ship" target is the synthesis docs + ADVANCE-verdicted
 
 | Date | Note |
 |------|------|
-| 2026-07-25 | Initial loop created under `agents/loop/`. Designed via a meta-brainstorming session (Phase 1 brainstorm → Phase 1 research → Phase 2 brainstorm → Phase 2 research) with 10 parallel subagents across the 4 phases. Design artifacts preserved under `agents/loop/_meta-session/`. Modeled on `agents/cd-review/LOOP.md` (cb-review) — same two-layer launcher + cycle-scope harness, same wave separation discipline, same RECORD + day-status resume contract. Adapted for divergent (idea-generation) rather than critical (code-review) work: 3 waves (α brainstorm / β research / γ synthesis) replace 3 waves (audit / brainstorm / fix); persona×seed matrix replaces slice map; cross-cycle novelty + constraint archives replace per-cycle fixes. |
+| 2026-07-25 | Initial loop created under `agents/brainstorm/`. Designed via a meta-brainstorming session (Phase 1 brainstorm → Phase 1 research → Phase 2 brainstorm → Phase 2 research) with 10 parallel subagents across the 4 phases. Design artifacts preserved under `agents/brainstorm/_meta-session/`. Modeled on `agents/cd-review/LOOP.md` (cb-review) — same two-layer launcher + cycle-scope harness, same wave separation discipline, same RECORD + day-status resume contract. Adapted for divergent (idea-generation) rather than critical (code-review) work: 3 waves (α brainstorm / β research / γ synthesis) replace 3 waves (audit / brainstorm / fix); persona×seed matrix replaces slice map; cross-cycle novelty + constraint archives replace per-cycle fixes. |
 
 For the design rationale (Phase 1 brainstorm findings, Phase 1 research verification, Phase 2 brainstorm architecture, Phase 2 research stress-test), see:
 
-`agents/loop/_meta-session/`
+`agents/brainstorm/_meta-session/`
