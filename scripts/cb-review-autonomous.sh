@@ -39,6 +39,14 @@
 
 set -Eeuo pipefail
 
+# ERR trap: produce a consistent exit code 4 for any unhandled command
+# failure. Without this, `set -e` just propagates the failing command's
+# own status (or bash's abort code for nounset violations), so a host
+# scheduler cannot distinguish "script bug" from "fatal blocked" (1) or
+# "budget exhausted" (3). The trap is inherited by functions and
+# subshells thanks to `set -E`.
+trap 'echo "[cb-review] FATAL: unhandled error on line $LINENO (exit $?)" >&2; exit 4' ERR
+
 # ---------------------------------------------------------------------------
 # 0. Defaults & arg parsing
 # ---------------------------------------------------------------------------
@@ -57,16 +65,38 @@ usage() {
   exit 2
 }
 
+# Helper: require a value for a flag that takes one. Under `set -u` a bare
+# trailing `--date` would otherwise abort with an opaque "unbound variable".
+require_arg() {
+  local flag="$1" value="$2"
+  if [[ -z "$value" ]]; then
+    echo "error: $flag requires a value" >&2
+    usage
+  fi
+}
+
+# Helper: validate that a value is a non-negative integer. Prevents the
+# wakeup/wall-clock budget guards from silently misbehaving when a non-numeric
+# value is passed (bash `[[ -gt ]]` prints "integer expression expected" and
+# then evaluates the if as false, disabling the guard instead of failing).
+require_int() {
+  local flag="$1" value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo "error: $flag requires a non-negative integer, got: $value" >&2
+    usage
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --date)         DATE_ARG="$2"; shift 2 ;;
+    --date)         require_arg "$1" "${2:-}"; DATE_ARG="$2"; shift 2 ;;
     --resume)       DATE_ARG="__resume__"; shift ;;
-    --scope)        SCOPE_HINT="$2"; shift 2 ;;
-    --max-runtime)  MAX_RUNTIME="$2"; shift 2 ;;
-    --max-wakeups)  MAX_WAKEUPS="$2"; shift 2 ;;
+    --scope)        require_arg "$1" "${2:-}"; SCOPE_HINT="$2"; shift 2 ;;
+    --max-runtime)  require_arg "$1" "${2:-}"; require_int "$1" "$2"; MAX_RUNTIME="$2"; shift 2 ;;
+    --max-wakeups)  require_arg "$1" "${2:-}"; require_int "$1" "$2"; MAX_WAKEUPS="$2"; shift 2 ;;
     --allow-fatal)  ALLOW_FATAL=1; shift ;;
-    --agent-bin)    AGENT_BIN_OVERRIDE="$2"; shift 2 ;;
-    --agent-flag)   EXTRA_AGENT_FLAGS+=("$2"); shift 2 ;;
+    --agent-bin)    require_arg "$1" "${2:-}"; AGENT_BIN_OVERRIDE="$2"; shift 2 ;;
+    --agent-flag)   require_arg "$1" "${2:-}"; EXTRA_AGENT_FLAGS+=("$2"); shift 2 ;;
     -h|--help)      usage ;;
     *) echo "unknown arg: $1" >&2; usage ;;
   esac
@@ -81,12 +111,44 @@ CD_REVIEW_DIR="$REPO_ROOT/agents/cd-review"
 if [[ "$DATE_ARG" == "" ]]; then
   RUN_DATE="$(date -u +%Y-%m-%d)"
 elif [[ "$DATE_ARG" == "__resume__" ]]; then
-  # Pick the most recent dated dir with a non-terminal day-status.json
-  RUN_DATE="$(ls -1d "$CD_REVIEW_DIR"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] 2>/dev/null \
-              | sort -r | head -1 | xargs -I{} basename {})"
+  # Pick the most recent dated dir whose day-status.json is NOT in a
+  # terminal state. Skip complete/fatal_blocked dirs so we never re-enter a
+  # finished day and risk mutating its artifacts (LOOP.md §0.5: "Artifacts
+  # are truth"). If every prior run is terminal, fall through to today.
+  RUN_DATE=""
+  while IFS= read -r -d '' dir; do
+    dir_date="$(basename "$dir")"
+    status_file="$dir/audits/day-status.json"
+    if [[ ! -f "$status_file" ]]; then
+      # No status file → never started or pre-status contract; eligible.
+      RUN_DATE="$dir_date"
+      break
+    fi
+    state="$(python3 -c "import json,sys
+try:
+    print(json.load(open('$status_file')).get('state',''))
+except Exception:
+    sys.exit(0)
+" 2>/dev/null || true)"
+    case "$state" in
+      complete|fatal_blocked)
+        # Terminal — keep scanning older dirs.
+        continue
+        ;;
+      *)
+        RUN_DATE="$dir_date"
+        break
+        ;;
+    esac
+  done < <(find "$CD_REVIEW_DIR" -maxdepth 1 -mindepth 1 \
+            -type d -name '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' \
+            -printf '%p\0' 2>/dev/null | sort -rz)
+
   if [[ -z "$RUN_DATE" ]]; then
-    echo "no prior dated run found; starting fresh for today" >&2
+    echo "[cb-review] no prior non-terminal dated run found; starting fresh for today" >&2
     RUN_DATE="$(date -u +%Y-%m-%d)"
+  else
+    echo "[cb-review] --resume picked run: $RUN_DATE"
   fi
 else
   RUN_DATE="$DATE_ARG"
@@ -97,6 +159,7 @@ mkdir -p "$RUN_ROOT/audits/slices" "$RUN_ROOT/audits/fixes" \
          "$RUN_ROOT/audits/pre-pr" "$RUN_ROOT/brainstorms"
 
 STATUS_FILE="$RUN_ROOT/audits/day-status.json"
+RECORD="$RUN_ROOT/RECORD.md"
 
 echo "[cb-review] RUN_ROOT=$RUN_ROOT"
 echo "[cb-review] STATUS_FILE=$STATUS_FILE"
@@ -173,16 +236,41 @@ if [[ "$MODE" == "cli_layer" ]] && ! command -v "$AGENT_CLI" >/dev/null 2>&1; th
 fi
 
 # Write a mode marker that LOOP.md §0.5 tells the agent to read.
-cat > "$RUN_ROOT/audits/harness-mode.json" <<EOF
+# Emit via python3 so all string fields are JSON-escaped (SCOPE_HINT is
+# arbitrary CLI input — `--scope 'wave "14"'` would otherwise produce
+# invalid JSON and break every downstream parser, including our own
+# read_status_field consumer).
+if command -v python3 >/dev/null 2>&1; then
+  python3 -c "
+import json
+d = {
+    'mode': '$MODE',
+    'agent_cli': '$AGENT_CLI',
+    'max_runtime_seconds': $MAX_RUNTIME,
+    'max_wakeups': $MAX_WAKEUPS,
+    'scope_hint': $(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$SCOPE_HINT"),
+    'detected_at': '$(date -u +%Y-%m-%dT%H:%M:%SZ)',
+}
+with open('$RUN_ROOT/audits/harness-mode.json', 'w') as f:
+    json.dump(d, f, indent=2)
+    f.write('\\n')
+"
+else
+  # Fallback: minimal escaping (backslash + double-quote only). Sufficient
+  # for typical scope hints; python3 path above is preferred.
+  esc_scope="${SCOPE_HINT//\\/\\\\}"
+  esc_scope="${esc_scope//\"/\\\"}"
+  cat > "$RUN_ROOT/audits/harness-mode.json" <<EOF
 {
   "mode": "$MODE",
   "agent_cli": "$AGENT_CLI",
   "max_runtime_seconds": $MAX_RUNTIME,
   "max_wakeups": $MAX_WAKEUPS,
-  "scope_hint": "$SCOPE_HINT",
+  "scope_hint": "$esc_scope",
   "detected_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+fi
 
 # ---------------------------------------------------------------------------
 # 3. Build the agent brief
@@ -239,10 +327,30 @@ EOF
 # and exit with the agent's exit code. --yolo / --dangerously-skip-perms
 # style flags are passed via EXTRA_AGENT_FLAGS so the caller controls them.
 spawn_agent() {
+  # Returns:
+  #   0  agent invocation succeeded (agent may still have exited non-zero
+  #      — that's a real run outcome, not a spawn failure; the supervise
+  #      loop reads day-status.json to classify it)
+  #   2  harness misconfiguration (unknown CLI, binary not on PATH, or no
+  #      spawn case matched) — these are hard fails; do NOT silently retry
+  #      as if the agent had run
+  #
+  # The previous version conflated "couldn't invoke the CLI" with "the CLI
+  # ran and exited non-zero". The brief instructs the agent to exit non-zero
+  # on fatal_blocked (line 212), so treating non-zero as a spawn failure
+  # silently re-spawned with a stale brief instead of surfacing the block.
   local wake_num="$1"
   local log_file="$RUN_ROOT/audits/agent-wake-${wake_num}.log"
   echo "[cb-review] spawning wake #$wake_num → $log_file"
 
+  # Verify the CLI binary exists for all non-self modes. This is the only
+  # path that should return 2 from spawn_agent (config error, not run error).
+  if [[ "$AGENT_CLI" != "self" ]] && ! command -v "$AGENT_CLI" >/dev/null 2>&1; then
+    echo "FATAL: AGENT_CLI='$AGENT_CLI' is not on PATH" >&2
+    return 2
+  fi
+
+  local rc=0
   case "$AGENT_CLI" in
     self)
       # We are already inside an agent with a subagent primitive. Drop a
@@ -258,23 +366,32 @@ $RUN_ROOT/audits/pending-brief.txt — hand off to your agent's subagent spawn."
     grok)
       echo "$AGENT_BRIEF" | "$AGENT_CLI" -p "$(cat)" \
         --cwd "$REPO_ROOT" --output-format json --yolo \
-        "${EXTRA_AGENT_FLAGS[@]}" >"$log_file" 2>&1
+        "${EXTRA_AGENT_FLAGS[@]}" >"$log_file" 2>&1 || rc=$?
       ;;
     claude)
       echo "$AGENT_BRIEF" | "$AGENT_CLI" -p "$(cat)" \
         --cwd "$REPO_ROOT" --output-format json --dangerously-skip-permissions \
-        "${EXTRA_AGENT_FLAGS[@]}" >"$log_file" 2>&1
+        "${EXTRA_AGENT_FLAGS[@]}" >"$log_file" 2>&1 || rc=$?
       ;;
     codex|aider|gemini|opencode)
       # Generic headless invocation; adjust per CLI as needed.
       echo "$AGENT_BRIEF" | "$AGENT_CLI" --cwd "$REPO_ROOT" \
-        "${EXTRA_AGENT_FLAGS[@]}" >"$log_file" 2>&1
+        "${EXTRA_AGENT_FLAGS[@]}" >"$log_file" 2>&1 || rc=$?
       ;;
     *)
       echo "FATAL: no spawn case for AGENT_CLI=$AGENT_CLI" >&2
       return 2
       ;;
   esac
+
+  # The agent ran. Whether it exited 0 or non-zero, the supervise loop must
+  # now inspect day-status.json to classify the outcome (terminal / blocked /
+  # transient). Returning 0 here does NOT mean "success" — it means
+  # "invocation succeeded; classify via status file".
+  if [[ "$rc" -ne 0 ]]; then
+    echo "[cb-review] wake #$wake_num: agent exited non-zero (rc=$rc) — will classify via day-status.json" >&2
+  fi
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -353,9 +470,25 @@ json.dump(d, open('$STATUS_FILE','w'), indent=2)
     exit 3
   fi
 
-  # Spawn (or re-spawn) the agent.
-  if ! spawn_agent "$WAKE_NUM"; then
-    echo "[cb-review] spawn_agent failed (wake #$WAKE_NUM); retrying after 30s" >&2
+  # Spawn (or re-spawn) the agent. spawn_agent returns:
+  #   0  invocation succeeded (agent ran and exited, possibly non-zero —
+  #      classify via day-status.json below)
+  #   2  harness misconfiguration (unknown CLI, binary missing) — hard fail,
+  #      no point retrying with the same config
+  #
+  # NOTE: we run spawn_agent and capture $? explicitly because `if ! cmd`
+  # would lose the original exit code (bash's `!` returns 0 or 1, not the
+  # underlying command's rc).
+  set +e
+  spawn_agent "$WAKE_NUM"
+  local_spawn_rc=$?
+  set -e
+  if [[ "$local_spawn_rc" -ne 0 ]]; then
+    if [[ "$local_spawn_rc" -eq 2 ]]; then
+      echo "[cb-review] spawn_agent returned 2 (harness misconfiguration); exiting" >&2
+      exit 2
+    fi
+    echo "[cb-review] spawn_agent failed with rc=$local_spawn_rc (wake #$WAKE_NUM); retrying after 30s" >&2
     sleep 30
     continue
   fi
@@ -386,16 +519,37 @@ json.dump(d, open('$STATUS_FILE','w'), indent=2)
     exit 0
   fi
 
-  # Non-terminal exit: the agent either crashed, hit a transient block, or
-  # exhausted its own context. Re-wake with a resume hint.
-  echo "[cb-review] non-terminal exit; re-waking with resume brief in 15s"
-  sleep 15
+  # Distinguish agent-signaled blocks from plain non-terminal exits. The
+  # brief lets the agent set state=budget_exhausted or state=blocked itself
+  # (both valid exit states per §10.5). budget_exhausted is a terminal-ish
+  # outcome — exit 3 so the host scheduler knows the budget is gone. blocked
+  # is transient — re-wake after the longer sleep.
+  if is_blocked_state; then
+    case "$STATE" in
+      budget_exhausted)
+        echo "[cb-review] agent signaled budget_exhausted; exiting 3" >&2
+        exit 3
+        ;;
+      blocked)
+        echo "[cb-review] agent signaled blocked; re-waking with resume brief in 60s" >&2
+        sleep 60
+        ;;
+    esac
+  else
+    # Non-terminal, non-blocked exit: the agent either crashed, hit a
+    # transient issue, or exhausted its own context. Re-wake with a resume hint.
+    echo "[cb-review] non-terminal exit; re-waking with resume brief in 15s"
+    sleep 15
+  fi
 
   # Update the brief for the next wake to emphasize RESUME semantics.
+  # NOTE: $RECORD is defined as a path variable near $STATUS_FILE (top of
+  # §1). Under `set -u` the previous version's `$RECORD.md` / `$RECORD`
+  # references were unbound and would crash the script on the first resume.
   read -r -d '' AGENT_BRIEF <<EOF || true
 You are the cd-review agent for Exigo, RESUMING wake #$WAKE_NUM.
 Read agents/cd-review/LOOP.md §8.2 (resume protocol) and §10.5 (exit conditions).
-Read $RECORD.md (especially "Stopped at" and "Residual / backlog").
+Read $RECORD (especially "Stopped at" and "Residual / backlog").
 Read $STATUS_FILE.
 
 RUN_ROOT=$RUN_ROOT
