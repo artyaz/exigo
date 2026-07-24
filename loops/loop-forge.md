@@ -62,3 +62,22 @@ the new loop is itself loop-shaped, it may spawn **one** nested
 `loop-forge` run as a sibling. The sibling ships first, then the
 parent loop's §11 contract is updated to chain to it. Strict handoff
 contract: `LOOP.md` §7.6.2.
+
+## Combineability
+
+`loop-forge` is combineable by construction. See `LOOP.md` §13.2 for
+the concrete composition patterns:
+
+- **`loop-forge + brainstorming-loop → new loop`** — the brainstorming
+  loop's Wave γ outputs (`synthesis/S-001-claims.md`,
+  `S-002-constraints.md`) feed into `loop-forge` as a trigger brief +
+  inherited design constraints. This is the flagship composition.
+- **`loop-forge + cb-review → hardened new loop`** — for new loops
+  that target the codebase, `cb-review` provides the ship protocol
+  and Wave D review pattern.
+- **`loop-forge + loop-forge → new loop library`** — Wave E recursion.
+  A single run can spawn a sibling run mid-task.
+
+The combineability contract every produced loop must declare
+(`LOOP.md` §11) is what makes these compositions work without the
+loops re-reading each other's source.

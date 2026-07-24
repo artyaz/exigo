@@ -15,6 +15,17 @@ in. The agent decides what autonomy surface the new loop needs, what
 external systems it must speak to, what side effects it owns, and what
 its waves are.
 
+This loop is also **combineable by construction**: it composes with
+the existing `cb-review` loop (`agents/cd-review/LOOP.md`) and the
+`brainstorming-loop` (`agents/loop/LOOP.md`) — the latter being the
+divergent counterpart to `cb-review`'s critical mode. Concretely,
+`loop-forge + brainstorming-loop` can produce a new loop: the
+brainstorming loop generates verified ideas and next-cycle constraints
+(`synthesis/S-001-claims.md`, `S-002-constraints.md`), and
+`loop-forge` consumes those as a trigger brief + inherited design
+constraints to draft the loop that operationalises the idea. See §13.2
+for the full composition pattern.
+
 This file is the **single source of truth** for the loop. Dated run
 artifacts live under:
 
@@ -426,12 +437,18 @@ After Wave A completes (or after enough dimensions land):
    + existing loops; **writes** `$RUN_ROOT/audits/designs/{DESIGN_ID}.md`.
 4. Design agents **do not** edit product code and **do not** spawn
    nested design agents.
-5. **Combineability with the brainstorm wave pattern of `cb-review`**:
-   a design agent MAY import `agents/cd-review/LOOP.md` §6 as a
-   template for "this is what a brainstorm wave inside the new loop
-   should look like". The agent does not copy it verbatim; it adapts
-   the structure (Decision Package shape, parallel subagent dispatch,
-   no-children rule) to the new loop's domain.
+5. **Combineability with the brainstorm wave patterns of `cb-review`
+   and `brainstorming-loop`**: a design agent MAY import
+   `agents/cd-review/LOOP.md` §6 (Wave B template — Decision Package
+   shape, parallel subagent dispatch, no-children rule) AND
+   `agents/loop/LOOP.md` §5 (Wave α — persona×seed matrix for
+   structural diversity) as templates for "this is what a brainstorm
+   wave inside the new loop should look like". The agent does not copy
+   either verbatim; it adapts the structure to the new loop's domain.
+   If the new loop is divergent (idea-generation, research, design),
+   prefer the `brainstorming-loop` shape. If the new loop is critical
+   (review, audit, fix), prefer the `cb-review` shape. See §13.1 for
+   the full decision table.
 
 ### 6.2 Design brief (template)
 
@@ -1207,6 +1224,122 @@ only place where domain knowledge enters the loop; everything else
 The only thing `loop-forge` does assume is the **operating contract**
 of a loop (§0): long-running, self-driving, no human, crash-safe
 resume, combineable. That contract is the whole point.
+
+### 13.1 Reference loops in this repo
+
+`loop-forge` was designed by studying two existing loops in this repo.
+Produced loops should be modeled on one or both, adapted to the new
+loop's domain:
+
+| Reference loop | Path | Mode | What to copy |
+|----------------|------|------|--------------|
+| `cb-review` | `agents/cd-review/LOOP.md` | Critical (audit existing code) | Two-layer launcher + day-scope harness, Wave A→B→C→D shape, `day-status.json` + `RECORD.md` resume contract, CodeRabbit iteration protocol, canonical `last_step` state machine |
+| `brainstorming-loop` | `agents/loop/LOOP.md` | Divergent (generate new ideas) | Persona×seed matrix for structural diversity, Toulmin dossier + 3-state verdict, cross-cycle archives (novelty, constraints, citations), three-layer stop conditions, enforced token kill-switch |
+
+A produced loop that targets a **critical** domain (review, audit,
+fix, deploy, monitor) should copy `cb-review`'s wave shape. A produced
+loop that targets a **divergent** domain (research, design, ideation,
+exploration) should copy `brainstorming-loop`'s wave shape. A produced
+loop that targets a **constructive** domain (write, build, generate,
+migrate) should hybridise: `cb-review`'s ship protocol +
+`brainstorming-loop`'s diversity pressure.
+
+### 13.2 Composition patterns (the whole point)
+
+Loops are combineable. These are the concrete composition patterns
+`loop-forge` is designed to support. Each pattern names the loops
+involved, the data that crosses the boundary, and which loop's §11
+contract authorises the chaining.
+
+#### 13.2.1 `loop-forge + brainstorming-loop → new loop`
+
+The flagship composition, and the reason `loop-forge` exists.
+
+- **brainstorming-loop** runs first. Its Wave γ writes
+  `synthesis/S-001-claims.md` (verified claims by theme) and
+  `synthesis/S-002-constraints.md` (next-cycle constraints, typed
+  `MUST_RESPECT` / `MUST_AVOID` / `MUST_TEST`).
+- The launcher (or a scheduler) reads one ADVANCE-verdicted idea
+  from `research/R-*.md` plus the relevant claims + constraints,
+  and packages them as a `loop-forge` trigger brief:
+  ```text
+  TRIGGER_BRIEF: Build a loop that operationalises idea I-007-003
+  ("weekly research survey on X with Toulmin verification").
+  INHERITED_DESIGN_CONSTRAINTS:
+  - MUST_RESPECT: every claim must have external grounding (from
+    S-002-constraints.md C-007-001)
+  - MUST_AVOID: multi-agent debate (from S-002-constraints.md
+    C-007-002 — degrades performance per Smit ICML 2024)
+  - MUST_TEST: cross-cycle memory grows monotonically (from
+    S-002-constraints.md C-007-003)
+  REFERENCE_LOOP: agents/loop/LOOP.md (the brainstorming-loop —
+    the new loop should compose with it as a sub-step, not
+    duplicate its wave logic)
+  ```
+- **loop-forge** runs. Its Wave A discover agents read the
+  brainstorming-loop's `archive/` (novelty, constraints) for context.
+  Its Wave B design agents propose loop architectures that respect
+  the inherited constraints. Its Wave C drafter writes the new loop.
+  Its Wave D L2 (combineability lens) verifies that the new loop's
+  §11 contract declares the chaining back to `brainstorming-loop`
+  (the new loop may consume `S-001-claims.md` as input; it must not
+  re-implement brainstorming).
+- The new loop ships. It is now a sibling of `brainstorming-loop`
+  in the loop graph, callable via its §11 contract.
+
+This composition is what makes `loop-forge` more than a template
+generator: it lets the team's idea-generation pipeline
+(`brainstorming-loop`) directly grow the team's loop library
+(`loop-forge`), with verification at every step.
+
+#### 13.2.2 `loop-forge + cb-review → hardened new loop
+
+For new loops that target the codebase (e.g. a "migration loop" that
+rewrites files from pattern A to pattern B), `cb-review` provides the
+ship protocol and Wave D review pattern. Composition:
+
+- **loop-forge** drafts the new loop's `LOOP.md`, modeled on
+  `cb-review`'s wave shape (audit → brainstorm → fix → pre-PR review
+  → ship).
+- The new loop's Wave D is a thin wrapper around `cb-review`'s
+  `REVIEW-LENS.md` (the new loop may import the lens catalogue
+  verbatim, or extend it with domain-specific lenses).
+- The new loop's §10 (ship protocol) is `cb-review`'s §10.2 with
+  branch names and PR targets adapted.
+- The new loop's §11 contract declares: "calls `cb-review` for
+  cross-cutting audits that are out of scope for this loop's
+  waves."
+
+This is sequential composition — `cb-review` runs after the new loop
+ships, not during.
+
+#### 13.2.3 `loop-forge + loop-forge → new loop library (Wave E recursion)
+
+`loop-forge` is recursive. A single run can spawn a sibling
+`loop-forge` run mid-task via Wave E (§7.6), if the agent realises
+a sub-step of the in-progress loop is itself loop-shaped. The sibling
+run produces another new loop; the parent run's §11 contract is
+updated to chain to it.
+
+This is the composition pattern that lets the loop library grow
+**during** a single forge run, not just between runs. Example: while
+drafting a "research-survey" loop, the agent realises the
+"fetch-and-summarise-one-paper" sub-step is loop-shaped (rate limits,
+retries, crash-safe resume across N papers). Wave E fires; a sibling
+`loop-forge` run drafts `paper-fetch-loop`; the parent
+`research-survey` loop's §11 contract chains to it.
+
+The hard cap (1 Wave E per parent run) prevents runaway recursion. A
+run that needs more than one sibling should be split into multiple
+runs that chain via §11.
+
+#### 13.2.4 Anti-pattern: loops calling loops inside Wave A subagents
+
+Wave A subagents (and all leaf-wave subagents in every loop) cannot
+spawn children. A loop that wants to call another loop must do so
+from its orchestrator (L0), not from a subagent. This is enforced
+structurally — subagent briefs end with "Do NOT spawn subagents" —
+and audited by Wave D L1 (autonomy lens) for every produced loop.
 
 ---
 
