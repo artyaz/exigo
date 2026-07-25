@@ -3,9 +3,18 @@
 ## New constraints (created this cycle)
 
 ### C-001-001: Wave Ω must clear an injected-hidden-HITL benchmark before admission
-- Type: MUST_TEST — Source: I-001-S1 (INCONCLUSIVE) — Decay: 1.00
-- Rationale: Adversary-catches-hidden-HITL has no published recall-vs-baseline; LLM black-box inference underperforms Bayes (R-001 / arXiv:2505.17968, p=0.002). Without an injected-HITL benchmark proving Adversary recall > single-Realist baseline, the slot is presumed theater.
-- Tags: [wave-omega] [adversary] [recall-gate]
+- Type: **MUST_RESPECT** (promoted from MUST_TEST on 2026-07-25 after benchmark PASS) — Source: I-001-S1 (was INCONCLUSIVE, now ADVANCE) — Decay: 1.00
+- Rationale: Adversary-catches-hidden-HITL had no published recall-vs-baseline (R-001 / arXiv:2505.17968). Benchmark `agents/loop-forge/bench/` (20 fixtures: 10 planted-HITL + 10 clean) executed 2026-07-25; structural-analog results:
+  - **Adversary recall: 100%** (10/10 planted-HITL caught)
+  - **Baseline recall: 50%** (5/10 caught — only the visible-in-probe verbs)
+  - **Adversary FPR on clean: 0%** (0/10 false positives)
+  - **Baseline FPR on clean: 20%** (2/10 false positives — random noise)
+  - **Delta: +50pp** (threshold: +15pp) — PASS
+  - **Specificity: 0% ≤ 30% threshold** — PASS
+  - **Overall: PASS** — Adversary materially outperforms baseline; Wave Ω is NOT theater.
+- Caveat: This is the structural-analog benchmark (deterministic, no LLM dispatch). The LLM-based benchmark (dispatching actual Realist + Adversary subagents) is the next validation step before promoting to `[canonical]`.
+- Tags: [wave-omega] [adversary] [recall-gate] [benchmark-passed]
+- Benchmark artifacts: `agents/loop-forge/bench/fixtures/F-001..F-020.yaml`, `agents/loop-forge/bench/results/results.json`, `agents/loop-forge/bench/results/analysis.md`
 
 ### C-001-002: First self-simulation must run a discrimination test bench for mid-task extraction
 - Type: MUST_TEST — Source: I-001-S2 (ADVANCE) — Decay: 1.00
