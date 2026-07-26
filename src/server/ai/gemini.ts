@@ -23,6 +23,8 @@ export class GeminiProvider implements AiProvider {
     } else if (req.json) {
       cfg.responseMimeType = "application/json";
     }
+    if (req.tools) cfg.tools = req.tools;
+    if (req.toolConfig) cfg.toolConfig = req.toolConfig;
     return cfg;
   }
 

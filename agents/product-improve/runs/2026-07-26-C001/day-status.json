@@ -1,0 +1,1 @@
+{"state": "complete", "cycle_id": "cycle-001", "cycle_type": "scout", "phase": "done", "last_checkpoint": "archive update complete", "shortlist_size": 5, "verdicts_pending": 0, "tokens_used": 0, "tokens_budget": 380000, "tokens_target": 350000, "blocked_reason": null, "updated_at": "2026-07-26T12:00:00Z"}

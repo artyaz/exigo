@@ -5,7 +5,6 @@ import {
   sseDelta,
   sseDone,
   sseError,
-  sseNamedEvent,
 } from "./sse";
 
 function decode(bytes: Uint8Array): string {
@@ -25,12 +24,6 @@ describe("sse helpers", () => {
     );
     expect(decode(sseError("Teaching failed"))).toBe(
       'data: {"type":"error","error":"Teaching failed"}\n\n',
-    );
-  });
-
-  it("encodes residual named-event dialect for tutor", () => {
-    expect(decode(sseNamedEvent("tool_call", { name: "search" }))).toBe(
-      'event: tool_call\ndata: {"name":"search"}\n\n',
     );
   });
 

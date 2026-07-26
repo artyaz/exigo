@@ -68,19 +68,6 @@ function parseLegacyRequestPayload(
   };
 }
 
-export function buildInsertTopicRequestContent(
-  request: Pick<CourseTopicInsertRequest, "topic"> &
-    Partial<Pick<CourseTopicInsertRequest, "context">>,
-): string {
-  const topic = normalizeWhitespace(request.topic);
-  const context = normalizeWhitespace(request.context ?? "Student request");
-
-  return `${INSERT_TOPIC_REQUEST_PREFIX} ${JSON.stringify({
-    topic,
-    context: context || "Student request",
-  })}`;
-}
-
 export function parseInsertTopicRequestContent(
   content: string,
 ): CourseTopicInsertRequest | null {

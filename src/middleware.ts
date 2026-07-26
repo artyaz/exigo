@@ -2,7 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 // Session-owned product surfaces. Public routes stay open by omission:
 // `/`, `/pricing`, `/terms`, `/sign-in`, `/sign-up`, `/sso-callback`, and static assets.
-// API routes run through this middleware but do not call protect() — handlers use auth().
+// API routes are protected except webhooks (which use HMAC verification, not Clerk sessions).
 const isProtectedRoute = createRouteMatcher([
     '/spaces(.*)',
     '/tests(.*)',
@@ -10,10 +10,16 @@ const isProtectedRoute = createRouteMatcher([
     '/knowledge-nodes(.*)',
     '/checkout(.*)',
     '/playground(.*)',
+    '/api/(.*)',
+]);
+
+const isPublicApiRoute = createRouteMatcher([
+    '/api/webhooks/(.*)',
+    '/api/plans/prices',
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
-    if (isProtectedRoute(req)) await auth.protect();
+    if (isProtectedRoute(req) && !isPublicApiRoute(req)) await auth.protect();
 })
 
 export const config = {

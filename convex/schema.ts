@@ -90,10 +90,6 @@ export default defineSchema({
     currentPeriodStart: v.optional(v.number()),
     currentPeriodEnd: v.optional(v.number()),
     canceledAt: v.optional(v.number()),
-    // Legacy fields from earlier billing integrations, tolerated as optional for
-    // schema-migration compatibility; current code reads the fields above.
-    clerkPlanSlug: v.optional(v.string()),
-    periodEnd: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])

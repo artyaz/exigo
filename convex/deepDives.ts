@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { canReadSpace } from "./spaceAccess";
 import {getAuthedContext, throwUnauthorized } from "./authDecorators";
 import { UNLIMITED_LIMIT } from "../shared/planConfig";
@@ -69,26 +69,5 @@ export const create = mutation({
       spaceId: args.spaceId,
       questionId: args.questionId,
     });
-  },
-});
-
-export const countForUserThisMonth = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity?.subject) {
-      return 0;
-    }
-
-    const startOfMonth = getStartOfMonthUTC();
-
-    const dives = await ctx.db
-      .query("deepDives")
-      .withIndex("by_user", (q) =>
-        q.eq("userId", identity.subject).gte("_creationTime", startOfMonth),
-      )
-      .collect();
-
-    return dives.length;
   },
 });

@@ -1,29 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildInsertTopicRequestContent,
   isRequestedTopicCovered,
   parseInsertTopicRequestContent,
 } from "./courseTopicRequests";
-
-describe("buildInsertTopicRequestContent", () => {
-  it("serializes the topic request as JSON content", () => {
-    expect(
-      buildInsertTopicRequestContent({
-        topic: "  GraphQL  ",
-        context: "  Needed before API design  ",
-      }),
-    ).toBe(
-      'INSERT TOPIC REQUEST: {"topic":"GraphQL","context":"Needed before API design"}',
-    );
-  });
-
-  it("uses default context when none is provided", () => {
-    const content = buildInsertTopicRequestContent({ topic: "GraphQL" });
-    expect(content).toBe(
-      'INSERT TOPIC REQUEST: {"topic":"GraphQL","context":"Student request"}',
-    );
-  });
-});
 
 describe("parseInsertTopicRequestContent", () => {
   it("parses the current JSON request format", () => {
@@ -54,12 +33,6 @@ describe("parseInsertTopicRequestContent", () => {
         "Student requested lesson on: GraphQL. Reason: Student interest",
       ),
     ).toBeNull();
-  });
-
-  it("round-trips through build and parse", () => {
-    const original = { topic: "GraphQL", context: "Needed before API design" };
-    const content = buildInsertTopicRequestContent(original);
-    expect(parseInsertTopicRequestContent(content)).toEqual(original);
   });
 });
 

@@ -5,6 +5,7 @@ import type { AiProvider, AiProviderConfig } from "./types";
 import { GeminiProvider } from "./gemini";
 import { OpenAiProvider } from "./openai";
 import { decryptSecret } from "./secrets";
+import { withRetry } from "./retry";
 
 /* The single routing decision: given an authed Convex client, return the
    AiProvider to use. Default is the app's Google Gemini key; a user who
@@ -38,18 +39,19 @@ export function defaultGeminiProvider(model?: string): AiProvider {
 }
 
 /** Resolve the provider for the authenticated user, honouring their saved
-    preference and falling back to the default Gemini provider on any gap. */
+    preference and falling back to the default Gemini provider on any gap.
+    All providers are wrapped with 429-retry (3 attempts, exponential backoff). */
 export async function resolveAiProvider(convex: ConvexHttpClient): Promise<AiProvider> {
   let settings: CipherSettings | null = null;
   try {
     settings = await convex.query(getCipherRef, {});
   } catch {
     // Settings table/function not deployed yet, or transient — use the default.
-    return defaultGeminiProvider();
+    return withRetry(defaultGeminiProvider());
   }
 
   if (!settings || settings.provider === "gemini") {
-    return defaultGeminiProvider(settings?.model ?? undefined);
+    return withRetry(defaultGeminiProvider(settings?.model ?? undefined));
   }
 
   // Custom OpenAI-compatible endpoint.
@@ -63,12 +65,12 @@ export async function resolveAiProvider(convex: ConvexHttpClient): Promise<AiPro
         baseUrl: settings.baseUrl ?? undefined,
         label: "openai",
       };
-      return new OpenAiProvider(config);
+      return withRetry(new OpenAiProvider(config));
     } catch {
       // Decryption failed (rotated/missing secret) — don't silently send to
       // a misconfigured endpoint; fall back to the safe default.
-      return defaultGeminiProvider();
+      return withRetry(defaultGeminiProvider());
     }
   }
-  return defaultGeminiProvider();
+  return withRetry(defaultGeminiProvider());
 }

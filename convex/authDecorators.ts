@@ -57,21 +57,6 @@ export async function getAuthedContextForAction(
   return { userId, accessLevel, limits };
 }
 
-export async function withAuth<T>(
-  ctx: QueryCtx | MutationCtx,
-  handler: (ctx: QueryCtx & AuthedContext, auth: AuthedContext) => Promise<T>,
-): Promise<T> {
-  const auth = await getAuthedContext(ctx);
-  return handler(ctx as QueryCtx & AuthedContext, auth);
-}
-
-export async function withAuthAction<T>(
-  ctx: ActionCtx,
-  handler: (ctx: ActionCtx & AuthedContext, auth: AuthedContext) => Promise<T>,
-): Promise<T> {
-  const auth = await getAuthedContextForAction(ctx);
-  return handler(ctx as ActionCtx & AuthedContext, auth);
-}
 
 export function requireMinAccessLevel(
   auth: AuthedContext,
@@ -83,10 +68,6 @@ export function requireMinAccessLevel(
       message: "This feature requires a higher subscription tier.",
     });
   }
-}
-
-export function requireProAccess(auth: AuthedContext): void {
-  requireMinAccessLevel(auth, ACCESS_LEVELS.PRO_SCHOLAR);
 }
 
 export function requireEducatorAccess(auth: AuthedContext): void {

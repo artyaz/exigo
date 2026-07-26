@@ -4,8 +4,9 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
 import { requireServerMutationSecret } from "../../../../lib/serverMutationSecret";
-import { getEnvGeminiClient, getEnvGeminiModel } from "../../../../server/ai/geminiEnv";
-import { sseData } from "../../../../lib/sse";
+import { resolveAiProvider } from "../../../../server/ai";
+import { sseData, sseResponse, enqueueSseError } from "../../../../lib/sse";
+import { createRequestId, getErrorAttributes, logError } from "../../../../lib/otlpLogger";
 import {
   captureAiGenerationEvent,
   createAiTraceId,
@@ -14,6 +15,7 @@ import { assembleContext } from "./assembleTutorContext";
 import {
   executeTool,
   generateEmbedding,
+  getEmbeddingClient,
   tutorToolDeclarations,
 } from "./tutorTools";
 
@@ -81,12 +83,13 @@ export async function POST(req: Request) {
         });
 
         // ─── Assemble Context ───
-        const ai = getEnvGeminiClient();
+        const provider = await resolveAiProvider(convex);
+        const embeddingClient = getEmbeddingClient();
         const ctx = await assembleContext(
           convex,
           spaceId,
           effectiveCourseId,
-          ai,
+          embeddingClient,
           userMessage,
         );
 
@@ -130,7 +133,7 @@ export async function POST(req: Request) {
           `Current module sequencing context:\n${ctx.currentModuleContext}`,
         ].join("\n");
 
-        const model = getEnvGeminiModel();
+        const model = provider.config.model;
         const startedAt = Date.now();
 
         // ─── Generate with Tool Support ───
@@ -139,20 +142,20 @@ export async function POST(req: Request) {
           ? {
               tools: [{ functionDeclarations: tutorToolDeclarations }],
               toolConfig: {
-                functionCallingConfig: {
-                  mode: FunctionCallingConfigMode.AUTO,
-                },
+                functionCallingConfig: { mode: "AUTO" },
               },
             }
           : {};
 
-        const initialResponse = await ai.models.generateContent({
-          model,
-          contents: prompt,
-          config: toolConfig,
+        const initialResult = await provider.generate({
+          prompt,
+          ...toolConfig,
         });
 
-        const functionCalls = initialResponse.functionCalls;
+        const geminiRaw = initialResult.raw as {
+          functionCalls?: Array<{ name?: string; args?: Record<string, unknown> }>;
+        } | undefined;
+        const functionCalls = geminiRaw?.functionCalls;
 
         if (functionCalls && functionCalls.length > 0) {
           // Execute tools and build response
@@ -190,27 +193,21 @@ export async function POST(req: Request) {
             "\nNow respond to the student naturally, incorporating the tool results. Be concise.",
           ].join("\n");
 
-          const followUpResponse = await ai.models.generateContentStream({
-            model,
-            contents: followUpPrompt,
-          });
-
           let fullResponse = "";
-          for await (const chunk of followUpResponse) {
-            const text = chunk.text ?? "";
-            if (text) {
-              fullResponse += text;
-              send("delta", { text });
+          for await (const chunk of provider.stream({ prompt: followUpPrompt })) {
+            if (chunk.text) {
+              fullResponse += chunk.text;
+              send("delta", { text: chunk.text });
             }
           }
 
           captureAiGenerationEvent({
             distinctId: userId,
             traceId: createAiTraceId(),
-            provider: "google",
+            provider: provider.config.label,
             model,
             input: [{ role: "user", content: prompt }],
-            response: { text: fullResponse },
+            response: initialResult.raw,
             latencySeconds: (Date.now() - startedAt) / 1000,
           });
 
@@ -223,7 +220,7 @@ export async function POST(req: Request) {
           send("done", { chatId });
         } else {
           // No tool calls — reuse the already-generated response
-          const fullResponse = initialResponse.text ?? "";
+          const fullResponse = initialResult.text;
           if (fullResponse) {
             send("delta", { text: fullResponse });
           }
@@ -231,10 +228,10 @@ export async function POST(req: Request) {
           captureAiGenerationEvent({
             distinctId: userId,
             traceId: createAiTraceId(),
-            provider: "google",
+            provider: provider.config.label,
             model,
             input: [{ role: "user", content: prompt }],
-            response: { text: fullResponse },
+            response: initialResult.raw,
             latencySeconds: (Date.now() - startedAt) / 1000,
           });
 
@@ -271,12 +268,9 @@ export async function POST(req: Request) {
               existingMemories: existingMemories || "None",
             });
 
-            const memoryResponse = await ai.models.generateContent({
-              model,
-              contents: memoryPrompt,
-            });
+            const memoryResult = await provider.generate({ prompt: memoryPrompt });
 
-            const memoryText = memoryResponse.text?.trim() ?? "[]";
+            const memoryText = memoryResult.text.trim() || "[]";
             let memories: Array<{
               category: "preference" | "struggle" | "insight" | "goal";
               content: string;
@@ -295,7 +289,7 @@ export async function POST(req: Request) {
 
             for (const mem of memories) {
               if (!mem.content?.trim()) continue;
-              const embedding = await generateEmbedding(ai, mem.content);
+              const embedding = await generateEmbedding(embeddingClient, mem.content);
               if (embedding.length === 0) continue;
 
               await convex.mutation(api.courseTutor.addMemory, {
@@ -313,18 +307,19 @@ export async function POST(req: Request) {
         }
 
         controller.close();
-      } catch {
-        send("error", { error: "Tutor request failed" });
-        controller.close();
+      } catch (err) {
+        const requestId = createRequestId();
+        logError("Tutor request failed", {
+          source: "api.learn.tutor",
+          requestId,
+          userId,
+          spaceId: String(spaceId),
+          ...getErrorAttributes(err),
+        });
+        enqueueSseError(controller, "Tutor request failed");
       }
     },
   });
 
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
+  return sseResponse(stream);
 }

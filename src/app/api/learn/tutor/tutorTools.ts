@@ -1,5 +1,5 @@
 import type { GoogleGenAI } from "@google/genai";
-import { Type } from "@google/genai";
+import { GoogleGenAI as GoogleGenAIClient, Type } from "@google/genai";
 import type { FunctionDeclaration } from "@google/genai";
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
@@ -8,6 +8,14 @@ import {
   CURRENT_MODULE_INSERT_PLACEMENTS,
   type CurrentModuleInsertionPlacement,
 } from "../../../../../shared/currentModuleInsertion";
+
+/** Embeddings always use the server Gemini key (not user BYOK). */
+export function getEmbeddingClient(): GoogleGenAI {
+  if (!process.env.GOOGLE_GEMINI_API_KEY) {
+    throw new Error("GOOGLE_GEMINI_API_KEY not set");
+  }
+  return new GoogleGenAIClient({ apiKey: process.env.GOOGLE_GEMINI_API_KEY });
+}
 
 export async function generateEmbedding(
   ai: GoogleGenAI,

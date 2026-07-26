@@ -14,5 +14,5 @@ export { AiProviderError } from "./types";
 export { GeminiProvider } from "./gemini";
 export { OpenAiProvider } from "./openai";
 export { resolveAiProvider, defaultGeminiProvider } from "./resolve";
+export { withRetry, type RetryOpts } from "./retry";
 export { encryptSecret, decryptSecret, type Encrypted } from "./secrets";
-export { getEnvGeminiClient, getEnvGeminiModel } from "./geminiEnv";

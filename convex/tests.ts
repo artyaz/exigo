@@ -7,7 +7,8 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import {getAuthedContext, getAuthenticatedUserId, throwUnauthorized } from "./authDecorators";
-import { UNLIMITED_LIMIT } from "../shared/planConfig";
+import { requireFeatureEnabled, assertWithinLimit } from "./limitEnforcement";
+import { requireOwnedSpace } from "./spaceAccess";
 
 const QUESTION_TYPE = v.union(v.literal("select"), v.literal("write"));
 
@@ -93,30 +94,11 @@ export const createEmptyTest = mutation({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-
-    const maxAllowed = auth.limits.maxTestsPerMonth;
-    if (maxAllowed === 0) {
-      throw new Error(
-        "You don't have access to test generation on your current plan. Please upgrade to continue.",
-      );
-    }
-
-    const space = await ctx.db.get(args.spaceId);
-    if (!space) {
-      throw new Error("Space not found");
-    }
-
-    if (space.userId !== auth.userId) {
-      throwUnauthorized("Unauthorized access to this space");
-    }
+    requireFeatureEnabled(auth.limits.maxTestsPerMonth, "test generation");
+    await requireOwnedSpace(ctx, args.spaceId, auth.userId);
 
     const count = await countForUserThisMonthInternal(ctx, auth.userId);
-
-    if (maxAllowed !== UNLIMITED_LIMIT && count >= maxAllowed) {
-      throw new Error(
-        `Limit reached: You have created ${count} tests this month. Your current plan limit is ${maxAllowed}. Please upgrade for more!`,
-      );
-    }
+    assertWithinLimit({ limit: auth.limits.maxTestsPerMonth, count, noun: "tests", scope: "per month" });
 
     return await ctx.db.insert("tests", {
       spaceId: args.spaceId,
@@ -139,29 +121,11 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-
-    const maxAllowed = auth.limits.maxTestsPerMonth;
-    if (maxAllowed === 0) {
-      throw new Error(
-        "You don't have access to test generation on your current plan. Please upgrade to continue.",
-      );
-    }
-
-    const space = await ctx.db.get(args.spaceId);
-    if (!space) {
-      throw new Error("Space not found");
-    }
-
-    if (space.userId !== auth.userId) {
-      throwUnauthorized("Unauthorized access to this space");
-    }
+    requireFeatureEnabled(auth.limits.maxTestsPerMonth, "test generation");
+    await requireOwnedSpace(ctx, args.spaceId, auth.userId);
 
     const count = await countForUserThisMonthInternal(ctx, auth.userId);
-    if (maxAllowed !== UNLIMITED_LIMIT && count >= maxAllowed) {
-      throw new Error(
-        `Limit reached: You can only create ${maxAllowed} tests per month on your current plan.`,
-      );
-    }
+    assertWithinLimit({ limit: auth.limits.maxTestsPerMonth, count, noun: "tests", scope: "per month" });
 
     return await ctx.db.insert("tests", {
       spaceId: args.spaceId,
@@ -297,29 +261,11 @@ export const createWithQuestions = mutation({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthedContext(ctx);
-
-    const maxAllowed = auth.limits.maxTestsPerMonth;
-    if (maxAllowed === 0) {
-      throw new Error(
-        "You don't have access to test generation on your current plan. Please upgrade to continue.",
-      );
-    }
-
-    const space = await ctx.db.get(args.spaceId);
-    if (!space) {
-      throw new Error("Space not found");
-    }
-
-    if (space.userId !== auth.userId) {
-      throwUnauthorized("Unauthorized access to this space");
-    }
+    requireFeatureEnabled(auth.limits.maxTestsPerMonth, "test generation");
+    await requireOwnedSpace(ctx, args.spaceId, auth.userId);
 
     const count = await countForUserThisMonthInternal(ctx, auth.userId);
-    if (maxAllowed !== UNLIMITED_LIMIT && count >= maxAllowed) {
-      throw new Error(
-        `Limit reached: You can only create ${maxAllowed} tests per month on your current plan.`,
-      );
-    }
+    assertWithinLimit({ limit: auth.limits.maxTestsPerMonth, count, noun: "tests", scope: "per month" });
 
     const testId = await ctx.db.insert("tests", {
       spaceId: args.spaceId,

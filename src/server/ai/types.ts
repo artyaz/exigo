@@ -34,6 +34,10 @@ export interface AiGenerateRequest {
   temperature?: number;
   maxOutputTokens?: number;
   signal?: AbortSignal;
+  /** Gemini function-calling tool declarations (ignored by OpenAI adapter). */
+  tools?: unknown[];
+  /** Gemini tool configuration (e.g. functionCallingConfig mode). */
+  toolConfig?: unknown;
 }
 
 /** One streamed increment: `text` is the delta, `raw` the vendor chunk. */

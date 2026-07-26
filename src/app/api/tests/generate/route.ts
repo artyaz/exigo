@@ -5,7 +5,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { jsonError, requireAuthedApi } from "../../../../lib/apiAuth";
-import { resolveAiProvider, type AiProvider } from "../../../../server/ai";
+import { resolveAiProvider } from "../../../../server/ai";
 import {
   enqueueSseError,
   sseDelta,
@@ -21,7 +21,6 @@ import {
   getErrorAttributes,
   logError,
   logInfo,
-  logWarn,
 } from "../../../../lib/otlpLogger";
 import { renderPrompt } from "../../../../../convex/coursePrompts";
 
@@ -66,46 +65,6 @@ const writeQuestionSchema = z.object({
  * - `{"type":"error","error":string}` on error.
  * The endpoint also returns 400 responses(JSON error body) when required parameters or knowledge pieces are missing.
  */
-
-async function* streamWithRetry(
-  provider: AiProvider,
-  prompt: string,
-  jsonSchema: object,
-  model: string,
-  context: { requestId: string; userId: string; route: string },
-) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      for await (const chunk of provider.stream({
-        prompt,
-        model,
-        json: true,
-        jsonSchema,
-      })) {
-        yield chunk;
-      }
-      return;
-    } catch (retryErr: unknown) {
-      const apiErr = retryErr as { status?: number };
-      if (apiErr.status === 429 && attempt < 2) {
-        logWarn("AI stream rate-limited, retrying", {
-          source: "api.tests.generate",
-          requestId: context.requestId,
-          route: context.route,
-          userId: context.userId,
-          ai_provider: provider.config.label,
-          ai_model: model,
-          attempt: attempt + 1,
-          http_status: 429,
-        });
-        await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
-        continue;
-      }
-      throw retryErr;
-    }
-  }
-  throw new Error("Failed to get stream after retries");
-}
 
 type KPiece = { _id: Id<"knowledgePieces">; content: string; title?: string };
 
@@ -438,17 +397,12 @@ export async function POST(req: NextRequest) {
         let firstTokenAt: number | undefined;
         let lastChunk: unknown;
 
-        for await (const chunk of streamWithRetry(
-          provider,
+        for await (const chunk of provider.stream({
           prompt,
-          jsonSchema,
           model,
-          {
-            requestId,
-            userId,
-            route: "/api/tests/generate",
-          },
-        )) {
+          json: true,
+          jsonSchema,
+        })) {
           lastChunk = chunk.raw;
           if (chunk.text) {
             firstTokenAt ??= Date.now();
