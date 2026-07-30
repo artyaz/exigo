@@ -1,0 +1,224 @@
+{
+  "registry_version": 2,
+  "loops": [
+    {
+      "loop_id": "cd-review",
+      "loop_num": 0,
+      "authored_at": "2026-07-17T00:00:00Z",
+      "run_root": "agents/cd-review",
+      "parent_loops": [],
+      "mutation_operator": "founder",
+      "ports": {
+        "inputs": [
+          {"name": "repo-port", "type": "directory-path", "required": true, "description": "Path to the exigo repo root (read + git-write access)."},
+          {"name": "slice-map-port", "type": "text", "required": false, "default": "agents/cd-review/REVIEW-LENS.md + §4 default S1–S11", "description": "Codebase partition into reviewable slices."},
+          {"name": "prior-fixes-port", "type": "jsonl", "required": false, "description": "Prior-day fix history (cross-day idempotency)."}
+        ],
+        "outputs": [
+          {"name": "fixes-port", "type": "git-diff", "description": "Code fixes shipped as PR diff(s) to develop → main."},
+          {"name": "pr-port", "type": "github-pr-url", "description": "Open PR(s) against develop (then main) with CodeRabbit review iteration."},
+          {"name": "audit-port", "type": "markdown-files", "path": "agents/cd-review/<date>/audits/slices/S<N>.md", "description": "Per-slice audit findings (P0–P3 severity)."},
+          {"name": "brainstorms-port", "type": "markdown-files", "path": "agents/cd-review/<date>/brainstorms/S<N>-B<NNN>.md", "description": "Per-slice fix-idea docs produced by Wave B."},
+          {"name": "record-port", "type": "markdown-file", "path": "agents/cd-review/<date>/RECORD.md"},
+          {"name": "day-status-port", "type": "json-file", "path": "agents/cd-review/<date>/audits/day-status.json"}
+        ]
+      },
+      "last_step_vocabulary": [
+        "init", "wave_a_dispatched", "wave_a_collected", "wave_b_dispatched", "wave_b_collected",
+        "master_consolidated", "wave_c_dispatched:{PACK_ID}", "wave_c_collected:{PACK_ID}",
+        "verify_done:{PACK_ID}", "wave_d_dispatched:{PACK_ID}:round_{N}",
+        "wave_d_collected:{PACK_ID}:round_{N}", "wave_d_verdict:{PACK_ID}:{send_back|fix_and_proceed|accept_and_ship}",
+        "ops_done", "develop_pushed", "develop_pr_open:{PR_NUMBER}", "develop_ci_green:{PR_NUMBER}",
+        "develop_merged:{PR_NUMBER}", "main_pr_open:{PR_NUMBER}", "cr_poll_{N}:{PR_NUMBER}",
+        "cr_comment_posted:{PR_NUMBER}", "cr_round_{N}_fix_pushed:{PR_NUMBER}",
+        "main_ci_green:{PR_NUMBER}", "main_merged:{PR_NUMBER}", "next_pack", "scope_complete"
+      ],
+      "lens_scores": {"L1": 0.90, "L2": 0.80, "L3": 0.65, "L4": 0.85},
+      "composition_count": 0,
+      "status": "active",
+      "stop_reason": null,
+      "remaining_extraction_depth": 3,
+      "lineage": {
+        "parent_loops": [],
+        "no_self_composition": true,
+        "no_parent_mutation": true,
+        "founder": true
+      },
+      "notes": "Founder genome. ports: block backfilled 2026-07-25 per loop-forge C-001-003 (canonical invariant). Original LOOP.md authored 2026-07-17; relocated to agents/cd-review/ 2026-07-18."
+    },
+    {
+      "loop_id": "brainstorm",
+      "loop_num": 0,
+      "authored_at": "2026-07-25T00:00:00Z",
+      "run_root": "agents/brainstorm",
+      "parent_loops": [],
+      "mutation_operator": "founder",
+      "ports": {
+        "inputs": [
+          {"name": "problem-statement-port", "type": "text", "required": true, "description": "One-sentence problem + context + stop condition."},
+          {"name": "prior-constraints-port", "type": "jsonl", "required": false, "path": "agents/brainstorm/archive/constraints.jsonl", "description": "Decay_score ≥ 0.3 + [soft]-tagged."},
+          {"name": "novelty-archive-port", "type": "jsonl", "required": false, "path": "agents/brainstorm/archive/novelty.jsonl"},
+          {"name": "cycle-type-port", "type": "enum", "values": ["scout", "deep"], "required": false, "default": "scout"}
+        ],
+        "outputs": [
+          {"name": "ideas-port", "type": "markdown-files", "path": "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/brainstorm/B-<NNN>-<persona>-<seed>.md"},
+          {"name": "dossiers-port", "type": "markdown-files", "path": "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/research/R-<NNN>-<idea_id>.md"},
+          {"name": "claims-port", "type": "markdown-file", "path": "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/synthesis/S-001-claims.md"},
+          {"name": "constraints-port", "type": "markdown-file", "path": "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/synthesis/S-002-constraints.md"},
+          {"name": "citations-port", "type": "jsonl", "path": "agents/brainstorm/archive/citations.jsonl"},
+          {"name": "record-port", "type": "markdown-file", "path": "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/RECORD.md"},
+          {"name": "day-status-port", "type": "json-file", "path": "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/day-status.json"}
+        ]
+      },
+      "last_step_vocabulary": [
+        "init", "cycle_scope_written", "persona_seed_matrix_written",
+        "alpha_dispatched", "alpha_consolidating", "alpha_shortlist_written",
+        "beta_dispatched", "beta_consolidating", "citation_verify",
+        "alladvance_redispatch_check", "gamma_1_dispatched", "gamma_1_collected",
+        "gamma_2_dispatched", "gamma_2_collected", "archive_update_started",
+        "archive_update_complete", "record_finalized", "scope_complete"
+      ],
+      "lens_scores": {"L1": 0.88, "L2": 0.85, "L3": 0.70, "L4": 0.82},
+      "composition_count": 0,
+      "status": "active",
+      "stop_reason": null,
+      "remaining_extraction_depth": 3,
+      "lineage": {
+        "parent_loops": [],
+        "no_self_composition": true,
+        "no_parent_mutation": true,
+        "founder": true
+      },
+      "notes": "Founder genome. ports: block backfilled 2026-07-25 per loop-forge C-001-003. Original LOOP.md authored 2026-07-25 via meta-brainstorm session."
+    },
+    {
+      "loop_id": "loop-forge",
+      "loop_num": 1,
+      "authored_at": "2026-07-24T23:50:00Z",
+      "run_root": "agents/loop-forge",
+      "parent_loops": [
+        "cd-review",
+        "brainstorm"
+      ],
+      "mutation_operator": "compose",
+      "ports": {
+        "inputs": [
+          {
+            "name": "target-domain-port",
+            "type": "text",
+            "required": true
+          },
+          {
+            "name": "prior-constraints-port",
+            "type": "archive-constraints.jsonl",
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "loop-md-port",
+            "type": "file",
+            "path": "agents/<name>/LOOP.md"
+          },
+          {
+            "name": "loop-registry-port",
+            "type": "file",
+            "path": "agents/<name>/loop-registry.json"
+          }
+        ]
+      },
+      "lens_scores": {
+        "L1": 0.85,
+        "L2": 0.78,
+        "L3": 0.72,
+        "L4": 0.8
+      },
+      "composition_count": 0,
+      "status": "active",
+      "stop_reason": null,
+      "remaining_extraction_depth": 3,
+      "lineage": {
+        "parent_loops": [
+          "cd-review",
+          "brainstorm"
+        ],
+        "no_self_composition": true,
+        "no_parent_mutation": true
+      }
+    },
+    {
+      "loop_id": "loop-compose",
+      "loop_num": 2,
+      "authored_at": "2026-07-24T23:50:00Z",
+      "run_root": "agents/loop-compose",
+      "parent_loops": [
+        "loop-forge"
+      ],
+      "mutation_operator": "extract",
+      "ports": {
+        "inputs": [
+          {
+            "name": "loop-a-port",
+            "type": "directory-path",
+            "required": true,
+            "description": "path to agents/<loopA>/"
+          },
+          {
+            "name": "loop-b-port",
+            "type": "directory-path",
+            "required": true,
+            "description": "path to agents/<loopB>/"
+          },
+          {
+            "name": "composition-contract-port",
+            "type": "yaml",
+            "required": true,
+            "description": "binding spec: which output of A feeds which input of B"
+          }
+        ],
+        "outputs": [
+          {
+            "name": "composed-loop-port",
+            "type": "directory-path",
+            "description": "path to the new agents/<composed>/ directory"
+          },
+          {
+            "name": "composition-manifest-port",
+            "type": "file",
+            "path": "agents/loop-compose/archive/composition-manifest.jsonl"
+          }
+        ]
+      },
+      "last_step_vocabulary": [
+        "init",
+        "alpha_pair_enumerated",
+        "beta_verdicted",
+        "gamma_delta_tested",
+        "delta_authored",
+        "epsilon_canary_passed",
+        "archived"
+      ],
+      "lens_scores": {
+        "L1": 0.78,
+        "L2": 0.72,
+        "L3": 0.85,
+        "L4": 0.65
+      },
+      "composition_count": 0,
+      "status": "active",
+      "stop_reason": null,
+      "remaining_extraction_depth": 2,
+      "lineage": {
+        "parent_loops": [
+          "loop-forge"
+        ],
+        "no_self_composition": true,
+        "no_parent_mutation": true,
+        "extracted_from": "loop-forge",
+        "extracted_at": "2026-07-24T23:50:00Z",
+        "extraction_reason": "composition operation is reusable beyond loop-forge — any caller wanting to compose two loops benefits"
+      }
+    }
+  ]
+}
+

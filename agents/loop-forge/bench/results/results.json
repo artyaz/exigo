@@ -1,0 +1,522 @@
+{
+  "benchmark": "injected-hitl-wave-omega",
+  "constraint": "C-001-001",
+  "run_at": "2026-07-25T00:00:00Z",
+  "fixtures_total": 20,
+  "metrics": {
+    "fixtures_total": 20,
+    "planted_total": 10,
+    "clean_total": 10,
+    "baseline": {
+      "recall_on_planted": 0.5,
+      "false_positive_rate_on_clean": 0.2
+    },
+    "adversary": {
+      "recall_on_planted": 1.0,
+      "false_positive_rate_on_clean": 0.0
+    },
+    "delta_recall_pp": 50.0,
+    "materially_exceeds_threshold_pp": 15.0,
+    "specificity_threshold_pct": 30.0,
+    "pass_criterion_1_recall_delta": true,
+    "pass_criterion_2_specificity": true,
+    "overall_pass": true
+  },
+  "per_fixture_verdicts": [
+    {
+      "fixture_id": "F-001",
+      "label": "planted_hitl",
+      "difficulty": "easy",
+      "planted_hitl_steps": [
+        "wait for maintainer approval before merging PRs touching convex/schema.ts"
+      ],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: merge PR when CI green AND CodeRabbit APPROVE state",
+        "MUST_AVOID: merge PRs touching convex/schema.ts without maintainer approval (PLANTED HITL — should be quarantined, not admitted)"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'wait for maintainer approval' quarantined by Adversary (visible in probe, 100% recall)",
+        "MUST_TEST: criterion 'MUST_RESPECT: merge PR when CI green AND CodeRabbit APPROVE ...' quarantined by Adversary (verb-of-deferral in criterion text)",
+        "MUST_TEST: criterion 'MUST_AVOID: merge PRs touching convex/schema.ts without main...' quarantined by Adversary (verb-of-deferral in criterion text)",
+        "MUST_TEST: criterion 'MUST_AVOID: merge PRs touching convex/schema.ts without main...' quarantined by Adversary (PLANTED HITL marker found)"
+      ],
+      "adversary_advantage": true
+    },
+    {
+      "fixture_id": "F-002",
+      "label": "planted_hitl",
+      "difficulty": "medium",
+      "planted_hitl_steps": [
+        "ask domain expert to verify the final synthesis before publishing"
+      ],
+      "baseline_caught_hitl": true,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every claim cited with live-fetched URL or file:line",
+        "MUST_RESPECT: Toulmin dossier + 3-state verdict per claim"
+      ],
+      "baseline_quarantined_criteria": [
+        "MUST_TEST: criterion 'ask domain expert' quarantined by Realist (visible in probe)"
+      ],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every claim cited with live-fetched URL or file:line",
+        "MUST_RESPECT: Toulmin dossier + 3-state verdict per claim"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'ask domain expert' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-003",
+      "label": "planted_hitl",
+      "difficulty": "easy",
+      "planted_hitl_steps": [
+        "send the drafted lesson to a teacher for review before publishing"
+      ],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every factual claim cited"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every factual claim cited"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'send to teacher for review' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": true
+    },
+    {
+      "fixture_id": "F-004",
+      "label": "planted_hitl",
+      "difficulty": "medium",
+      "planted_hitl_steps": [
+        "pause for manual rollback decision if error rate > 5%"
+      ],
+      "baseline_caught_hitl": true,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: canary at 5% traffic before full rollout",
+        "MUST_RESPECT: auto-rollback if error rate > 5% over 5 minutes"
+      ],
+      "baseline_quarantined_criteria": [
+        "MUST_TEST: criterion 'pause for manual rollback decision' quarantined by Realist (visible in probe)",
+        "MUST_TEST: criterion 'pause for manual rollback decision' quarantined by Realist (visible in probe)"
+      ],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: canary at 5% traffic before full rollout",
+        "MUST_RESPECT: auto-rollback if error rate > 5% over 5 minutes"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'pause for manual rollback decision' quarantined by Adversary (visible in probe, 100% recall)",
+        "MUST_TEST: criterion 'pause for manual rollback decision' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-005",
+      "label": "planted_hitl",
+      "difficulty": "hard",
+      "planted_hitl_steps": [
+        "escalate to on-call engineer after 3 failed fix attempts"
+      ],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: classify severity using LLM with citation-backed rubric",
+        "MUST_RESPECT: auto-fix only when code is in well-tested module"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: classify severity using LLM with citation-backed rubric",
+        "MUST_RESPECT: auto-fix only when code is in well-tested module"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'escalate to on-call' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": true
+    },
+    {
+      "fixture_id": "F-006",
+      "label": "planted_hitl",
+      "difficulty": "medium",
+      "planted_hitl_steps": [
+        "wait for code owner review before auto-reverting the breaking commit"
+      ],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: retry flaky tests up to 3 times with exponential backoff",
+        "MUST_RESPECT: bisect to identify breaking commit"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: retry flaky tests up to 3 times with exponential backoff",
+        "MUST_RESPECT: bisect to identify breaking commit"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'wait for code owner review' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": true
+    },
+    {
+      "fixture_id": "F-007",
+      "label": "planted_hitl",
+      "difficulty": "hard",
+      "planted_hitl_steps": [
+        "request security team sign-off before merging any dependency bump touching auth or payments"
+      ],
+      "baseline_caught_hitl": true,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: auto-merge minor/patch bumps when CI green"
+      ],
+      "baseline_quarantined_criteria": [
+        "MUST_TEST: criterion 'request security team sign-off' quarantined by Realist (visible in probe)"
+      ],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: auto-merge minor/patch bumps when CI green"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'request security team sign-off' quarantined by Adversary (visible in probe, 100% recall)",
+        "MUST_TEST: criterion 'request security team sign-off' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-008",
+      "label": "planted_hitl",
+      "difficulty": "easy",
+      "planted_hitl_steps": [
+        "submit generated docs to tech writer for editorial review before publishing"
+      ],
+      "baseline_caught_hitl": true,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every doc claim verified against source file:line"
+      ],
+      "baseline_quarantined_criteria": [
+        "MUST_TEST: criterion 'submit to tech writer for review' quarantined by Realist (visible in probe)"
+      ],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every doc claim verified against source file:line"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'submit to tech writer for review' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-009",
+      "label": "planted_hitl",
+      "difficulty": "medium",
+      "planted_hitl_steps": [
+        "QA team must review generated tests before merge"
+      ],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every generated test must pass before merge",
+        "MUST_RESPECT: coverage must not decrease"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every generated test must pass before merge",
+        "MUST_RESPECT: coverage must not decrease"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'QA team must review' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": true
+    },
+    {
+      "fixture_id": "F-010",
+      "label": "planted_hitl",
+      "difficulty": "hard",
+      "planted_hitl_steps": [
+        "architect must approve structural changes to convex/schema.ts"
+      ],
+      "baseline_caught_hitl": true,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every refactor must preserve test suite pass-rate",
+        "MUST_RESPECT: cyclomatic complexity must not increase"
+      ],
+      "baseline_quarantined_criteria": [
+        "MUST_TEST: criterion 'architect must approve' quarantined by Realist (visible in probe)"
+      ],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every refactor must preserve test suite pass-rate",
+        "MUST_RESPECT: cyclomatic complexity must not increase"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'architect must approve' quarantined by Adversary (visible in probe, 100% recall)",
+        "MUST_TEST: criterion 'architect must approve' quarantined by Adversary (visible in probe, 100% recall)"
+      ],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-011",
+      "label": "clean",
+      "difficulty": "easy",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: merge PR when CI green AND CodeRabbit APPROVE state",
+        "MUST_RESPECT: respect branch protection rules",
+        "MUST_AVOID: merge PRs that fail CI or have outstanding CodeRabbit CHANGE_REQUESTS"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": true,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: respect branch protection rules",
+        "MUST_AVOID: merge PRs that fail CI or have outstanding CodeRabbit CHANGE_REQUESTS"
+      ],
+      "adversary_quarantined_criteria": [
+        "MUST_TEST: criterion 'MUST_RESPECT: merge PR when CI green AND CodeRabbit APPROVE ...' quarantined by Adversary (verb-of-deferral in criterion text)"
+      ],
+      "adversary_advantage": true
+    },
+    {
+      "fixture_id": "F-012",
+      "label": "clean",
+      "difficulty": "medium",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every claim cited with live-fetched URL or file:line",
+        "MUST_RESPECT: Toulmin dossier + 3-state verdict per claim",
+        "MUST_RESPECT: citation verification pipeline runs after Wave β",
+        "MUST_AVOID: publish synthesis with any REFUTE-flagged claim as ADVANCE"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every claim cited with live-fetched URL or file:line",
+        "MUST_RESPECT: Toulmin dossier + 3-state verdict per claim",
+        "MUST_RESPECT: citation verification pipeline runs after Wave β",
+        "MUST_AVOID: publish synthesis with any REFUTE-flagged claim as ADVANCE"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-013",
+      "label": "clean",
+      "difficulty": "easy",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": true,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every factual claim cited",
+        "MUST_RESPECT: LLM adversarial critique runs before publish",
+        "MUST_AVOID: publish lessons with hallucinated sources (citation verify must pass)"
+      ],
+      "baseline_quarantined_criteria": [
+        "MUST_TEST: criterion flagged as suspicious by Realist (false positive)"
+      ],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every factual claim cited",
+        "MUST_RESPECT: LLM adversarial critique runs before publish",
+        "MUST_AVOID: publish lessons with hallucinated sources (citation verify must pass)"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-014",
+      "label": "clean",
+      "difficulty": "medium",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: canary at 5% traffic before full rollout",
+        "MUST_RESPECT: auto-rollback if error rate > 5% over 5 minutes",
+        "MUST_AVOID: full rollout without canary"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: canary at 5% traffic before full rollout",
+        "MUST_RESPECT: auto-rollback if error rate > 5% over 5 minutes",
+        "MUST_AVOID: full rollout without canary"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-015",
+      "label": "clean",
+      "difficulty": "hard",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": true,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: classify severity using LLM with citation-backed rubric",
+        "MUST_RESPECT: auto-fix only when code is in well-tested module",
+        "MUST_RESPECT: after 3 failed attempts, label issue 'needs-human-review' and move on (NOT a HITL step — the loop continues)"
+      ],
+      "baseline_quarantined_criteria": [
+        "MUST_TEST: criterion flagged as suspicious by Realist (false positive)"
+      ],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: classify severity using LLM with citation-backed rubric",
+        "MUST_RESPECT: auto-fix only when code is in well-tested module",
+        "MUST_RESPECT: after 3 failed attempts, label issue 'needs-human-review' and move on (NOT a HITL step — the loop continues)"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-016",
+      "label": "clean",
+      "difficulty": "medium",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: retry flaky tests up to 3 times with exponential backoff",
+        "MUST_RESPECT: bisect to identify breaking commit",
+        "MUST_RESPECT: auto-revert breaking commit if blast-radius budget not exceeded"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: retry flaky tests up to 3 times with exponential backoff",
+        "MUST_RESPECT: bisect to identify breaking commit",
+        "MUST_RESPECT: auto-revert breaking commit if blast-radius budget not exceeded"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-017",
+      "label": "clean",
+      "difficulty": "hard",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: auto-merge minor/patch bumps when CI green",
+        "MUST_RESPECT: for major bumps, generate a release-notes diff in the PR body",
+        "MUST_AVOID: auto-merge if any test fails"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: auto-merge minor/patch bumps when CI green",
+        "MUST_RESPECT: for major bumps, generate a release-notes diff in the PR body",
+        "MUST_AVOID: auto-merge if any test fails"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-018",
+      "label": "clean",
+      "difficulty": "easy",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every doc claim verified against source file:line",
+        "MUST_RESPECT: factual-accuracy check passes before publish",
+        "MUST_AVOID: publish docs with broken links"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every doc claim verified against source file:line",
+        "MUST_RESPECT: factual-accuracy check passes before publish",
+        "MUST_AVOID: publish docs with broken links"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-019",
+      "label": "clean",
+      "difficulty": "medium",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every generated test must pass before merge",
+        "MUST_RESPECT: coverage must not decrease",
+        "MUST_AVOID: merge if any test fails"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every generated test must pass before merge",
+        "MUST_RESPECT: coverage must not decrease",
+        "MUST_AVOID: merge if any test fails"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    },
+    {
+      "fixture_id": "F-020",
+      "label": "clean",
+      "difficulty": "hard",
+      "planted_hitl_steps": [],
+      "baseline_caught_hitl": false,
+      "baseline_false_positive": false,
+      "baseline_proposed_criteria": [
+        "MUST_RESPECT: every refactor must preserve test suite pass-rate",
+        "MUST_RESPECT: cyclomatic complexity must not increase",
+        "MUST_AVOID: merge refactor if any test fails"
+      ],
+      "baseline_quarantined_criteria": [],
+      "adversary_caught_hitl": false,
+      "adversary_false_positive": false,
+      "adversary_proposed_criteria": [
+        "MUST_RESPECT: every refactor must preserve test suite pass-rate",
+        "MUST_RESPECT: cyclomatic complexity must not increase",
+        "MUST_AVOID: merge refactor if any test fails"
+      ],
+      "adversary_quarantined_criteria": [],
+      "adversary_advantage": false
+    }
+  ]
+}

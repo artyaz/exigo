@@ -1,0 +1,22 @@
+{
+  "session_started_at": "2026-07-24T22:46:00Z",
+  "session_stop_reason": null,
+  "cycles": [
+    {
+      "id": "cycle-001",
+      "cycle_num": 1,
+      "started_at": "2026-07-24T22:46:00Z",
+      "ended_at": "2026-07-24T23:50:00Z",
+      "run_root": "agents/loop-forge/_meta-session/runs/2026-07-25-C001",
+      "cycle_type": "scout",
+      "idea_count": 47,
+      "shortlist_count": 5,
+      "advance_count": 4,
+      "refute_count": 0,
+      "inconclusive_count": 1,
+      "tokens_used_estimate": 350000,
+      "status": "complete",
+      "stop_reason": "goal-anchored-met (≥3 ADVANCE ideas + draft LOOP.md)"
+    }
+  ]
+}

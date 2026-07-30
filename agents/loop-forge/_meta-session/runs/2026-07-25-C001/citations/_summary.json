@@ -1,0 +1,15 @@
+{
+  "total_urls": 28,
+  "verified": 22,
+  "refuted": 6,
+  "per_subagent_mismatches": {
+    "R-002": 1,
+    "R-003": 1,
+    "R-004": 3,
+    "R-005": 1
+  },
+  "blacklisted": [
+    "R-004"
+  ],
+  "verdict_cap_applied": []
+}
