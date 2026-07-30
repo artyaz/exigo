@@ -1,0 +1,21 @@
+{
+  "state": "complete",
+  "loop_id": "loop-004",
+  "cycle_type": "scout",
+  "phase": "done",
+  "last_checkpoint": "agents/ux-review shipped; registry + archives updated",
+  "shortlist_size": 3,
+  "verdicts_pending": 0,
+  "extraction_queue_size": 0,
+  "next_cycle_constraints_extracted": true,
+  "tokens_used": 0,
+  "tokens_budget": 380000,
+  "tokens_target": 350000,
+  "alladvance_redispatch_fired": false,
+  "canary_verdict": "PASS 11/11 (sealed structural)",
+  "blocked_reason": null,
+  "harness_mode": "single-agent",
+  "target_loop": "agents/ux-review",
+  "remaining_extraction_depth": 3,
+  "updated_at": "2026-07-30T15:12:00Z"
+}

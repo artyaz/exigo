@@ -1,22 +1,65 @@
 {
-  "session_started_at": "2026-07-24T22:46:00Z",
-  "session_stop_reason": null,
-  "cycles": [
-    {
-      "id": "cycle-001",
-      "cycle_num": 1,
-      "started_at": "2026-07-24T22:46:00Z",
-      "ended_at": "2026-07-24T23:50:00Z",
-      "run_root": "agents/loop-forge/_meta-session/runs/2026-07-25-C001",
-      "cycle_type": "scout",
-      "idea_count": 47,
-      "shortlist_count": 5,
-      "advance_count": 4,
-      "refute_count": 0,
-      "inconclusive_count": 1,
-      "tokens_used_estimate": 350000,
-      "status": "complete",
-      "stop_reason": "goal-anchored-met (≥3 ADVANCE ideas + draft LOOP.md)"
+ "session_started_at": "2026-07-24T22:46:00Z",
+ "session_stop_reason": "goal-anchored: target loop authored and passed the epsilon ship-gate",
+ "cycles": [
+  {
+   "id": "cycle-001",
+   "cycle_num": 1,
+   "started_at": "2026-07-24T22:46:00Z",
+   "ended_at": "2026-07-24T23:50:00Z",
+   "run_root": "agents/loop-forge/_meta-session/runs/2026-07-25-C001",
+   "cycle_type": "scout",
+   "idea_count": 47,
+   "shortlist_count": 5,
+   "advance_count": 4,
+   "refute_count": 0,
+   "inconclusive_count": 1,
+   "tokens_used_estimate": 350000,
+   "status": "complete",
+   "stop_reason": "goal-anchored-met (\u22653 ADVANCE ideas + draft LOOP.md)"
+  },
+  {
+   "id": "cycle-004",
+   "cycle_num": 4,
+   "started_at": "2026-07-30T14:22:00Z",
+   "ended_at": "2026-07-30T14:52:20.671308Z",
+   "run_root": "agents/loop-forge/runs/2026-07-30-L004",
+   "cycle_type": "scout",
+   "target_loop": "agents/ux-review",
+   "status": "complete",
+   "idea_count": 24,
+   "shortlist_count": 3,
+   "advance": 0,
+   "refute": 0,
+   "inconclusive": 3,
+   "omega": {
+    "probes": 5,
+    "realist_criteria": 8,
+    "adversary_admitted": 5,
+    "adversary_quarantined": 3,
+    "orchestrator_lifted": 1,
+    "orchestrator_escalated": 1,
+    "bench": {
+     "planted_detected": 6,
+     "planted_partial": 2,
+     "planted_missed": 0,
+     "clean_false_positives": 0
     }
-  ]
+   },
+   "waves_run": [
+    "omega",
+    "alpha(N=5)",
+    "beta(M=3)",
+    "delta",
+    "epsilon"
+   ],
+   "waves_skipped": [
+    "gamma",
+    "citation_verify"
+   ],
+   "canary_verdict": "PASS 11/11 (sealed structural)",
+   "constraints_created": 11,
+   "notes": "Authored agents/ux-review/. Key measured findings: remote browser cannot reach sandbox localhost; publish bridge works but outer shareUrl wraps artifact in an iframe with injected chrome; UnpublishFile does NOT revoke the inner URL (publish is irreversible); no script-eval tool so computed contrast/geometry unobtainable. Deviations: alpha N=5 not 10 (s2 oblique rotation dropped), gamma and citation-verify skipped -- all budget-driven and recorded in RECORD.md."
+  }
+ ]
 }
