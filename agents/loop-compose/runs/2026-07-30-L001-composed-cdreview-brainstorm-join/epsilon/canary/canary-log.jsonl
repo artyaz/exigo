@@ -1,0 +1,71 @@
+{"t": 0.0, "event": "canary_start", "sealed": true, "domain": "dedupe a list (C-001-004b fixed corpus)", "budget_seconds": 300}
+{"t": 0.001, "event": "stare_decisis", "prior_refutations": 0, "note": "empty archive on first cycle"}
+{"t": 0.276, "event": "measure", "hyp": "H-001", "phase": "before", "rc": 0, "out": "M-H-001-before.json  wall_seconds=0.077677 (runs=[0.077677, 0.077529, 0.082605] stdev=0.002889)"}
+{"t": 0.288, "event": "verify", "cmd": "python3 test_dedupe.py", "green": true, "out": "ok 4 assertions"}
+{"t": 0.359, "event": "measure", "hyp": "H-001", "phase": "after", "rc": 0, "out": "M-H-001-after.json  wall_seconds=0.011776 (runs=[0.012739, 0.011776, 0.010511] stdev=0.001117)"}
+{"t": 0.394, "event": "delta", "hyp": "H-001", "rc": 0, "out": "delta_computed:P-001:improved  wall_seconds 0.077677 -> 0.011776 (-84.8%, noise\u00b10.0058)"}
+{"t": 0.436, "event": "evidence_gate", "pack": "P-001", "verdict": "pass"}
+{"t": 0.436, "event": "gate_conjunct", "detail": "evidence_gate:P-001:pass"}
+{"t": 0.436, "event": "gate_conjunct", "detail": "dossier_advance            PASS  verdict=ADVANCE (V-001-H-001.md)"}
+{"t": 0.436, "event": "gate_conjunct", "detail": "citation_verified          PASS  1/1 citations are 200 and within 7d TTL"}
+{"t": 0.437, "event": "gate_conjunct", "detail": "baseline_exists            PASS  M-H-001-before.json value=0.077677"}
+{"t": 0.437, "event": "gate_conjunct", "detail": "baseline_precedes_edit     PASS  baseline sha 3c123fa450d9 is an ancestor of HEAD in /agent/workspace/repo"}
+{"t": 0.437, "event": "gate_conjunct", "detail": "after_exists               PASS  M-H-001-after.json value=0.011776"}
+{"t": 0.437, "event": "gate_conjunct", "detail": "delta_not_regressed        PASS  delta=improved (wall_seconds 0.077677 -> 0.011776, -84.8%)"}
+{"t": 0.437, "event": "gate_conjunct", "detail": "wave_d_accept              PASS  wave_d_verdict=accept_and_ship"}
+{"t": 0.437, "event": "gate_conjunct", "detail": "no_l6_p1                   PASS  L6 findings=none (worst=none)"}
+{"t": 0.505, "event": "measure", "hyp": "H-002", "phase": "before", "rc": 0, "out": "M-H-002-before.json  wall_seconds=0.011182 (runs=[0.011182, 0.011372, 0.010859] stdev=0.000259)"}
+{"t": 0.516, "event": "verify", "cmd": "python3 test_dedupe.py", "green": true, "out": "ok 4 assertions"}
+{"t": 1.006, "event": "measure", "hyp": "H-002", "phase": "after", "rc": 0, "out": "M-H-002-after.json  wall_seconds=0.149955 (runs=[0.154049, 0.149955, 0.148599] stdev=0.002837)"}
+{"t": 1.038, "event": "delta", "hyp": "H-002", "rc": 0, "out": "delta_computed:P-002:regressed  wall_seconds 0.011182 -> 0.149955 (+1241.0%, noise\u00b10.0057)"}
+{"t": 1.039, "event": "KILLED_BY_ORACLE", "step": "wave_d_dispatched:P-002:round_1", "note": "simulated SIGKILL; no graceful shutdown"}
+{"t": 0.0, "event": "cold_resume", "from_step": "wave_d_dispatched:P-002:round_1", "resolved_owning_step": "wave_d_dispatched:P-002:round_1", "replaying_in_flight_step": "wave_d_dispatched:P-002:round_1", "skipping": 35, "source": "day-status.json + RECORD.md only"}
+{"t": 0.0, "event": "skip_completed", "step": "init"}
+{"t": 0.0, "event": "skip_completed", "step": "cycle_scope_written"}
+{"t": 0.0, "event": "skip_completed", "step": "stare_decisis_loaded"}
+{"t": 0.0, "event": "skip_completed", "step": "slice_map_resolved"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_a_dispatched"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_a_collected"}
+{"t": 0.0, "event": "skip_completed", "step": "findings_clustered"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_h_dispatched"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_h_collected"}
+{"t": 0.0, "event": "skip_completed", "step": "hypothesis_shortlist_written"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_v_dispatched"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_v_collected"}
+{"t": 0.0, "event": "skip_completed", "step": "citation_verify"}
+{"t": 0.0, "event": "skip_completed", "step": "verdict_recorded:H-001:advance"}
+{"t": 0.0, "event": "skip_completed", "step": "metric_declared:H-001"}
+{"t": 0.0, "event": "skip_completed", "step": "measure_before:H-001"}
+{"t": 0.0, "event": "skip_completed", "step": "pack_consolidated:P-001"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_f_dispatched:P-001"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_f_collected:P-001"}
+{"t": 0.0, "event": "skip_completed", "step": "verify_done:P-001"}
+{"t": 0.0, "event": "skip_completed", "step": "measure_after:P-001"}
+{"t": 0.0, "event": "skip_completed", "step": "delta_computed:P-001"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_d_dispatched:P-001:round_1"}
+{"t": 0.0, "event": "skip_completed", "step": "wave_d_collected:P-001:round_1"}
+{"t": 0.001, "event": "skip_completed", "step": "wave_d_verdict:P-001:accept_and_ship"}
+{"t": 0.001, "event": "skip_completed", "step": "evidence_gate:P-001"}
+{"t": 0.001, "event": "skip_completed", "step": "verdict_recorded:H-002:advance"}
+{"t": 0.001, "event": "skip_completed", "step": "metric_declared:H-002"}
+{"t": 0.001, "event": "skip_completed", "step": "measure_before:H-002"}
+{"t": 0.001, "event": "skip_completed", "step": "pack_consolidated:P-002"}
+{"t": 0.001, "event": "skip_completed", "step": "wave_f_dispatched:P-002"}
+{"t": 0.001, "event": "skip_completed", "step": "wave_f_collected:P-002"}
+{"t": 0.001, "event": "skip_completed", "step": "verify_done:P-002"}
+{"t": 0.001, "event": "skip_completed", "step": "measure_after:P-002"}
+{"t": 0.001, "event": "skip_completed", "step": "delta_computed:P-002"}
+{"t": 0.042, "event": "evidence_gate", "pack": "P-002", "verdict": "veto"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "evidence_gate:P-002:veto"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "dossier_advance            PASS  verdict=ADVANCE (V-002-H-002.md)"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "citation_verified          PASS  1/1 citations are 200 and within 7d TTL"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "baseline_exists            PASS  M-H-002-before.json value=0.011182"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "baseline_precedes_edit     PASS  baseline sha 3c123fa450d9 is an ancestor of HEAD in /agent/workspace/repo"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "after_exists               PASS  M-H-002-after.json value=0.149955"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "delta_not_regressed        VETO  delta=regressed (wall_seconds 0.011182 -> 0.149955, +1241.0%)"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "wave_d_accept              PASS  wave_d_verdict=accept_and_ship"}
+{"t": 0.042, "event": "gate_conjunct", "detail": "no_l6_p1                   PASS  L6 findings=none (worst=none)"}
+{"t": 0.043, "event": "reverted", "pack": "P-002", "note": "tree restored to pre-pack state"}
+{"t": 0.053, "event": "verify", "cmd": "python3 test_dedupe.py", "green": true, "out": "ok 4 assertions"}
+{"t": 0.054, "event": "ship_stubbed", "note": "no real git push \u2014 sealed canary"}
+{"t": 0.054, "event": "canary_end", "state": "complete", "status_writes": 14, "violations": 0}

@@ -1,0 +1,2 @@
+{"id": "VI-canary-H001", "hypothesis_id": "H-001", "warrant_hash": "sha256:canary-h001", "verdict": "ADVANCE", "outcome": "shipped", "gate": {"verdict": "pass"}}
+{"id": "VI-canary-H002", "hypothesis_id": "H-002", "warrant_hash": "sha256:canary-h002", "verdict": "ADVANCE", "outcome": "refuted_at_gate", "gate": {"verdict": "veto", "failed_conjunct": "delta_not_regressed"}, "note": "pre-refuted for future cycles"}

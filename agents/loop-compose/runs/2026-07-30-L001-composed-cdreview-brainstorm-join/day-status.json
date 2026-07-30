@@ -1,0 +1,49 @@
+{
+  "state": "complete",
+  "scope_id": "compose-scope-1",
+  "last_step": "archived",
+  "loop_a": "agents/cd-review/",
+  "loop_b": "agents/brainstorm/",
+  "composed_loop_id": "cdreview-brainstorm-join",
+  "composed_dir": "agents/cdreview-brainstorm-join",
+  "operator": "join_on_archive",
+  "candidate_bindings": 45,
+  "compose_verdicts": {
+    "COMPOSE": 16,
+    "CONFLICT": 8,
+    "ORTHOGONAL": 21
+  },
+  "bound_edges": [
+    "cd-review.audit-port -> brainstorm.problem-statement-port (forward)",
+    "brainstorm.constraints-port -> cd-review.slice-map-port (feedback)"
+  ],
+  "conflict_class": "resume-contract-single-writer",
+  "delta_test": {
+    "verdict": "ADMIT",
+    "composed": "8/8",
+    "baseline_a": "2/8",
+    "baseline_b": "2/8",
+    "non_degenerate": true,
+    "phases": {
+      "contract": "ADMIT",
+      "authored": "ADMIT"
+    }
+  },
+  "canary": {
+    "verdict": "PASS",
+    "domain": "dedupe a list",
+    "terminal_state": "complete",
+    "gate_outcomes": {
+      "P-001": "pass",
+      "P-002": "veto"
+    },
+    "kill_resume_trials": 4,
+    "kill_resume_success": 4,
+    "epsilon_reruns": 0
+  },
+  "manifest_entry": "CM-001",
+  "catalogued_in": "agents/loop-forge/loop-registry.json",
+  "blocked_reason": null,
+  "resume_hint": "Run complete. Goal-anchored stop condition met (1 composed loop passed the epsilon canary). Nothing to resume.",
+  "updated_at": "2026-07-30T07:05:00Z"
+}
