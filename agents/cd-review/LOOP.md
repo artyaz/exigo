@@ -1,5 +1,91 @@
 # Codebase Review Loop (`cb-review` / `cd-review`)
 
+<!-- ports-block:start
+     Backfilled per loop-forge C-001-003 (canonical invariant).
+     Makes composition with other exigo loops decidable via COMPOSE/CONFLICT/
+     ORTHOGONAL verdict (loop-compose primitive). See agents/loop-forge/LOOP.md §7.
+-->
+```yaml
+loop_id: cd-review
+parent_loops: []                # founder genome — no parents
+mutation_operator: founder
+remaining_extraction_depth: 3
+ports:
+  inputs:
+    - name: repo-port
+      type: directory-path
+      required: true
+      description: "Path to the exigo repo root (read + git-write access)."
+    - name: slice-map-port
+      type: text
+      required: false
+      default: "agents/cd-review/REVIEW-LENS.md + §4 default S1–S11"
+      description: "Codebase partition into reviewable slices. Defaults to the in-repo slice map."
+    - name: prior-fixes-port
+      type: jsonl
+      required: false
+      description: "Prior-day fix history (for cross-day idempotency checks). Sourced from agents/cd-review/<date>/audits/fixes/."
+  outputs:
+    - name: fixes-port
+      type: git-diff
+      description: "Code fixes shipped as PR diff(s) to develop → main."
+    - name: pr-port
+      type: github-pr-url
+      description: "Open PR(s) against develop (then main) with CodeRabbit review iteration."
+    - name: audit-port
+      type: markdown-files
+      path: "agents/cd-review/<date>/audits/slices/S<N>.md"
+      description: "Per-slice audit findings (P0–P3 severity, with code:line citations)."
+    - name: brainstorms-port
+      type: markdown-files
+      path: "agents/cd-review/<date>/brainstorms/S<N>-B<NNN>.md"
+      description: "Per-slice fix-idea docs produced by Wave B."
+    - name: record-port
+      type: markdown-file
+      path: "agents/cd-review/<date>/RECORD.md"
+      description: "Day-scope narrative + Stopped at + Residual + per-pack verdicts."
+    - name: day-status-port
+      type: json-file
+      path: "agents/cd-review/<date>/audits/day-status.json"
+      description: "Thin launcher poll file (state, last_step, blocked_reason, resume_hint)."
+last_step_vocabulary:
+  # Canonical §10.7 step names — see "## 10.7 Ship state machine" below.
+  # These are GitHub/CodeRabbit-specific values, NOT universal (per loop-forge
+  # C-001-004a). Loops composed with cd-review declare their own last_step
+  # vocabulary; the canary oracle runs against THAT, not this list.
+  - init
+  - wave_a_dispatched
+  - wave_a_collected
+  - wave_b_dispatched
+  - wave_b_collected
+  - master_consolidated
+  - wave_c_dispatched:{PACK_ID}
+  - wave_c_collected:{PACK_ID}
+  - verify_done:{PACK_ID}
+  - wave_d_dispatched:{PACK_ID}:round_{N}
+  - wave_d_collected:{PACK_ID}:round_{N}
+  - wave_d_verdict:{PACK_ID}:{send_back|fix_and_proceed|accept_and_ship}
+  - ops_done
+  - develop_pushed
+  - develop_pr_open:{PR_NUMBER}
+  - develop_ci_green:{PR_NUMBER}
+  - develop_merged:{PR_NUMBER}
+  - main_pr_open:{PR_NUMBER}
+  - cr_poll_{N}:{PR_NUMBER}
+  - cr_comment_posted:{PR_NUMBER}
+  - cr_round_{N}_fix_pushed:{PR_NUMBER}
+  - main_ci_green:{PR_NUMBER}
+  - main_merged:{PR_NUMBER}
+  - next_pack
+  - scope_complete
+lineage:
+  parent_loops: []
+  no_self_composition: true
+  no_parent_mutation: true
+  founder: true              # cd-review is one of two founder genomes (with brainstorm)
+```
+<!-- ports-block:end -->
+
 Continuous **hostile audit → brainstorm → fix → pre-PR review → verify →
 ship → record** loop for Exigo. Designed to run **autonomously in a sealed
 environment with no human access to execution**. The protocol assumes the

@@ -1,0 +1,18 @@
+{
+  "state": "complete",
+  "cycle_id": "cycle-001",
+  "cycle_type": "scout",
+  "phase": "done",
+  "last_checkpoint": "cycle closed cleanly; ship target (LOOP.md + extracted sibling loop-compose) written; archive updated",
+  "shortlist_size": 5,
+  "verdicts_pending": 0,
+  "next_cycle_constraints_extracted": true,
+  "tokens_used_estimate": 350000,
+  "tokens_budget": 380000,
+  "tokens_target": 350000,
+  "alladvance_redispatch_fired": false,
+  "canary_verdict": "deferred_to_first_non_inaugural_invocation",
+  "extraction_queue_size": 0,
+  "blocked_reason": null,
+  "updated_at": "2026-07-24T23:50:00Z"
+}

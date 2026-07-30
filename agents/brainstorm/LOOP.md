@@ -1,5 +1,95 @@
 # Brainstorming Loop (`brainstorm`)
 
+<!-- ports-block:start
+     Backfilled per loop-forge C-001-003 (canonical invariant).
+     Makes composition with other exigo loops decidable via COMPOSE/CONFLICT/
+     ORTHOGONAL verdict (loop-compose primitive). See agents/loop-forge/LOOP.md §7.
+-->
+```yaml
+loop_id: brainstorm
+parent_loops: []                # founder genome — no parents
+mutation_operator: founder
+remaining_extraction_depth: 3
+ports:
+  inputs:
+    - name: problem-statement-port
+      type: text
+      required: true
+      description: "One-sentence problem statement + context + stop condition (written by launcher into cycle-scope.md §4)."
+    - name: prior-constraints-port
+      type: jsonl
+      required: false
+      path: "agents/brainstorm/archive/constraints.jsonl"
+      description: "Inherited constraints filtered to decay_score ≥ 0.3 plus [soft]-tagged. Drives Wave α seed + Wave γ constraint decay updates."
+    - name: novelty-archive-port
+      type: jsonl
+      required: false
+      path: "agents/brainstorm/archive/novelty.jsonl"
+      description: "Cross-cycle idea memory (warrant_hash + embedding). Used by Wave α for dedup + Wave β for dossier context."
+    - name: cycle-type-port
+      type: enum
+      values: [scout, deep]
+      required: false
+      default: scout
+      description: "Scout = 350k tokens / 1 spawn (default). Deep = ~727k tokens / 2 spawns via mid-cycle checkpointing (§8.4.3)."
+  outputs:
+    - name: ideas-port
+      type: markdown-files
+      path: "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/brainstorm/B-<NNN>-<persona>-<seed>.md"
+      description: "Wave α idea-docs (10 per scout cycle, 5 personas × 2 seeds). Each idea has id, description, warrant, riskiest_assumption, parent_idea."
+    - name: dossiers-port
+      type: markdown-files
+      path: "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/research/R-<NNN>-<idea_id>.md"
+      description: "Wave β Toulmin dossiers with 3-state verdict (ADVANCE/REFUTE/INCONCLUSIVE). 5 per scout cycle (M = shortlist cap)."
+    - name: claims-port
+      type: markdown-file
+      path: "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/synthesis/S-001-claims.md"
+      description: "γ-1 output: verified / refuted / inconclusive claims grouped by theme, with source dossier + confidence."
+    - name: constraints-port
+      type: markdown-file
+      path: "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/synthesis/S-002-constraints.md"
+      description: "γ-2 output: next-cycle constraints (MUST_RESPECT/MUST_AVOID/MUST_TEST) with decay scores. Feeds the next cycle's prior-constraints-port."
+    - name: citations-port
+      type: jsonl
+      path: "agents/brainstorm/archive/citations.jsonl"
+      description: "Cross-cycle citation verification cache (7-day TTL). Per-cycle verified.jsonl + refuted.jsonl merged at end-of-cycle archive-update."
+    - name: record-port
+      type: markdown-file
+      path: "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/RECORD.md"
+      description: "Cycle-scope narrative + Stopped at + Residual + shortlist/verdicts table."
+    - name: day-status-port
+      type: json-file
+      path: "agents/brainstorm/runs/<YYYY-MM-DD-CNNN>/day-status.json"
+      description: "Thin launcher poll file (state, phase, tokens_used, verdicts_pending)."
+last_step_vocabulary:
+  # Brainstorm cycle-scope phases. Universal (NOT GitHub-specific) per loop-forge
+  # C-001-004a — these describe wave transitions, not git/CR operations.
+  - init
+  - cycle_scope_written
+  - persona_seed_matrix_written
+  - alpha_dispatched
+  - alpha_consolidating
+  - alpha_shortlist_written
+  - beta_dispatched
+  - beta_consolidating
+  - citation_verify
+  - alladvance_redispatch_check
+  - gamma_1_dispatched
+  - gamma_1_collected
+  - gamma_2_dispatched
+  - gamma_2_collected
+  - archive_update_started
+  - archive_update_complete
+  - record_finalized
+  - scope_complete
+lineage:
+  parent_loops: []
+  no_self_composition: true
+  no_parent_mutation: true
+  founder: true              # brainstorm is one of two founder genomes (with cd-review)
+```
+<!-- ports-block:end -->
+
 Continuous **brainstorm → research → synthesize → brainstorm** loop for Exigo.
 
 This is the **divergent** counterpart to `agents/cd-review/` (which is the **critical** counterpart). The cd-review loop optimizes an existing codebase for readability, clarity, brevity, consistency, correctness. The brainstorming loop generates, pressure-tests, and converges on **new ideas** that have not been written down yet — product features, architecture directions, research questions, design decisions.
