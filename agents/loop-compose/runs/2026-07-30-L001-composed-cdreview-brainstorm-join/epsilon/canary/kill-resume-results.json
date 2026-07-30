@@ -1,0 +1,90 @@
+{
+  "seed": 20260730,
+  "declared_vocabulary_size": 44,
+  "candidate_kill_points": 44,
+  "reference": {
+    "gate": {
+      "P-001": "PASS",
+      "P-002": "VETO"
+    },
+    "state": "complete",
+    "refutations": 1,
+    "reverted": true
+  },
+  "trials": [
+    {
+      "trial": 1,
+      "killed_at": "constraints_written",
+      "kill_exit_code": 137,
+      "hard_kill_confirmed": true,
+      "status_last_step_at_kill": "constraints_written",
+      "resume_exit_code": 0,
+      "resume_state": "complete",
+      "gate_outcomes": {
+        "P-001": "PASS",
+        "P-002": "VETO"
+      },
+      "refutation_count": 1,
+      "matches_reference": true,
+      "cold_resume": "SUCCESS"
+    },
+    {
+      "trial": 2,
+      "killed_at": "citation_verify",
+      "kill_exit_code": 137,
+      "hard_kill_confirmed": true,
+      "status_last_step_at_kill": "citation_verify",
+      "resume_exit_code": 0,
+      "resume_state": "complete",
+      "gate_outcomes": {
+        "P-001": "PASS",
+        "P-002": "VETO"
+      },
+      "refutation_count": 1,
+      "matches_reference": true,
+      "cold_resume": "SUCCESS"
+    },
+    {
+      "trial": 3,
+      "killed_at": "wave_f_dispatched:P-001",
+      "kill_exit_code": 137,
+      "hard_kill_confirmed": true,
+      "status_last_step_at_kill": "wave_f_dispatched:P-001",
+      "resume_exit_code": 0,
+      "resume_state": "complete",
+      "gate_outcomes": {
+        "P-001": "PASS",
+        "P-002": "VETO"
+      },
+      "refutation_count": 1,
+      "matches_reference": true,
+      "cold_resume": "SUCCESS"
+    },
+    {
+      "trial": 4,
+      "killed_at": "wave_d_dispatched:P-002:round_1",
+      "kill_exit_code": 137,
+      "hard_kill_confirmed": true,
+      "status_last_step_at_kill": "wave_d_dispatched:P-002:round_1",
+      "resume_exit_code": 0,
+      "resume_state": "complete",
+      "gate_outcomes": {
+        "P-001": "PASS",
+        "P-002": "VETO"
+      },
+      "refutation_count": 1,
+      "matches_reference": true,
+      "cold_resume": "SUCCESS"
+    }
+  ],
+  "pass_criteria": {
+    "terminal_state_reached": true,
+    "authored_loop_md_readable": true,
+    "no_hitl_strings_in_log": true,
+    "hitl_matches": [],
+    "all_trials_resumed": true,
+    "gate_property_held": true,
+    "veto_was_reverted": true
+  },
+  "verdict": "PASS"
+}

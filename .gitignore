@@ -56,3 +56,6 @@ lint-output*.txt
 # maintenance agent logs
 .maintenance/logs/
 AGENTS.md
+
+# python bytecode from loop harnesses (canary drivers, delta-test, oracles)
+agents/**/__pycache__/

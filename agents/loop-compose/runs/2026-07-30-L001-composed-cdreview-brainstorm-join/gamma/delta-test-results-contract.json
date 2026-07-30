@@ -1,0 +1,355 @@
+{
+  "run_id": "2026-07-30-L001-composed-cdreview-brainstorm-join",
+  "mode": "contract",
+  "artifact_union": [
+    "audit_finding",
+    "verified_dossier",
+    "verified_citation",
+    "before_measurement",
+    "after_measurement",
+    "measured_delta",
+    "shipped_diff",
+    "refutation_veto"
+  ],
+  "scores": {
+    "baseline_a (cd-review alone)": "2/8",
+    "baseline_b (brainstorm alone)": "2/8",
+    "composed (declared by composition contract)": "8/8"
+  },
+  "baseline_a_missing": [
+    "verified_dossier",
+    "verified_citation",
+    "before_measurement",
+    "after_measurement",
+    "measured_delta",
+    "refutation_veto"
+  ],
+  "baseline_b_missing": [
+    "audit_finding",
+    "before_measurement",
+    "after_measurement",
+    "measured_delta",
+    "shipped_diff",
+    "refutation_veto"
+  ],
+  "composed_emits_full_union": true,
+  "composed_beats_baseline_a": true,
+  "composed_beats_baseline_b": true,
+  "capabilities_added_over_a": [
+    "verified_dossier",
+    "verified_citation",
+    "before_measurement",
+    "after_measurement",
+    "measured_delta",
+    "refutation_veto"
+  ],
+  "capabilities_added_over_b": [
+    "audit_finding",
+    "before_measurement",
+    "after_measurement",
+    "measured_delta",
+    "shipped_diff",
+    "refutation_veto"
+  ],
+  "non_degenerate": true,
+  "verdict": "ADMIT",
+  "detail": [
+    {
+      "subject": "baseline_a (cd-review alone)",
+      "source": "./agents/cd-review/LOOP.md",
+      "artifacts": {
+        "audit_finding": {
+          "label": "Severity-classified audit finding with a code:line citation",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 34,
+            "text": "- name: audit-port"
+          },
+          "wave_evidence": {
+            "line": 374,
+            "text": "- Severity: P0|P1|P2|P3"
+          },
+          "missing": []
+        },
+        "verified_dossier": {
+          "label": "Externally-verified dossier carrying a 3-state verdict",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "verified_citation": {
+          "label": "Citation verified against a TTL-bounded cache",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "before_measurement": {
+          "label": "Metric captured BEFORE the edit is written",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "after_measurement": {
+          "label": "Same metric re-captured AFTER the edit",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "measured_delta": {
+          "label": "Computed before/after delta with an improved|neutral|regressed call",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "shipped_diff": {
+          "label": "Repo-write: a diff/PR actually shipped",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 29,
+            "text": "type: git-diff"
+          },
+          "wave_evidence": {
+            "line": 72,
+            "text": "- develop_merged:{PR_NUMBER}"
+          },
+          "missing": []
+        },
+        "refutation_veto": {
+          "label": "Record of a written, green change BLOCKED by a verdict",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        }
+      },
+      "score": 2
+    },
+    {
+      "subject": "baseline_b (brainstorm alone)",
+      "source": "./agents/brainstorm/LOOP.md",
+      "artifacts": {
+        "audit_finding": {
+          "label": "Severity-classified audit finding with a code:line citation",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "verified_dossier": {
+          "label": "Externally-verified dossier carrying a 3-state verdict",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 39,
+            "text": "- name: dossiers-port"
+          },
+          "wave_evidence": {
+            "line": 43,
+            "text": "description: \"Wave \u03b2 Toulmin dossiers with 3-state verdict (ADVANCE/REFUTE/INCONCLUSIVE). 5 per scout cycle (M = shortlist cap).\""
+          },
+          "missing": []
+        },
+        "verified_citation": {
+          "label": "Citation verified against a TTL-bounded cache",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 51,
+            "text": "- name: citations-port"
+          },
+          "wave_evidence": {
+            "line": 55,
+            "text": "description: \"Cross-cycle citation verification cache (7-day TTL). Per-cycle verified.jsonl + refuted.jsonl merged at end-of-cycle archive-update.\""
+          },
+          "missing": []
+        },
+        "before_measurement": {
+          "label": "Metric captured BEFORE the edit is written",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "after_measurement": {
+          "label": "Same metric re-captured AFTER the edit",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "measured_delta": {
+          "label": "Computed before/after delta with an improved|neutral|regressed call",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "shipped_diff": {
+          "label": "Repo-write: a diff/PR actually shipped",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        },
+        "refutation_veto": {
+          "label": "Record of a written, green change BLOCKED by a verdict",
+          "can_emit": false,
+          "port_evidence": null,
+          "wave_evidence": null,
+          "missing": [
+            "no port declares this artifact",
+            "no wave/gate produces this artifact"
+          ]
+        }
+      },
+      "score": 2
+    },
+    {
+      "subject": "composed (declared by composition contract)",
+      "source": "./agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/composition-contract.md",
+      "artifacts": {
+        "audit_finding": {
+          "label": "Severity-classified audit finding with a code:line citation",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 125,
+            "text": "- {name: audit-port, type: markdown-files}"
+          },
+          "wave_evidence": {
+            "line": 148,
+            "text": "| **A** \u2014 Audit | Hostile slice audit, findings only | `cd-review` Wave A | findings with `Severity: P0|P1|P2|P3`, code:line citation, and a declared "
+          },
+          "missing": []
+        },
+        "verified_dossier": {
+          "label": "Externally-verified dossier carrying a 3-state verdict",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 127,
+            "text": "- {name: dossiers-port, type: markdown-files}"
+          },
+          "wave_evidence": {
+            "line": 70,
+            "text": "Run brainstorm alone. It produces ADVANCE/REFUTE/INCONCLUSIVE dossiers with"
+          },
+          "missing": []
+        },
+        "verified_citation": {
+          "label": "Citation verified against a TTL-bounded cache",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 132,
+            "text": "- {name: citations-port, type: jsonl}"
+          },
+          "wave_evidence": {
+            "line": 150,
+            "text": "| **V** \u2014 Verify | Toulmin dossier + 3-state verdict | `brainstorm` Wave \u03b2 | `ADVANCE / REFUTE / INCONCLUSIVE` per hypothesis, \u22651 citation verified ag"
+          },
+          "missing": []
+        },
+        "before_measurement": {
+          "label": "Metric captured BEFORE the edit is written",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 128,
+            "text": "- {name: measurements-port, type: jsonl}"
+          },
+          "wave_evidence": {
+            "line": 75,
+            "text": "dossier, before-measurement, after-measurement, measured delta, shipped"
+          },
+          "missing": []
+        },
+        "after_measurement": {
+          "label": "Same metric re-captured AFTER the edit",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 128,
+            "text": "- {name: measurements-port, type: jsonl}"
+          },
+          "wave_evidence": {
+            "line": 61,
+            "text": "verified citation and (b) a before/after measurement on a metric declared"
+          },
+          "missing": []
+        },
+        "measured_delta": {
+          "label": "Computed before/after delta with an improved|neutral|regressed call",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 128,
+            "text": "- {name: measurements-port, type: jsonl}"
+          },
+          "wave_evidence": {
+            "line": 75,
+            "text": "dossier, before-measurement, after-measurement, measured delta, shipped"
+          },
+          "missing": []
+        },
+        "shipped_diff": {
+          "label": "Repo-write: a diff/PR actually shipped",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 133,
+            "text": "- {name: fixes-port, type: git-diff}"
+          },
+          "wave_evidence": {
+            "line": 155,
+            "text": "| **S** \u2014 Synthesise + ship | Constraints, then ship | `brainstorm` Wave \u03b3 + `cd-review` \u00a710.2 | next-cycle constraints, then `gh pr create` \u2192 `develo"
+          },
+          "missing": []
+        },
+        "refutation_veto": {
+          "label": "Record of a written, green change BLOCKED by a verdict",
+          "can_emit": true,
+          "port_evidence": {
+            "line": 121,
+            "text": "- {name: verified-improvements-port, type: jsonl, required: false}"
+          },
+          "wave_evidence": {
+            "line": 76,
+            "text": "diff, refutation veto record}. Each baseline must be structurally incapable"
+          },
+          "missing": []
+        }
+      },
+      "score": 8
+    }
+  ]
+}

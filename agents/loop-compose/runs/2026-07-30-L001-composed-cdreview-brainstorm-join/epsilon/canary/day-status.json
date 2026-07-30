@@ -1,0 +1,9 @@
+{
+  "state": "complete",
+  "scope_id": "canary-cycle-1",
+  "last_step": "scope_complete",
+  "run_id": "canary-2026-07-30",
+  "sealed": true,
+  "resume_hint": "resume by re-running canary_driver.py --resume; steps at or before last_step are skipped",
+  "updated_at": "2026-07-30T07:01:35Z"
+}

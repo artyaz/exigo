@@ -1,0 +1,1 @@
+{"pack_id": "P-002", "hypothesis_id": "H-002", "failed_conjunct": "delta_not_regressed", "all_failed": ["delta_not_regressed"], "detail": "delta=regressed (wall_seconds 0.009969 -> 0.148592, +1390.5%)", "verdict_at": "2026-07-30T07:01:35Z", "disposition": "reverted"}
