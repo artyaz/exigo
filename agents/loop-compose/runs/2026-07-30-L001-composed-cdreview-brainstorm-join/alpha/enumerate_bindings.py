@@ -389,10 +389,12 @@ def main():
 
     os.makedirs(os.path.join(out_dir, "alpha"), exist_ok=True)
     os.makedirs(os.path.join(out_dir, "beta"), exist_ok=True)
-    with open(os.path.join(out_dir, "alpha/port-binding-enumeration.json"), "w") as fh:
+    with open(os.path.join(out_dir, "alpha/port-binding-enumeration.json"), "w",
+              encoding="utf-8") as fh:
         json.dump(alpha, fh, indent=2)
         fh.write("\n")
-    with open(os.path.join(out_dir, "beta/verdicts.json"), "w") as fh:
+    with open(os.path.join(out_dir, "beta/verdicts.json"), "w",
+              encoding="utf-8") as fh:
         json.dump(beta, fh, indent=2)
         fh.write("\n")
 

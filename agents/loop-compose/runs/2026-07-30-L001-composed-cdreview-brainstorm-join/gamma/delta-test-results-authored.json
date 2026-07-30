@@ -62,7 +62,7 @@
           "label": "Severity-classified audit finding with a code:line citation",
           "can_emit": true,
           "port_evidence": {
-            "line": 34,
+            "line": 35,
             "text": "- name: audit-port"
           },
           "wave_evidence": {
@@ -78,7 +78,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "verified_citation": {
@@ -88,7 +88,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "before_measurement": {
@@ -98,7 +98,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "after_measurement": {
@@ -108,7 +108,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "measured_delta": {
@@ -118,19 +118,19 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "shipped_diff": {
           "label": "Repo-write: a diff/PR actually shipped",
           "can_emit": true,
           "port_evidence": {
-            "line": 29,
+            "line": 30,
             "text": "type: git-diff"
           },
           "wave_evidence": {
-            "line": 72,
-            "text": "- develop_merged:{PR_NUMBER}"
+            "line": 626,
+            "text": "`git push`, `gh pr create`, `gh pr merge`, `@coderabbitai review`"
           },
           "missing": []
         },
@@ -141,7 +141,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         }
       },
@@ -158,19 +158,19 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "verified_dossier": {
           "label": "Externally-verified dossier carrying a 3-state verdict",
           "can_emit": true,
           "port_evidence": {
-            "line": 39,
+            "line": 40,
             "text": "- name: dossiers-port"
           },
           "wave_evidence": {
-            "line": 43,
-            "text": "description: \"Wave \u03b2 Toulmin dossiers with 3-state verdict (ADVANCE/REFUTE/INCONCLUSIVE). 5 per scout cycle (M = shortlist cap).\""
+            "line": 100,
+            "text": "2. **Research** (convergent, max-N parallel subagents) \u2014 verify each shortlisted idea with external grounding (web search, code PoCs, citations), prod"
           },
           "missing": []
         },
@@ -178,12 +178,12 @@
           "label": "Citation verified against a TTL-bounded cache",
           "can_emit": true,
           "port_evidence": {
-            "line": 51,
+            "line": 52,
             "text": "- name: citations-port"
           },
           "wave_evidence": {
-            "line": 55,
-            "text": "description: \"Cross-cycle citation verification cache (7-day TTL). Per-cycle verified.jsonl + refuted.jsonl merged at end-of-cycle archive-update.\""
+            "line": 127,
+            "text": "citations.jsonl                    \u2190 cross-cycle citation verification cache (7-day TTL)"
           },
           "missing": []
         },
@@ -194,7 +194,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "after_measurement": {
@@ -204,7 +204,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "measured_delta": {
@@ -214,7 +214,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "shipped_diff": {
@@ -224,7 +224,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         },
         "refutation_veto": {
@@ -234,7 +234,7 @@
           "wave_evidence": null,
           "missing": [
             "no port declares this artifact",
-            "no wave/gate produces this artifact"
+            "no wave/gate in the protocol body produces this artifact"
           ]
         }
       },
@@ -248,11 +248,11 @@
           "label": "Severity-classified audit finding with a code:line citation",
           "can_emit": true,
           "port_evidence": {
-            "line": 20,
+            "line": 21,
             "text": "- {name: audit-port, type: markdown-files, path: \"agents/cdreview-brainstorm-join/runs/<RUN_ID>/audits/slices/S<N>.md\", description: \"Wave A findings "
           },
           "wave_evidence": {
-            "line": 360,
+            "line": 361,
             "text": "- Severity: P0|P1|P2|P3"
           },
           "missing": []
@@ -261,11 +261,11 @@
           "label": "Externally-verified dossier carrying a 3-state verdict",
           "can_emit": true,
           "port_evidence": {
-            "line": 22,
+            "line": 23,
             "text": "- {name: dossiers-port, type: markdown-files, path: \"agents/cdreview-brainstorm-join/runs/<RUN_ID>/dossiers/V-<NNN>-<hyp_id>.md\", description: \"Wave V"
           },
           "wave_evidence": {
-            "line": 900,
+            "line": 930,
             "text": "| Hypothesis verdict | 3-state UPPERCASE: `ADVANCE` / `REFUTE` / `INCONCLUSIVE` |"
           },
           "missing": []
@@ -274,12 +274,12 @@
           "label": "Citation verified against a TTL-bounded cache",
           "can_emit": true,
           "port_evidence": {
-            "line": 27,
+            "line": 28,
             "text": "- {name: citations-port, type: jsonl, path: \"agents/cdreview-brainstorm-join/archive/citations.jsonl\", description: \"Citation verification cache, 7-da"
           },
           "wave_evidence": {
-            "line": 28,
-            "text": "- {name: citations-port, type: jsonl, path: \"agents/cdreview-brainstorm-join/archive/citations.jsonl\", description: \"Citation verification cache, 7-da"
+            "line": 143,
+            "text": "citations.jsonl                   \u2190 citation cache, 7-day TTL"
           },
           "missing": []
         },
@@ -287,11 +287,11 @@
           "label": "Metric captured BEFORE the edit is written",
           "can_emit": true,
           "port_evidence": {
-            "line": 23,
+            "line": 24,
             "text": "- {name: measurements-port, type: jsonl, path: \"agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl\", description: \"Wave M before"
           },
           "wave_evidence": {
-            "line": 164,
+            "line": 165,
             "text": "M-<hyp_id>-before.json       \u2190 written BEFORE any edit (\u00a78)"
           },
           "missing": []
@@ -300,11 +300,11 @@
           "label": "Same metric re-captured AFTER the edit",
           "can_emit": true,
           "port_evidence": {
-            "line": 23,
+            "line": 24,
             "text": "- {name: measurements-port, type: jsonl, path: \"agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl\", description: \"Wave M before"
           },
           "wave_evidence": {
-            "line": 165,
+            "line": 166,
             "text": "M-<hyp_id>-after.json"
           },
           "missing": []
@@ -313,12 +313,12 @@
           "label": "Computed before/after delta with an improved|neutral|regressed call",
           "can_emit": true,
           "port_evidence": {
-            "line": 23,
+            "line": 24,
             "text": "- {name: measurements-port, type: jsonl, path: \"agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl\", description: \"Wave M before"
           },
           "wave_evidence": {
-            "line": 58,
-            "text": "- delta_computed:{PACK_ID}:{improved|neutral|regressed}"
+            "line": 504,
+            "text": "delta_computed:{PACK_ID}:{improved|neutral|regressed}"
           },
           "missing": []
         },
@@ -326,12 +326,12 @@
           "label": "Repo-write: a diff/PR actually shipped",
           "can_emit": true,
           "port_evidence": {
-            "line": 28,
+            "line": 29,
             "text": "- {name: fixes-port, type: git-diff, description: \"Wave F edits shipped as PR diff(s) to develop \u2192 main.\"}"
           },
           "wave_evidence": {
-            "line": 69,
-            "text": "- develop_merged:{PR_NUMBER}"
+            "line": 751,
+            "text": "`gh pr create` against `develop`, CI green, merge, then a `main` PR with"
           },
           "missing": []
         },
@@ -339,12 +339,12 @@
           "label": "Record of a written, green change BLOCKED by a verdict",
           "can_emit": true,
           "port_evidence": {
-            "line": 16,
+            "line": 17,
             "text": "- {name: verified-improvements-port, type: jsonl, required: false, path: \"agents/cdreview-brainstorm-join/archive/verified-improvements.jsonl\", descri"
           },
           "wave_evidence": {
-            "line": 25,
-            "text": "- {name: refutations-port, type: jsonl, path: \"agents/cdreview-brainstorm-join/runs/<RUN_ID>/gate/refutations.jsonl\", description: \"Evidence-Gate veto"
+            "line": 510,
+            "text": "`ship_blocked:{PACK_ID}:missing_baseline`. The pack may be re-run next cycle"
           },
           "missing": []
         }

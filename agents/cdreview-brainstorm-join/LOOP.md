@@ -134,6 +134,7 @@ agents/cdreview-brainstorm-join/
   bin/
     measure.py                       ← Wave M metric harness (§8)
     gate.py                          ← Evidence Gate evaluator (§11)
+    selftest.py                      ← negative controls for every gate conjunct (§11.3)
   archive/                           ← cross-cycle memory (persists across runs)
     verified-improvements.jsonl       ← stare decisis: proved / refuted claims
     measurements.jsonl                ← metric history across cycles
@@ -659,7 +660,13 @@ SHIP  IFF  dossier.verdict == ADVANCE
       AND  no L6 finding at P1 or above
 ```
 
-Every conjunct is a veto. `last_step=evidence_gate:{PACK_ID}:{pass|veto}`.
+Every conjunct is a veto. `last_step=evidence_gate:{PACK_ID}:{pass|veto}` is
+written for **both** outcomes — a veto that skipped straight to `ship_blocked`
+would leave a declared vocabulary entry unused, i.e. the implementation
+contradicting its own header.
+
+No conjunct may be skipped. A check that reports `PASS` without executing is
+worse than no check, because it launders an untested assumption into evidence.
 
 ### 11.1 On veto
 
@@ -691,6 +698,29 @@ are green, and four lenses approved it. It still does not ship.**
 A vetoed pack produced a verified refutation, a measurement, and a durable
 "don't try this" record. That is the loop's second product and the reason
 `refutations-port` is a declared output port rather than a log file.
+
+---
+
+### 11.3 The gate must be falsifiable
+
+[`bin/selftest.py`](./bin/selftest.py) drives **every** conjunct to failure on
+purpose, plus a positive control proving the happy path still ships. A gate whose
+conjuncts have never been observed to fail is a claim, not a test.
+
+Two cases exist specifically to pin fail-OPEN regressions that were found in
+review and must not return:
+
+| Case | The bug it pins |
+|------|-----------------|
+| stray `accept_and_ship` in prose before the real verdict | an unanchored leftmost regex read the *first* verdict token anywhere in the file, so a vocabulary legend or a sentence like *"this would normally be accept_and_ship, but…"* could outrank the recorded verdict |
+| no labelled verdict at all | absent evidence must fail **closed**; defaulting to ship is the one failure mode this loop exists to prevent |
+| baseline SHA not an ancestor of HEAD | the ancestry conjunct was once skippable and reported `PASS` without checking anything |
+
+Run it in CI alongside the measurement harness:
+
+```bash
+python3 agents/cdreview-brainstorm-join/bin/selftest.py    # exit 0 = all conjuncts falsifiable
+```
 
 ---
 

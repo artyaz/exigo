@@ -156,6 +156,35 @@ def git_sha(cwd="."):
     return p.stdout.strip() if p.returncode == 0 else "unknown"
 
 
+# ---------------------------------------------------------------------------
+# Shared measurement-record selection
+# ---------------------------------------------------------------------------
+# SINGLE source of truth, imported by bin/gate.py. The gate and the harness must
+# never disagree about which record is newest — if they did, the gate could
+# evaluate a different measurement than the one the harness wrote, and the
+# disagreement would be invisible.
+
+def measurement_records(mdir, base):
+    """Records matching `base`, as [(revision, filename)] sorted oldest→newest.
+
+    Exact-shape match only: `<base>.json` is revision 0 and `<base>.rN.json` is
+    revision N. A `startswith` filter plus an unguarded revision parse would raise
+    AttributeError on any other file sharing the prefix (a stray `<base>.bak.json`,
+    an editor backup), crashing the gate with a traceback instead of returning a
+    clean veto — the worst outcome for a loop that must never stop ambiguously.
+    """
+    if not os.path.isdir(mdir):
+        return []
+    pat = re.compile(r"^%s(?:\.r(\d+))?\.json$" % re.escape(base))
+    found = []
+    for name in os.listdir(mdir):
+        m = pat.match(name)
+        if m:
+            found.append((int(m.group(1) or 0), name))
+    found.sort()
+    return found
+
+
 def now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -183,7 +212,8 @@ def capture(args):
         "runs": runs,
         "value": value,
         "stdev": round(stdev, 6),
-        "git_sha": git_sha(),
+        "git_sha": git_sha(args.git_dir),
+        "git_dir": os.path.abspath(args.git_dir),
         "captured_at": now(),
     }
 
@@ -213,15 +243,10 @@ def capture(args):
 def load_phase(run_root, hyp, phase):
     """Load the newest record for a phase (re-measures win)."""
     mdir = os.path.join(run_root, "measure")
-    base = "M-%s-%s" % (hyp, phase)
-    cands = [f for f in os.listdir(mdir)
-             if f.startswith(base) and f.endswith(".json")] if os.path.isdir(mdir) else []
-    if not cands:
+    recs = measurement_records(mdir, "M-%s-%s" % (hyp, phase))
+    if not recs:
         return None, None
-    # plain .json is r1; .rN.json sorts after
-    cands.sort(key=lambda f: (0 if f == base + ".json" else int(
-        re.search(r"\.r(\d+)\.json$", f).group(1))))
-    chosen = cands[-1]
+    chosen = recs[-1][1]
     with open(os.path.join(mdir, chosen), encoding="utf-8") as fh:
         return json.load(fh), chosen
 
@@ -287,6 +312,9 @@ def main():
     ap.add_argument("--target", action="append")
     ap.add_argument("--command")
     ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--git-dir", default=".",
+                    help="repo whose HEAD is recorded as the measurement's git_sha; "
+                         "the Evidence Gate checks baseline ancestry against it")
     ap.add_argument("--remeasure-reason")
     ap.add_argument("--delta", action="store_true")
     args = ap.parse_args()

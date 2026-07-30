@@ -23,7 +23,8 @@ L = ["# Wave γ — Delta-test verdict", "",
      ""]
 
 for phase, p in paths:
-    d = json.load(open(p))
+    with open(p, encoding="utf-8") as fh:
+        d = json.load(fh)
     subs = d["detail"]
     union = d["artifact_union"]
 
@@ -85,5 +86,7 @@ for phase, p in paths:
         L += [""]
     L += ["</details>", ""]
 
-open(os.path.join(RR, "gamma/delta-test-verdict.md"), "w").write("\n".join(L) + "\n")
+with open(os.path.join(RR, "gamma/delta-test-verdict.md"), "w",
+          encoding="utf-8") as fh:
+    fh.write("\n".join(L) + "\n")
 print("wrote gamma/delta-test-verdict.md (%d phase(s))" % len(paths))

@@ -18,52 +18,170 @@
       "composition_run": "agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join",
       "ports": {
         "inputs": [
-          {"name": "repo-port", "type": "directory-path", "required": true, "description": "Path to the exigo repo root (read + git-write access)."},
-          {"name": "improvement-goal-port", "type": "text", "required": true, "description": "One-sentence improvement goal + goal-anchored stop condition."},
-          {"name": "slice-map-port", "type": "text", "required": false, "default": "agents/cd-review/REVIEW-LENS.md + cd-review §4 default S1–S11", "description": "Codebase partition; re-aimed each cycle by prior constraints (§4)."},
-          {"name": "prior-constraints-port", "type": "jsonl", "required": false, "path": "agents/cdreview-brainstorm-join/archive/constraints.jsonl"},
-          {"name": "prior-measurements-port", "type": "jsonl", "required": false, "path": "agents/cdreview-brainstorm-join/archive/measurements.jsonl"},
-          {"name": "verified-improvements-port", "type": "jsonl", "required": false, "path": "agents/cdreview-brainstorm-join/archive/verified-improvements.jsonl", "description": "Stare decisis — the join. Read at §1.3, appended at §14."},
-          {"name": "novelty-archive-port", "type": "jsonl", "required": false, "path": "agents/cdreview-brainstorm-join/archive/novelty.jsonl"},
-          {"name": "cycle-type-port", "type": "enum", "values": ["scout", "deep"], "required": false, "default": "scout"}
+          {
+            "name": "repo-port",
+            "type": "directory-path",
+            "required": true,
+            "description": "Path to the exigo repo root (read + git-write access)."
+          },
+          {
+            "name": "improvement-goal-port",
+            "type": "text",
+            "required": true,
+            "description": "One-sentence improvement goal + goal-anchored stop condition."
+          },
+          {
+            "name": "slice-map-port",
+            "type": "text",
+            "required": false,
+            "default": "agents/cd-review/REVIEW-LENS.md + cd-review §4 default S1–S11",
+            "description": "Codebase partition; re-aimed each cycle by prior constraints (§4)."
+          },
+          {
+            "name": "prior-constraints-port",
+            "type": "jsonl",
+            "required": false,
+            "path": "agents/cdreview-brainstorm-join/archive/constraints.jsonl"
+          },
+          {
+            "name": "prior-measurements-port",
+            "type": "jsonl",
+            "required": false,
+            "path": "agents/cdreview-brainstorm-join/archive/measurements.jsonl"
+          },
+          {
+            "name": "verified-improvements-port",
+            "type": "jsonl",
+            "required": false,
+            "path": "agents/cdreview-brainstorm-join/archive/verified-improvements.jsonl",
+            "description": "Stare decisis — the join. Read at §1.3, appended at §14."
+          },
+          {
+            "name": "novelty-archive-port",
+            "type": "jsonl",
+            "required": false,
+            "path": "agents/cdreview-brainstorm-join/archive/novelty.jsonl"
+          },
+          {
+            "name": "cycle-type-port",
+            "type": "enum",
+            "values": [
+              "scout",
+              "deep"
+            ],
+            "required": false,
+            "default": "scout"
+          }
         ],
         "outputs": [
-          {"name": "audit-port", "type": "markdown-files", "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/audits/slices/S<N>.md"},
-          {"name": "hypotheses-port", "type": "markdown-files", "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/hypotheses/H-<NNN>-<persona>-<seed>.md"},
-          {"name": "dossiers-port", "type": "markdown-files", "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/dossiers/V-<NNN>-<hyp_id>.md"},
-          {"name": "measurements-port", "type": "jsonl", "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl", "description": "Before/after records and computed deltas. Absent from both parents."},
-          {"name": "refutations-port", "type": "jsonl", "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/gate/refutations.jsonl", "description": "Gate vetoes. Negative results are first-class output."},
-          {"name": "verified-improvements-port", "type": "jsonl", "path": "agents/cdreview-brainstorm-join/archive/verified-improvements.jsonl"},
-          {"name": "constraints-port", "type": "markdown-file", "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/synthesis/S-002-constraints.md"},
-          {"name": "citations-port", "type": "jsonl", "path": "agents/cdreview-brainstorm-join/archive/citations.jsonl"},
-          {"name": "fixes-port", "type": "git-diff", "description": "Wave F edits shipped as PR diff(s) to develop → main."},
-          {"name": "pr-port", "type": "github-pr-url"},
-          {"name": "record-port", "type": "markdown-file", "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/RECORD.md"},
-          {"name": "day-status-port", "type": "json-file", "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/day-status.json"}
+          {
+            "name": "audit-port",
+            "type": "markdown-files",
+            "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/audits/slices/S<N>.md"
+          },
+          {
+            "name": "hypotheses-port",
+            "type": "markdown-files",
+            "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/hypotheses/H-<NNN>-<persona>-<seed>.md"
+          },
+          {
+            "name": "dossiers-port",
+            "type": "markdown-files",
+            "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/dossiers/V-<NNN>-<hyp_id>.md"
+          },
+          {
+            "name": "measurements-port",
+            "type": "jsonl",
+            "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl",
+            "description": "Before/after records and computed deltas. Absent from both parents."
+          },
+          {
+            "name": "refutations-port",
+            "type": "jsonl",
+            "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/gate/refutations.jsonl",
+            "description": "Gate vetoes. Negative results are first-class output."
+          },
+          {
+            "name": "verified-improvements-port",
+            "type": "jsonl",
+            "path": "agents/cdreview-brainstorm-join/archive/verified-improvements.jsonl"
+          },
+          {
+            "name": "constraints-port",
+            "type": "markdown-file",
+            "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/synthesis/S-002-constraints.md"
+          },
+          {
+            "name": "citations-port",
+            "type": "jsonl",
+            "path": "agents/cdreview-brainstorm-join/archive/citations.jsonl"
+          },
+          {
+            "name": "fixes-port",
+            "type": "git-diff",
+            "description": "Wave F edits shipped as PR diff(s) to develop → main."
+          },
+          {
+            "name": "pr-port",
+            "type": "github-pr-url"
+          },
+          {
+            "name": "record-port",
+            "type": "markdown-file",
+            "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/RECORD.md"
+          },
+          {
+            "name": "day-status-port",
+            "type": "json-file",
+            "path": "agents/cdreview-brainstorm-join/runs/<RUN_ID>/day-status.json"
+          }
         ]
       },
       "last_step_vocabulary": [
-        "init", "cycle_scope_written", "stare_decisis_loaded", "slice_map_resolved",
-        "wave_a_dispatched", "wave_a_collected", "findings_clustered",
-        "wave_h_dispatched", "wave_h_collected", "hypothesis_shortlist_written",
-        "wave_v_dispatched", "wave_v_collected", "citation_verify",
+        "init",
+        "cycle_scope_written",
+        "stare_decisis_loaded",
+        "slice_map_resolved",
+        "wave_a_dispatched",
+        "wave_a_collected",
+        "findings_clustered",
+        "wave_h_dispatched",
+        "wave_h_collected",
+        "hypothesis_shortlist_written",
+        "wave_v_dispatched",
+        "wave_v_collected",
+        "citation_verify",
         "alladvance_redispatch_check",
         "verdict_recorded:{HYP_ID}:{advance|refute|inconclusive}",
-        "metric_declared:{HYP_ID}", "measure_before:{HYP_ID}",
-        "pack_consolidated:{PACK_ID}", "wave_f_dispatched:{PACK_ID}",
-        "wave_f_collected:{PACK_ID}", "verify_done:{PACK_ID}",
+        "metric_declared:{HYP_ID}",
+        "measure_before:{HYP_ID}",
+        "pack_consolidated:{PACK_ID}",
+        "wave_f_dispatched:{PACK_ID}",
+        "wave_f_collected:{PACK_ID}",
+        "verify_done:{PACK_ID}",
         "measure_after:{PACK_ID}",
         "delta_computed:{PACK_ID}:{improved|neutral|regressed}",
-        "wave_d_dispatched:{PACK_ID}:round_{N}", "wave_d_collected:{PACK_ID}:round_{N}",
+        "wave_d_dispatched:{PACK_ID}:round_{N}",
+        "wave_d_collected:{PACK_ID}:round_{N}",
         "wave_d_verdict:{PACK_ID}:{send_back|fix_and_proceed|accept_and_ship}",
-        "evidence_gate:{PACK_ID}:{pass|veto}", "ship_blocked:{PACK_ID}:{reason}",
-        "reverted:{PACK_ID}", "constraints_written",
-        "develop_pushed", "develop_pr_open:{PR_NUMBER}", "develop_ci_green:{PR_NUMBER}",
-        "develop_merged:{PR_NUMBER}", "main_pr_open:{PR_NUMBER}",
-        "cr_poll_{N}:{PR_NUMBER}", "cr_round_{N}_fix_pushed:{PR_NUMBER}",
-        "main_ci_green:{PR_NUMBER}", "main_merged:{PR_NUMBER}",
-        "archive_update_started", "archive_update_complete", "record_finalized",
-        "next_pack", "scope_complete"
+        "evidence_gate:{PACK_ID}:{pass|veto}",
+        "ship_blocked:{PACK_ID}:{reason}",
+        "reverted:{PACK_ID}",
+        "constraints_written",
+        "develop_pushed",
+        "develop_pr_open:{PR_NUMBER}",
+        "develop_ci_green:{PR_NUMBER}",
+        "develop_merged:{PR_NUMBER}",
+        "main_pr_open:{PR_NUMBER}",
+        "cr_poll_{N}:{PR_NUMBER}",
+        "cr_round_{N}_fix_pushed:{PR_NUMBER}",
+        "main_ci_green:{PR_NUMBER}",
+        "main_merged:{PR_NUMBER}",
+        "archive_update_started",
+        "archive_update_complete",
+        "record_finalized",
+        "next_pack",
+        "scope_complete"
       ],
       "lens_scores": {
         "L1": 0.88,
@@ -108,9 +226,20 @@
           "refutation_veto"
         ],
         "verdict": "ADMIT",
-        "non_degenerate": true
+        "non_degenerate": true,
+        "method": "port-anchored capability probe; wave evidence excludes the ports region so the two evidence kinds are independent",
+        "phases": {
+          "contract": "ADMIT",
+          "authored": "ADMIT"
+        }
       },
-      "notes": "Composed 2026-07-30 by agents/loop-compose/ run 2026-07-30-L001. Wave α enumerated 45 candidate port bindings from the parents' real ports: blocks; Wave β returned 16 COMPOSE / 8 CONFLICT / 21 ORTHOGONAL and bound 2 edges (audit-port→problem-statement-port forward, constraints-port→slice-map-port feedback). All 8 CONFLICTs were the resume-contract single-writer class, resolved by this loop owning one RECORD.md + one day-status.json + its own last_step vocabulary (C-001-004a). Known weak point tracked as C-J-022 (MUST_TEST): metric-gaming in Wave H."
+      "notes": "Composed 2026-07-30 by agents/loop-compose/ run 2026-07-30-L001. Wave α enumerated 45 candidate port bindings from the parents' real ports: blocks; Wave β returned 16 COMPOSE / 8 CONFLICT / 21 ORTHOGONAL and bound 2 edges (audit-port→problem-statement-port forward, constraints-port→slice-map-port feedback). All 8 CONFLICTs were the resume-contract single-writer class, resolved by this loop owning one RECORD.md + one day-status.json + its own last_step vocabulary (C-001-004a). Known weak point tracked as C-J-022 (MUST_TEST): metric-gaming in Wave H. Review round 1 (CodeRabbit, PR #105): 8 valid findings fixed. The delta-test's two-evidence rule was tightened so wave evidence cannot come from the ports block (verdict survived at 8/8); the gate's ancestry conjunct is no longer skippable; resume now resolves the veto path's sub-state labels instead of silently replaying the cycle. bin/selftest.py added: 13 negative controls proving every conjunct can fail.",
+      "gates": {
+        "delta_test": "agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/gamma/delta_test.py",
+        "canary": "agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/epsilon/canary_driver.py",
+        "kill_resume_oracle": "agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/epsilon/kill_resume_oracle.py",
+        "gate_negative_controls": "agents/cdreview-brainstorm-join/bin/selftest.py"
+      }
     }
   ]
 }

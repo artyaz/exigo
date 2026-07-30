@@ -14,6 +14,80 @@
   "trials": [
     {
       "trial": 1,
+      "kill_mode": "status",
+      "regression_test": true,
+      "killed_at": "evidence_gate:P-001:pass",
+      "kill_exit_code": 137,
+      "hard_kill_confirmed": true,
+      "status_last_step_at_kill": "evidence_gate:P-001:pass",
+      "resume_exit_code": 0,
+      "resume_state": "complete",
+      "gate_outcomes": {
+        "P-001": "PASS",
+        "P-002": "VETO"
+      },
+      "refutation_count": 1,
+      "matches_reference": true,
+      "cold_resume": "SUCCESS"
+    },
+    {
+      "trial": 2,
+      "kill_mode": "status",
+      "regression_test": true,
+      "killed_at": "evidence_gate:P-002:veto",
+      "kill_exit_code": 137,
+      "hard_kill_confirmed": true,
+      "status_last_step_at_kill": "evidence_gate:P-002:veto",
+      "resume_exit_code": 0,
+      "resume_state": "complete",
+      "gate_outcomes": {
+        "P-001": "PASS",
+        "P-002": "VETO"
+      },
+      "refutation_count": 1,
+      "matches_reference": true,
+      "cold_resume": "SUCCESS"
+    },
+    {
+      "trial": 3,
+      "kill_mode": "status",
+      "regression_test": true,
+      "killed_at": "ship_blocked:P-002:delta_not_regressed",
+      "kill_exit_code": 137,
+      "hard_kill_confirmed": true,
+      "status_last_step_at_kill": "ship_blocked:P-002:delta_not_regressed",
+      "resume_exit_code": 0,
+      "resume_state": "complete",
+      "gate_outcomes": {
+        "P-001": "PASS",
+        "P-002": "VETO"
+      },
+      "refutation_count": 1,
+      "matches_reference": true,
+      "cold_resume": "SUCCESS"
+    },
+    {
+      "trial": 4,
+      "kill_mode": "status",
+      "regression_test": true,
+      "killed_at": "reverted:P-002",
+      "kill_exit_code": 137,
+      "hard_kill_confirmed": true,
+      "status_last_step_at_kill": "reverted:P-002",
+      "resume_exit_code": 0,
+      "resume_state": "complete",
+      "gate_outcomes": {
+        "P-001": "PASS",
+        "P-002": "VETO"
+      },
+      "refutation_count": 1,
+      "matches_reference": true,
+      "cold_resume": "SUCCESS"
+    },
+    {
+      "trial": 5,
+      "kill_mode": "step",
+      "regression_test": false,
       "killed_at": "constraints_written",
       "kill_exit_code": 137,
       "hard_kill_confirmed": true,
@@ -29,7 +103,9 @@
       "cold_resume": "SUCCESS"
     },
     {
-      "trial": 2,
+      "trial": 6,
+      "kill_mode": "step",
+      "regression_test": false,
       "killed_at": "citation_verify",
       "kill_exit_code": 137,
       "hard_kill_confirmed": true,
@@ -45,7 +121,9 @@
       "cold_resume": "SUCCESS"
     },
     {
-      "trial": 3,
+      "trial": 7,
+      "kill_mode": "step",
+      "regression_test": false,
       "killed_at": "wave_f_dispatched:P-001",
       "kill_exit_code": 137,
       "hard_kill_confirmed": true,
@@ -61,7 +139,9 @@
       "cold_resume": "SUCCESS"
     },
     {
-      "trial": 4,
+      "trial": 8,
+      "kill_mode": "step",
+      "regression_test": false,
       "killed_at": "wave_d_dispatched:P-002:round_1",
       "kill_exit_code": 137,
       "hard_kill_confirmed": true,
@@ -82,6 +162,9 @@
     "authored_loop_md_readable": true,
     "no_hitl_strings_in_log": true,
     "hitl_matches": [],
+    "trials_executed": true,
+    "all_substate_labels_fired": true,
+    "substate_regressions_covered": true,
     "all_trials_resumed": true,
     "gate_property_held": true,
     "veto_was_reverted": true

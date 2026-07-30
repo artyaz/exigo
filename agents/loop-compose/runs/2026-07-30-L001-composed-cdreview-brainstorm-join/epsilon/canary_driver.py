@@ -91,6 +91,51 @@ STEPS = [
     "scope_complete",
 ]
 
+# Statuses the loop persists that are SUB-STATES of a declared step rather than
+# steps in their own right. §11.1 writes ship_blocked:<pack>:<reason> and then
+# reverted:<pack> while handling a gate veto; both belong to evidence_gate:<pack>.
+# Without this map a kill on the veto path leaves a last_step that reduces to
+# nothing, and resume silently replays the entire cycle from init.
+SUBSTATE_OWNER = {
+    "ship_blocked": "evidence_gate",
+    "reverted": "evidence_gate",
+}
+
+# Annotated labels this driver persists that are NOT plain STEPS entries. Exposed
+# so the kill-resume oracle can target them directly via --kill-after-status.
+# These are exactly the labels whose mishandling caused a silent full replay, so
+# they are a FIXED regression test rather than something random sampling may or
+# may not happen to hit.
+SUBSTATE_KILL_POINTS = [
+    "evidence_gate:P-001:pass",
+    "evidence_gate:P-002:veto",
+    "ship_blocked:P-002:delta_not_regressed",
+    "reverted:P-002",
+]
+
+
+def normalize_step(last):
+    """Map a persisted status label back to the STEPS entry that owns it.
+
+    Returns None when the label cannot be mapped — the caller must treat that as
+    a protocol violation rather than silently restarting, because a silent full
+    replay duplicates RECORD.md content and manufactures undocumented re-measures.
+    """
+    if last in STEPS:
+        return last
+    parts = last.split(":")
+    if parts[0] in SUBSTATE_OWNER and len(parts) >= 2:
+        cand = "%s:%s" % (SUBSTATE_OWNER[parts[0]], parts[1])
+        if cand in STEPS:
+            return cand
+    # annotated variants (e.g. evidence_gate:P-001:pass) — strip right to left
+    for n in range(len(parts) - 1, 0, -1):
+        cand = ":".join(parts[:n])
+        if cand in STEPS:
+            return cand
+    return None
+
+
 SLOW_DEDUPE = '''"""dedupe a list — trivial-domain canary target (C-001-004b corpus)."""
 
 
@@ -214,6 +259,18 @@ class Canary:
         os.replace(tmp, self.status_path)
         self.status_writes += 1
 
+        # Kill hook keyed on the persisted LABEL, not on a STEPS entry. This is
+        # what makes sub-state labels (ship_blocked:<pack>, reverted:<pack>)
+        # reachable as kill points — the exact class of label that used to break
+        # resume. It also fires BEFORE the step's side effect, which is the
+        # dangerous ordering the replay semantics exist for.
+        if getattr(self.args, "kill_after_status", None) == step:
+            self.log("KILLED_BY_ORACLE", status_label=step,
+                     note="simulated SIGKILL immediately after status persist, "
+                          "before the side effect")
+            sys.stdout.flush()
+            os._exit(137)
+
     def read_status(self):
         if not os.path.exists(self.status_path):
             return None
@@ -237,6 +294,10 @@ class Canary:
                "--run-root", self.rr, "--hyp", hyp, "--phase", phase,
                "--metric", "wall_seconds", "--direction", "lower_is_better",
                "--unit", "seconds", "--runs", "3",
+               # Baseline SHAs come from the real repo, so the gate's ancestry
+               # conjunct is genuinely evaluated rather than skipped. This mirrors
+               # a live cycle: measure at HEAD, edit the working tree, ship later.
+               "--git-dir", self.repo,
                "--command", "%s %s 4000" % (sys.executable,
                                             os.path.join(self.ws, "dedupe.py"))]
         if pack:
@@ -256,7 +317,7 @@ class Canary:
     def gate(self, pack, hyp):
         p = subprocess.run([sys.executable, os.path.join(self.bin, "gate.py"),
                             "--run-root", self.rr, "--pack", pack, "--hyp", hyp,
-                            "--repo", self.repo, "--skip-git-ancestry"],
+                            "--repo", self.repo],
                            capture_output=True, text=True, cwd=self.repo)
         verdict = "pass" if p.returncode == 0 else "veto"
         self.log("evidence_gate", pack=pack, verdict=verdict)
@@ -444,11 +505,22 @@ class Canary:
             return False
 
         if step == "init":
-            self.append_record("# canary RECORD — cdreview-brainstorm-join\n")
-            self.append_record("## Status\nrunning (sealed canary)\n")
-            self.append_record("## Goal this cycle\n"
-                               "trivial-domain corpus C-001-004b: \"dedupe a list\"\n")
-            self.append_record("## Done (chronological)\n")
+            # Idempotent: RECORD.md is append-only (§13.2.5), so a replayed init
+            # must not write a second header. Defence in depth — even if step
+            # resolution ever regresses, the record cannot be corrupted.
+            header = "# canary RECORD — cdreview-brainstorm-join"
+            existing = ""
+            if os.path.exists(self.record_path):
+                with open(self.record_path, encoding="utf-8") as fh:
+                    existing = fh.read()
+            if header not in existing:
+                self.append_record(header + "\n")
+                self.append_record("## Status\nrunning (sealed canary)\n")
+                self.append_record("## Goal this cycle\n"
+                                   "trivial-domain corpus C-001-004b: \"dedupe a list\"\n")
+                self.append_record("## Done (chronological)\n")
+            else:
+                self.log("record_header_present", note="not duplicating (append-only)")
         elif step == "cycle_scope_written":
             self.seed_workspace()
         elif step == "stare_decisis_loaded":
@@ -529,6 +601,11 @@ class Canary:
         elif step == "evidence_gate:P-002":
             v = self.gate("P-002", "H-002")
             self.append_record("- evidence_gate:P-002:%s" % v)
+            # Persist the declared vocabulary entry for BOTH outcomes. The header
+            # declares evidence_gate:{PACK_ID}:{pass|veto}, so a veto that jumped
+            # straight to ship_blocked would leave that declared label unused —
+            # the implementation contradicting its own vocabulary.
+            self.write_status("evidence_gate:P-002:%s" % v)
             if v == "veto":
                 self.write_status("ship_blocked:P-002:delta_not_regressed")
                 # revert the pack (§11.1)
@@ -592,19 +669,27 @@ class Canary:
             if not st:
                 print("CANARY FAIL: --resume but no day-status.json to resume from")
                 return 1
-            last = st["last_step"]
-            if last not in STEPS:
-                # tolerate the annotated variants the loop writes (e.g. :pass)
-                base = last.rsplit(":", 1)[0]
-                last = base if base in STEPS else last
-            if last in STEPS:
-                # EXCLUSIVE slice on purpose: the step named in day-status.json is
-                # RE-RUN, not skipped. Status is written *before* the side effect,
-                # so a crash mid-side-effect leaves that step recorded but
-                # possibly incomplete. cd-review §8.3.1: "the next wake sees the
-                # in-flight step and re-runs it idempotently."
-                resumed_past = set(STEPS[:STEPS.index(last)])
-            self.log("cold_resume", from_step=st["last_step"],
+            raw_last = st["last_step"]
+            last = normalize_step(raw_last)
+            if last is None:
+                # Fail loudly. Silently restarting from init would duplicate
+                # RECORD.md content and fabricate undocumented re-measures, which
+                # the loop's own L6 lens flags as P1 (EVIDENCE-LENS.md §4).
+                self.log("RESUME_VIOLATION", last_step=raw_last,
+                         detail="status label maps to no declared step; refusing "
+                                "to silently replay the cycle")
+                print("CANARY FAIL: last_step %r is not in the declared vocabulary "
+                      "and has no known owning step" % raw_last)
+                self.write_status(raw_last, state="fatal_blocked",
+                                  blocked_reason="unmappable_last_step")
+                return 1
+            # EXCLUSIVE slice on purpose: the owning step is RE-RUN, not skipped.
+            # Status is written *before* the side effect, so a crash mid-effect
+            # leaves that step recorded but possibly incomplete. cd-review §8.3.1:
+            # "the next wake sees the in-flight step and re-runs it idempotently."
+            resumed_past = set(STEPS[:STEPS.index(last)])
+            self.log("cold_resume", from_step=raw_last,
+                     resolved_owning_step=last,
                      replaying_in_flight_step=last,
                      skipping=len(resumed_past),
                      source="day-status.json + RECORD.md only")
@@ -621,6 +706,16 @@ class Canary:
 
         for step in STEPS:
             if not self.execute(step, resumed_past):
+                # Preserve a specific terminal state the step already recorded
+                # (e.g. budget_exhausted). Flattening everything to fatal_blocked
+                # would erase the timeout-vs-failure distinction, and the two have
+                # opposite launcher actions: re-wake vs do-not-retry
+                # (cd-review §10.5).
+                prior = (self.read_status() or {}).get("state")
+                if prior in ("budget_exhausted",):
+                    self.log("canary_end", state=prior, step=step,
+                             note="specific terminal state preserved")
+                    return 1
                 self.write_status(step, state="fatal_blocked",
                                   blocked_reason="canary step failed")
                 self.log("canary_end", state="fatal_blocked", step=step)
@@ -639,7 +734,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", default=".")
     ap.add_argument("--run-root", required=True)
-    ap.add_argument("--kill-at")
+    ap.add_argument("--kill-at",
+                    help="STEPS entry to die after (post side-effect)")
+    ap.add_argument("--kill-after-status",
+                    help="persisted status LABEL to die immediately after, before "
+                         "the side effect; reaches sub-state labels such as "
+                         "reverted:<pack>")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--budget-seconds", type=int, default=300)
     sys.exit(Canary(ap.parse_args()).run())

@@ -69,63 +69,63 @@ Spec: [`delta_test.md`](./delta_test.md). Harness: [`delta_test.py`](./delta_tes
 `./agents/cd-review/LOOP.md`
 
 - **`audit_finding`** ✅
-  - port evidence — L34: `- name: audit-port`
+  - port evidence — L35: `- name: audit-port`
   - wave evidence — L374: `- Severity: P0|P1|P2|P3`
-- **`verified_dossier`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`verified_citation`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`before_measurement`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`after_measurement`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`measured_delta`** ❌ — no port declares this artifact; no wave/gate produces this artifact
+- **`verified_dossier`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`verified_citation`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`before_measurement`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`after_measurement`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`measured_delta`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
 - **`shipped_diff`** ✅
-  - port evidence — L29: `type: git-diff`
-  - wave evidence — L72: `- develop_merged:{PR_NUMBER}`
-- **`refutation_veto`** ❌ — no port declares this artifact; no wave/gate produces this artifact
+  - port evidence — L30: `type: git-diff`
+  - wave evidence — L626: ``git push`, `gh pr create`, `gh pr merge`, `@coderabbitai review``
+- **`refutation_veto`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
 
 #### baseline_b (brainstorm alone)
 
 `./agents/brainstorm/LOOP.md`
 
-- **`audit_finding`** ❌ — no port declares this artifact; no wave/gate produces this artifact
+- **`audit_finding`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
 - **`verified_dossier`** ✅
-  - port evidence — L39: `- name: dossiers-port`
-  - wave evidence — L43: `description: "Wave β Toulmin dossiers with 3-state verdict (ADVANCE/REFUTE/INCONCLUSIVE). 5 per scout cycle (M = shortlist cap)."`
+  - port evidence — L40: `- name: dossiers-port`
+  - wave evidence — L100: `2. **Research** (convergent, max-N parallel subagents) — verify each shortlisted idea with external grounding (web search, code PoCs, citations), prod`
 - **`verified_citation`** ✅
-  - port evidence — L51: `- name: citations-port`
-  - wave evidence — L55: `description: "Cross-cycle citation verification cache (7-day TTL). Per-cycle verified.jsonl + refuted.jsonl merged at end-of-cycle archive-update."`
-- **`before_measurement`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`after_measurement`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`measured_delta`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`shipped_diff`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`refutation_veto`** ❌ — no port declares this artifact; no wave/gate produces this artifact
+  - port evidence — L52: `- name: citations-port`
+  - wave evidence — L127: `citations.jsonl                    ← cross-cycle citation verification cache (7-day TTL)`
+- **`before_measurement`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`after_measurement`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`measured_delta`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`shipped_diff`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`refutation_veto`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
 
 #### composed (declared by composition contract)
 
 `./agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/composition-contract.md`
 
 - **`audit_finding`** ✅
-  - port evidence — L125: `- {name: audit-port, type: markdown-files}`
+  - port evidence — L126: `- {name: audit-port, type: markdown-files}`
   - wave evidence — L148: `| **A** — Audit | Hostile slice audit, findings only | `cd-review` Wave A | findings with `Severity: P0|P1|P2|P3`, code:line citation, and a declared `
 - **`verified_dossier`** ✅
-  - port evidence — L127: `- {name: dossiers-port, type: markdown-files}`
+  - port evidence — L128: `- {name: dossiers-port, type: markdown-files}`
   - wave evidence — L70: `Run brainstorm alone. It produces ADVANCE/REFUTE/INCONCLUSIVE dossiers with`
 - **`verified_citation`** ✅
-  - port evidence — L132: `- {name: citations-port, type: jsonl}`
+  - port evidence — L133: `- {name: citations-port, type: jsonl}`
   - wave evidence — L150: `| **V** — Verify | Toulmin dossier + 3-state verdict | `brainstorm` Wave β | `ADVANCE / REFUTE / INCONCLUSIVE` per hypothesis, ≥1 citation verified ag`
 - **`before_measurement`** ✅
-  - port evidence — L128: `- {name: measurements-port, type: jsonl}`
+  - port evidence — L129: `- {name: measurements-port, type: jsonl}`
   - wave evidence — L75: `dossier, before-measurement, after-measurement, measured delta, shipped`
 - **`after_measurement`** ✅
-  - port evidence — L128: `- {name: measurements-port, type: jsonl}`
+  - port evidence — L129: `- {name: measurements-port, type: jsonl}`
   - wave evidence — L61: `verified citation and (b) a before/after measurement on a metric declared`
 - **`measured_delta`** ✅
-  - port evidence — L128: `- {name: measurements-port, type: jsonl}`
+  - port evidence — L129: `- {name: measurements-port, type: jsonl}`
   - wave evidence — L75: `dossier, before-measurement, after-measurement, measured delta, shipped`
 - **`shipped_diff`** ✅
-  - port evidence — L133: `- {name: fixes-port, type: git-diff}`
+  - port evidence — L134: `- {name: fixes-port, type: git-diff}`
   - wave evidence — L155: `| **S** — Synthesise + ship | Constraints, then ship | `brainstorm` Wave γ + `cd-review` §10.2 | next-cycle constraints, then `gh pr create` → `develo`
 - **`refutation_veto`** ✅
-  - port evidence — L121: `- {name: verified-improvements-port, type: jsonl, required: false}`
-  - wave evidence — L76: `diff, refutation veto record}. Each baseline must be structurally incapable`
+  - port evidence — L122: `- {name: verified-improvements-port, type: jsonl, required: false}`
+  - wave evidence — L154: `| **G** — Evidence Gate | Conjunctive admission | **new — neither parent** | gate verdict; on veto a `ship_blocked` record in `refutations-port` |`
 
 </details>
 
@@ -195,63 +195,63 @@ Spec: [`delta_test.md`](./delta_test.md). Harness: [`delta_test.py`](./delta_tes
 `./agents/cd-review/LOOP.md`
 
 - **`audit_finding`** ✅
-  - port evidence — L34: `- name: audit-port`
+  - port evidence — L35: `- name: audit-port`
   - wave evidence — L374: `- Severity: P0|P1|P2|P3`
-- **`verified_dossier`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`verified_citation`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`before_measurement`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`after_measurement`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`measured_delta`** ❌ — no port declares this artifact; no wave/gate produces this artifact
+- **`verified_dossier`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`verified_citation`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`before_measurement`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`after_measurement`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`measured_delta`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
 - **`shipped_diff`** ✅
-  - port evidence — L29: `type: git-diff`
-  - wave evidence — L72: `- develop_merged:{PR_NUMBER}`
-- **`refutation_veto`** ❌ — no port declares this artifact; no wave/gate produces this artifact
+  - port evidence — L30: `type: git-diff`
+  - wave evidence — L626: ``git push`, `gh pr create`, `gh pr merge`, `@coderabbitai review``
+- **`refutation_veto`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
 
 #### baseline_b (brainstorm alone)
 
 `./agents/brainstorm/LOOP.md`
 
-- **`audit_finding`** ❌ — no port declares this artifact; no wave/gate produces this artifact
+- **`audit_finding`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
 - **`verified_dossier`** ✅
-  - port evidence — L39: `- name: dossiers-port`
-  - wave evidence — L43: `description: "Wave β Toulmin dossiers with 3-state verdict (ADVANCE/REFUTE/INCONCLUSIVE). 5 per scout cycle (M = shortlist cap)."`
+  - port evidence — L40: `- name: dossiers-port`
+  - wave evidence — L100: `2. **Research** (convergent, max-N parallel subagents) — verify each shortlisted idea with external grounding (web search, code PoCs, citations), prod`
 - **`verified_citation`** ✅
-  - port evidence — L51: `- name: citations-port`
-  - wave evidence — L55: `description: "Cross-cycle citation verification cache (7-day TTL). Per-cycle verified.jsonl + refuted.jsonl merged at end-of-cycle archive-update."`
-- **`before_measurement`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`after_measurement`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`measured_delta`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`shipped_diff`** ❌ — no port declares this artifact; no wave/gate produces this artifact
-- **`refutation_veto`** ❌ — no port declares this artifact; no wave/gate produces this artifact
+  - port evidence — L52: `- name: citations-port`
+  - wave evidence — L127: `citations.jsonl                    ← cross-cycle citation verification cache (7-day TTL)`
+- **`before_measurement`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`after_measurement`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`measured_delta`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`shipped_diff`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
+- **`refutation_veto`** ❌ — no port declares this artifact; no wave/gate in the protocol body produces this artifact
 
 #### composed (as authored by Wave δ)
 
 `./agents/cdreview-brainstorm-join/LOOP.md`
 
 - **`audit_finding`** ✅
-  - port evidence — L20: `- {name: audit-port, type: markdown-files, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/audits/slices/S<N>.md", description: "Wave A findings `
-  - wave evidence — L360: `- Severity: P0|P1|P2|P3`
+  - port evidence — L21: `- {name: audit-port, type: markdown-files, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/audits/slices/S<N>.md", description: "Wave A findings `
+  - wave evidence — L361: `- Severity: P0|P1|P2|P3`
 - **`verified_dossier`** ✅
-  - port evidence — L22: `- {name: dossiers-port, type: markdown-files, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/dossiers/V-<NNN>-<hyp_id>.md", description: "Wave V`
-  - wave evidence — L900: `| Hypothesis verdict | 3-state UPPERCASE: `ADVANCE` / `REFUTE` / `INCONCLUSIVE` |`
+  - port evidence — L23: `- {name: dossiers-port, type: markdown-files, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/dossiers/V-<NNN>-<hyp_id>.md", description: "Wave V`
+  - wave evidence — L930: `| Hypothesis verdict | 3-state UPPERCASE: `ADVANCE` / `REFUTE` / `INCONCLUSIVE` |`
 - **`verified_citation`** ✅
-  - port evidence — L27: `- {name: citations-port, type: jsonl, path: "agents/cdreview-brainstorm-join/archive/citations.jsonl", description: "Citation verification cache, 7-da`
-  - wave evidence — L28: `- {name: citations-port, type: jsonl, path: "agents/cdreview-brainstorm-join/archive/citations.jsonl", description: "Citation verification cache, 7-da`
+  - port evidence — L28: `- {name: citations-port, type: jsonl, path: "agents/cdreview-brainstorm-join/archive/citations.jsonl", description: "Citation verification cache, 7-da`
+  - wave evidence — L143: `citations.jsonl                   ← citation cache, 7-day TTL`
 - **`before_measurement`** ✅
-  - port evidence — L23: `- {name: measurements-port, type: jsonl, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl", description: "Wave M before`
-  - wave evidence — L164: `M-<hyp_id>-before.json       ← written BEFORE any edit (§8)`
+  - port evidence — L24: `- {name: measurements-port, type: jsonl, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl", description: "Wave M before`
+  - wave evidence — L165: `M-<hyp_id>-before.json       ← written BEFORE any edit (§8)`
 - **`after_measurement`** ✅
-  - port evidence — L23: `- {name: measurements-port, type: jsonl, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl", description: "Wave M before`
-  - wave evidence — L165: `M-<hyp_id>-after.json`
+  - port evidence — L24: `- {name: measurements-port, type: jsonl, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl", description: "Wave M before`
+  - wave evidence — L166: `M-<hyp_id>-after.json`
 - **`measured_delta`** ✅
-  - port evidence — L23: `- {name: measurements-port, type: jsonl, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl", description: "Wave M before`
-  - wave evidence — L58: `- delta_computed:{PACK_ID}:{improved|neutral|regressed}`
+  - port evidence — L24: `- {name: measurements-port, type: jsonl, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/measure/measurements.jsonl", description: "Wave M before`
+  - wave evidence — L504: `delta_computed:{PACK_ID}:{improved|neutral|regressed}`
 - **`shipped_diff`** ✅
-  - port evidence — L28: `- {name: fixes-port, type: git-diff, description: "Wave F edits shipped as PR diff(s) to develop → main."}`
-  - wave evidence — L69: `- develop_merged:{PR_NUMBER}`
+  - port evidence — L29: `- {name: fixes-port, type: git-diff, description: "Wave F edits shipped as PR diff(s) to develop → main."}`
+  - wave evidence — L751: ``gh pr create` against `develop`, CI green, merge, then a `main` PR with`
 - **`refutation_veto`** ✅
-  - port evidence — L16: `- {name: verified-improvements-port, type: jsonl, required: false, path: "agents/cdreview-brainstorm-join/archive/verified-improvements.jsonl", descri`
-  - wave evidence — L25: `- {name: refutations-port, type: jsonl, path: "agents/cdreview-brainstorm-join/runs/<RUN_ID>/gate/refutations.jsonl", description: "Evidence-Gate veto`
+  - port evidence — L17: `- {name: verified-improvements-port, type: jsonl, required: false, path: "agents/cdreview-brainstorm-join/archive/verified-improvements.jsonl", descri`
+  - wave evidence — L510: ``ship_blocked:{PACK_ID}:missing_baseline`. The pack may be re-run next cycle`
 
 </details>
 

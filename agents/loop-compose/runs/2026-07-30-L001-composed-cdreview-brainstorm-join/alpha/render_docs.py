@@ -11,8 +11,11 @@ import os
 import sys
 
 RR = sys.argv[1] if len(sys.argv) > 1 else "."
-alpha = json.load(open(os.path.join(RR, "alpha/port-binding-enumeration.json")))
-beta = json.load(open(os.path.join(RR, "beta/verdicts.json")))
+with open(os.path.join(RR, "alpha/port-binding-enumeration.json"),
+          encoding="utf-8") as fh:
+    alpha = json.load(fh)
+with open(os.path.join(RR, "beta/verdicts.json"), encoding="utf-8") as fh:
+    beta = json.load(fh)
 
 C = beta["verdict_counts"]
 
@@ -103,7 +106,9 @@ lines += [
     "parent's own wave, or a resume-contract collision.",
     "",
 ]
-open(os.path.join(RR, "alpha/port-binding-enumeration.md"), "w").write("\n".join(lines) + "\n")
+with open(os.path.join(RR, "alpha/port-binding-enumeration.md"), "w",
+          encoding="utf-8") as fh:
+    fh.write("\n".join(lines) + "\n")
 
 # ---------------------------------------------------------------- beta doc
 def group(pred):
@@ -201,6 +206,7 @@ bl += [
     "triggered.",
     "",
 ]
-open(os.path.join(RR, "beta/verdicts.md"), "w").write("\n".join(bl) + "\n")
+with open(os.path.join(RR, "beta/verdicts.md"), "w", encoding="utf-8") as fh:
+    fh.write("\n".join(bl) + "\n")
 
 print("wrote alpha/port-binding-enumeration.md and beta/verdicts.md")

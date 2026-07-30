@@ -17,7 +17,10 @@ is a veto:
 Usage
 -----
   gate.py --run-root DIR --pack P-002 --hyp H-003 [--repo .] [--ttl-days 7]
-          [--skip-git-ancestry]
+
+Ancestry is verified against the tree each baseline was measured in (its recorded
+`git_dir`), so there is no way to skip the check. A conjunct that reports PASS
+without performing its check turns the gate into a claim rather than a test.
 
 Exit 0 = pass, 1 = veto. Writes gate/gate-<PACK>.md always, and appends to
 gate/refutations.jsonl on veto.
@@ -32,6 +35,11 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
+
+# Reuse the harness's record selector so the gate and the harness can never
+# disagree about which measurement record is newest.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from measure import measurement_records  # noqa: E402
 
 SEV_RANK = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 
@@ -96,10 +104,20 @@ def read_wave_d(run_root, pack):
         return None, "no consolidated Wave D file at audits/pre-pr/%s.md" % pack
     with open(p, encoding="utf-8") as fh:
         text = fh.read()
-    verdict = None
-    m = re.search(r"(send_back_to_wave_F|fix_and_proceed|accept_and_ship)", text)
-    if m:
-        verdict = m.group(1)
+    # Anchor to a LABELLED verdict and take the LAST one. An unanchored search
+    # returns the leftmost token anywhere in the document, so a vocabulary legend
+    # or a sentence like "this would normally be accept_and_ship, but..." could
+    # outrank the real verdict — and if the stray token were accept_and_ship the
+    # gate would fail OPEN. Two accepted forms:
+    #   "Verdict: accept_and_ship"     (inline field)
+    #   "## Verdict\naccept_and_ship"  (heading followed by the bare token)
+    # No labelled verdict found ⇒ None ⇒ the wave_d_accept conjunct fails closed.
+    TOKENS = r"(send_back_to_wave_F|fix_and_proceed|accept_and_ship)"
+    found = re.findall(r"^\s*[-*]?\s*\**\s*verdict\s*\**\s*:\s*\**\s*" + TOKENS,
+                       text, re.M | re.I)
+    found += re.findall(r"^\s*#{1,6}\s*\**\s*verdict\b[^\n]*\n+\s*[-*]?\s*\**\s*"
+                        + TOKENS, text, re.M | re.I)
+    verdict = found[-1] if found else None
     # L6 findings: "D-<pack>-L6-<nnn>" with a Severity line nearby
     l6 = []
     for block in re.split(r"\n(?=#{2,4}\s)", text):
@@ -111,17 +129,13 @@ def read_wave_d(run_root, pack):
 
 def newest_measure(run_root, hyp, phase):
     mdir = os.path.join(run_root, "measure")
-    base = "M-%s-%s" % (hyp, phase)
-    if not os.path.isdir(mdir):
+    recs = measurement_records(mdir, "M-%s-%s" % (hyp, phase))
+    if not recs:
         return None
-    cands = [f for f in os.listdir(mdir) if f.startswith(base) and f.endswith(".json")]
-    if not cands:
-        return None
-    cands.sort(key=lambda f: (0 if f == base + ".json"
-                              else int(re.search(r"\.r(\d+)\.json$", f).group(1))))
-    with open(os.path.join(mdir, cands[-1]), encoding="utf-8") as fh:
+    chosen = recs[-1][1]
+    with open(os.path.join(mdir, chosen), encoding="utf-8") as fh:
         d = json.load(fh)
-    d["_file"] = cands[-1]
+    d["_file"] = chosen
     return d
 
 
@@ -147,11 +161,16 @@ def read_delta(run_root, hyp):
 def is_ancestor(sha, repo):
     if not sha or sha == "unknown":
         return False, "baseline git_sha is unknown"
+    inside = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"],
+                            cwd=repo, capture_output=True, text=True)
+    if inside.returncode != 0:
+        return False, "%s is not a git work tree, so baseline ancestry cannot be " \
+                      "verified" % repo
     p = subprocess.run(["git", "merge-base", "--is-ancestor", sha, "HEAD"],
                        cwd=repo, capture_output=True, text=True)
     if p.returncode == 0:
         return True, None
-    return False, "baseline sha %s is not an ancestor of HEAD" % sha[:12]
+    return False, "baseline sha %s is not an ancestor of HEAD in %s" % (sha[:12], repo)
 
 
 # ---------------------------------------------------------------------------
@@ -193,12 +212,15 @@ def evaluate(args):
         add("baseline_precedes_edit", False, "no baseline")
     else:
         add("baseline_exists", True, "%s value=%s" % (before["_file"], before["value"]))
-        if args.skip_git_ancestry:
-            add("baseline_precedes_edit", True,
-                "ancestry check skipped (sealed canary: --skip-git-ancestry)")
-        else:
-            ok, why = is_ancestor(before.get("git_sha"), args.repo)
-            add("baseline_precedes_edit", ok, why or "baseline sha is an ancestor of HEAD")
+        # Ancestry is checked against the tree the baseline was actually measured
+        # in (recorded as git_dir), falling back to --repo for older records.
+        # There is deliberately no skip flag: a conjunct that reports PASS without
+        # performing its check makes the whole gate a claim rather than a test.
+        tree = before.get("git_dir") or args.repo
+        ok, why = is_ancestor(before.get("git_sha"), tree)
+        add("baseline_precedes_edit", ok,
+            why or "baseline sha %s is an ancestor of HEAD in %s"
+            % ((before.get("git_sha") or "?")[:12], tree))
 
     if after is None:
         add("after_exists", False, "M-%s-after.json missing" % args.hyp)
@@ -303,9 +325,6 @@ def main():
     ap.add_argument("--hyp", required=True)
     ap.add_argument("--repo", default=".")
     ap.add_argument("--ttl-days", type=int, default=7)
-    ap.add_argument("--skip-git-ancestry", action="store_true",
-                    help="sealed-canary mode: the canary works in a scratch tree "
-                         "with no git history of its own")
     sys.exit(evaluate(ap.parse_args()))
 
 

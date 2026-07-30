@@ -92,7 +92,11 @@ ARTIFACT_CLASSES = [
         "label": "Record of a written, green change BLOCKED by a verdict",
         "port_re": r"name:\s*refutations?-port|\{name:\s*refutations?-port|"
                    r"name:\s*verified-improvements-port|\{name:\s*verified-improvements-port",
-        "wave_re": r"evidence_gate\S*veto|ship_blocked|REFUTE vetoes|veto",
+        # A bare "veto" would match any prose mention, so the wave probe requires
+        # a structured form: a declared gate step, a ship-block record, or a
+        # named failed conjunct.
+        "wave_re": r"evidence_gate\S*veto|evidence_gate:\S*\{pass\|veto\}|ship_blocked"
+                   r"|REFUTE vetoes|failed_conjunct",
     },
 ]
 
@@ -100,12 +104,23 @@ PORTS_REGION = re.compile(r"```yaml\n(.*?)\n```|^---\n(.*?)\n---", re.DOTALL | r
 
 
 def ports_region(text):
-    """Return the ports: block text plus its offset, so line numbers stay real."""
+    """Locate the declared interface block.
+
+    Returns (body, line_offset, (start_char, end_char)).
+
+    `line_offset` is the 0-based count of lines before the block body, so a body
+    index `i` maps to 1-based source line `line_offset + i + 1`. The `+ 1` in the
+    return accounts for the opening fence / `---` occupying its own line — the
+    body begins on the line AFTER the delimiter.
+
+    The char span is returned so wave-evidence scanning can EXCLUDE this region;
+    see `probe()`.
+    """
     for m in PORTS_REGION.finditer(text):
         body = m.group(1) or m.group(2) or ""
         if "ports:" in body:
-            return body, text[:m.start()].count("\n")
-    return "", 0
+            return body, text[:m.start()].count("\n") + 1, (m.start(), m.end())
+    return "", 0, (0, 0)
 
 
 def norm(line):
@@ -120,12 +135,31 @@ def norm(line):
     return line.replace("\\|", "|")
 
 
+def body_lines(text, pspan):
+    """Protocol-body lines, with the declared-interface region blanked out.
+
+    Wave evidence MUST come from the protocol body. If the ports region were left
+    in scope, a single port `description:` string could satisfy both conjuncts and
+    the two-evidence rule would collapse into one — a loop could then score by
+    declaring an interface it never implements. Blanked lines keep their index so
+    reported line numbers stay true to the source.
+    """
+    ps, pe = pspan
+    out, off = [], 0
+    for raw in text.split("\n"):
+        start, end = off, off + len(raw)
+        overlaps = start < pe and end > ps
+        out.append("" if overlaps else norm(raw))
+        off = end + 1
+    return out
+
+
 def probe(path, label):
     with open(path, "r", encoding="utf-8") as fh:
         text = fh.read()
-    pregion, poffset = ports_region(text)
-    plines = [norm(l) for l in pregion.split("\n")]
-    blines = [norm(l) for l in text.split("\n")]
+    pregion, poffset, pspan = ports_region(text)
+    plines = [norm(x) for x in pregion.split("\n")]
+    blines = body_lines(text, pspan)
 
     results = {}
     for spec in ARTIFACT_CLASSES:
@@ -145,7 +179,7 @@ def probe(path, label):
         if not port_hit:
             missing.append("no port declares this artifact")
         if not wave_hit:
-            missing.append("no wave/gate produces this artifact")
+            missing.append("no wave/gate in the protocol body produces this artifact")
 
         results[spec["id"]] = {
             "label": spec["label"],

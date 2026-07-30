@@ -31,6 +31,7 @@ four reviewers.*
 - **The new review lens:** [`EVIDENCE-LENS.md`](./EVIDENCE-LENS.md) — L6, evidence & measurement integrity
 - **Measurement harness:** [`bin/measure.py`](./bin/measure.py) — Wave M (§8)
 - **Gate evaluator:** [`bin/gate.py`](./bin/gate.py) — the Evidence Gate (§11)
+- **Gate negative controls:** [`bin/selftest.py`](./bin/selftest.py) — drives every conjunct to failure, so the gate is falsifiable rather than decorative
 - **Cross-cycle memory:** [`archive/`](./archive/) — verified improvements, measurements, novelty, constraints
 - **Per-cycle runs:** [`runs/YYYY-MM-DD-JNNN/`](./runs/) — immutable dated artifacts
 - **How it was composed:** [`agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/`](../loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/)

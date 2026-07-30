@@ -113,20 +113,33 @@ def main():
     # declared vocabulary with the canary's executed step list, so a trial can
     # never target a step that never happens.
     executed = [l.strip() for l in out.split("\n")]
-    from canary_driver import STEPS  # noqa: E402
+    from canary_driver import STEPS, SUBSTATE_KILL_POINTS  # noqa: E402
     concrete = [s for s in STEPS if s != "init"]
     # keep only steps whose vocabulary form is declared (templated names match by prefix)
     declared_prefixes = [v.split(":")[0] for v in vocab]
     candidates = [s for s in concrete if s.split(":")[0] in declared_prefixes]
 
+    if not vocab:
+        print("ORACLE FAIL: parsed an empty last_step_vocabulary from the composed "
+              "LOOP.md — kill points cannot be drawn from the target's own vocabulary "
+              "(C-001-004a)")
+        return 1
+    if not candidates:
+        print("ORACLE FAIL: no kill candidates after intersecting the declared "
+              "vocabulary with the canary's executed steps")
+        return 1
+
     rng = random.Random(args.seed)
-    picks = rng.sample(candidates, min(args.trials, len(candidates)))
+    picks = [("status", lbl) for lbl in SUBSTATE_KILL_POINTS]
+    picks += [("step", s) for s in
+              rng.sample(candidates, min(args.trials, len(candidates)))]
 
     trials = []
-    for i, step in enumerate(picks, 1):
-        print("\n--- trial %d/%d: kill at %r ---" % (i, len(picks), step))
+    for i, (mode, step) in enumerate(picks, 1):
+        flag = "--kill-at" if mode == "step" else "--kill-after-status"
+        print("\n--- trial %d/%d: kill at %r (%s) ---" % (i, len(picks), step, mode))
         rc1, o1, e1 = run([sys.executable, DRIVER, "--repo", repo,
-                           "--run-root", rr, "--kill-at", step])
+                           "--run-root", rr, flag, step])
         killed = (rc1 == 137)
         sp = os.path.join(rr, "day-status.json")
         status_at_kill = json.load(open(sp, encoding="utf-8")) if os.path.exists(sp) else None
@@ -144,12 +157,18 @@ def main():
         print("  resume rc=%s state=%s gate=%s refutations=%d  -> %s"
               % (rc2, resumed["state"], resumed["gate"], resumed["refutations"],
                  "SUCCESS" if ok else "FAILURE"))
+        if mode == "status" and not killed:
+            print("  ORACLE MISCONFIGURED: %r was never persisted by the driver, so "
+                  "the kill never fired. Either the driver stopped writing that "
+                  "label or SUBSTATE_KILL_POINTS is stale." % step)
         if not ok:
             print("  reference=%s\n  resumed  =%s" % (reference, resumed))
             print(e2[-600:])
 
         trials.append({
             "trial": i,
+            "kill_mode": mode,
+            "regression_test": mode == "status",
             "killed_at": step,
             "kill_exit_code": rc1,
             "hard_kill_confirmed": killed,
@@ -177,7 +196,14 @@ def main():
             "authored_loop_md_readable": readable,
             "no_hitl_strings_in_log": len(hitl) == 0,
             "hitl_matches": hitl,
-            "all_trials_resumed": all(t["cold_resume"] == "SUCCESS" for t in trials),
+            # all() is True on an empty list, so without this the oracle could
+              # report PASS having executed no trial at all.
+              "trials_executed": len(trials) > 0,
+              "all_substate_labels_fired": all(
+                  t["hard_kill_confirmed"] for t in trials if t["regression_test"]),
+              "substate_regressions_covered": sum(
+                  1 for t in trials if t["regression_test"]) == len(SUBSTATE_KILL_POINTS),
+              "all_trials_resumed": all(t["cold_resume"] == "SUCCESS" for t in trials),
             "gate_property_held": reference["gate"] == {"P-001": "PASS", "P-002": "VETO"},
             "veto_was_reverted": reference["reverted"],
         },

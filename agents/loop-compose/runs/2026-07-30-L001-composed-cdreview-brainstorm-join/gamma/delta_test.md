@@ -40,12 +40,37 @@ emit a class only when **both** kinds of evidence exist *in its own spec*:
 | Evidence kind | Where it is searched | Why it is required |
 |---------------|----------------------|--------------------|
 | **PORT** | the protocol's typed `ports:` block only | something must carry the artifact across the loop boundary |
-| **WAVE** | the whole protocol body | some wave or gate must actually produce it |
+| **WAVE** | the protocol body, **with the `ports:` region excluded** | some wave or gate must actually produce it |
 
 Requiring both is what keeps this from collapsing into keyword-grepping.
-Aspirational prose ("we should measure things some day") yields wave-ish text
-with no port to carry the artifact, and scores zero. Conversely a port declared
-but never produced by any wave also scores zero.
+Aspirational prose ("we should measure things some day") yields wave-ish text with
+no port to carry the artifact, and scores zero. Conversely a port declared but
+never produced by any wave also scores zero.
+
+### The two evidence kinds must be independent
+
+The first version of this harness scanned the **whole** document for wave
+evidence, including the `ports:` region. Code review caught the consequence: a
+single port `description:` string could satisfy *both* conjuncts, so the
+two-evidence rule silently collapsed into one. Two of the composed loop's eight
+classes were affected — `verified_citation` cited L27 (a port) and L28 (the same
+port), and `refutation_veto` cited L16 and L25, also both ports. Those classes had
+no independent wave evidence at all, which weakened the 8/8 result they
+contributed to.
+
+The interface region is now blanked out before wave scanning. A loop can no longer
+score by *declaring* an interface it never implements — which is precisely the
+failure this test is supposed to detect. Blanked lines keep their index, so
+reported line numbers stay true to the source.
+
+Excluding the whole frontmatter also excludes `last_step_vocabulary`. That is
+deliberate: a declared step name is interface, not mechanism. A loop can declare
+`delta_computed` and never compute a delta, so the step list is not admissible as
+proof that a wave produces the artifact.
+
+**Re-running under the stricter rule left the verdict unchanged at 8/8**, with all
+four previously-ports-backed citations relocating to genuine body evidence
+(§0 layout, §8.1, §12.2). The result is the same; it now means something.
 
 Every hit records file, line number and matched text, so each cell of the
 verdict table can be audited by hand. Misses record which of the two evidence
@@ -63,6 +88,14 @@ kinds was absent.
 | `measured_delta` | computed delta with an `improved\|neutral\|regressed` call |
 | `shipped_diff` | repo-write: a diff / PR actually shipped |
 | `refutation_veto` | record of a written, green change **blocked** by a verdict |
+
+### Line numbers
+
+`ports_region` returns the 0-based count of lines preceding the block *body*, so a
+body index `i` maps to source line `offset + i + 1`. The opening fence / `---`
+occupies its own line, which an earlier revision failed to account for — every
+`port_evidence.line` in the committed results was one short, undercutting the
+"auditable by hand" claim this harness rests on.
 
 ### Markdown normalisation
 

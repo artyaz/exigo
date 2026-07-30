@@ -20,7 +20,7 @@
             "name": "slice-map-port",
             "type": "text",
             "required": false,
-            "default": "agents/cd-review/REVIEW-LENS.md + \u00a74 default S1\u2013S11",
+            "default": "agents/cd-review/REVIEW-LENS.md + §4 default S1–S11",
             "description": "Codebase partition into reviewable slices."
           },
           {
@@ -34,7 +34,7 @@
           {
             "name": "fixes-port",
             "type": "git-diff",
-            "description": "Code fixes shipped as PR diff(s) to develop \u2192 main."
+            "description": "Code fixes shipped as PR diff(s) to develop → main."
           },
           {
             "name": "pr-port",
@@ -45,7 +45,7 @@
             "name": "audit-port",
             "type": "markdown-files",
             "path": "agents/cd-review/<date>/audits/slices/S<N>.md",
-            "description": "Per-slice audit findings (P0\u2013P3 severity)."
+            "description": "Per-slice audit findings (P0–P3 severity)."
           },
           {
             "name": "brainstorms-port",
@@ -133,7 +133,7 @@
             "type": "jsonl",
             "required": false,
             "path": "agents/brainstorm/archive/constraints.jsonl",
-            "description": "Decay_score \u2265 0.3 + [soft]-tagged."
+            "description": "Decay_score ≥ 0.3 + [soft]-tagged."
           },
           {
             "name": "novelty-archive-port",
@@ -356,7 +356,7 @@
         "no_parent_mutation": true,
         "extracted_from": "loop-forge",
         "extracted_at": "2026-07-24T23:50:00Z",
-        "extraction_reason": "composition operation is reusable beyond loop-forge \u2014 any caller wanting to compose two loops benefits"
+        "extraction_reason": "composition operation is reusable beyond loop-forge — any caller wanting to compose two loops benefits"
       }
     },
     {
@@ -391,8 +391,8 @@
             "name": "slice-map-port",
             "type": "text",
             "required": false,
-            "default": "agents/cd-review/REVIEW-LENS.md + cd-review \u00a74 default S1\u2013S11",
-            "description": "Codebase partition; re-aimed each cycle by prior constraints (\u00a74)."
+            "default": "agents/cd-review/REVIEW-LENS.md + cd-review §4 default S1–S11",
+            "description": "Codebase partition; re-aimed each cycle by prior constraints (§4)."
           },
           {
             "name": "prior-constraints-port",
@@ -411,7 +411,7 @@
             "type": "jsonl",
             "required": false,
             "path": "agents/cdreview-brainstorm-join/archive/verified-improvements.jsonl",
-            "description": "Stare decisis \u2014 the join. Read at \u00a71.3, appended at \u00a714."
+            "description": "Stare decisis — the join. Read at §1.3, appended at §14."
           },
           {
             "name": "novelty-archive-port",
@@ -476,7 +476,7 @@
           {
             "name": "fixes-port",
             "type": "git-diff",
-            "description": "Wave F edits shipped as PR diff(s) to develop \u2192 main."
+            "description": "Wave F edits shipped as PR diff(s) to develop → main."
           },
           {
             "name": "pr-port",
@@ -547,10 +547,10 @@
         "L4": 0.75
       },
       "lens_scores_rationale": {
-        "L1": "Autonomy \u2014 inherits cd-review's day-status resume contract and adds the measure-before-mutate invariant, which is machine-checkable on resume from disk alone.",
-        "L2": "Universality \u2014 deliberately low. The measurement catalogue is bound to Exigo's npm scripts and the ship path is GitHub/CodeRabbit-specific. Portable in structure, not in commands.",
-        "L3": "Combinability \u2014 8 typed inputs / 12 typed outputs, including two ports (measurements-port, refutations-port) that no other loop exposes; verified-improvements-port is both input and output, which is what makes it joinable with itself across cycles.",
-        "L4": "Extractability \u2014 per-wave checkpoints and immutable measurements survive a mid-wave kill. Wave M is the risky span because before/after must pair; the vocabulary orders measure_before ahead of wave_f_dispatched precisely so a cold launcher can detect a broken pair."
+        "L1": "Autonomy — inherits cd-review's day-status resume contract and adds the measure-before-mutate invariant, which is machine-checkable on resume from disk alone.",
+        "L2": "Universality — deliberately low. The measurement catalogue is bound to Exigo's npm scripts and the ship path is GitHub/CodeRabbit-specific. Portable in structure, not in commands.",
+        "L3": "Combinability — 8 typed inputs / 12 typed outputs, including two ports (measurements-port, refutations-port) that no other loop exposes; verified-improvements-port is both input and output, which is what makes it joinable with itself across cycles.",
+        "L4": "Extractability — per-wave checkpoints and immutable measurements survive a mid-wave kill. Wave M is the risky span because before/after must pair; the vocabulary orders measure_before ahead of wave_f_dispatched precisely so a cold launcher can detect a broken pair."
       },
       "composition_count": 0,
       "status": "active",
@@ -565,7 +565,7 @@
         "no_parent_mutation": true,
         "composed_by": "loop-compose",
         "composed_at": "2026-07-30T06:50:00Z",
-        "depth_derivation": "min(parent depths) \u2212 1 = min(3, 3) \u2212 1 = 2. The authoring loop (loop-compose, depth 2) is not a lineage parent and does not further decrement.",
+        "depth_derivation": "min(parent depths) − 1 = min(3, 3) − 1 = 2. The authoring loop (loop-compose, depth 2) is not a lineage parent and does not further decrement.",
         "extraction_candidate": "The Wave M measurement harness (bin/measure.py) is reusable by any loop wanting a before/after gate. If a second caller needs it, that is the itch to file."
       },
       "delta_test": {
@@ -583,9 +583,20 @@
           "refutation_veto"
         ],
         "verdict": "ADMIT",
-        "non_degenerate": true
+        "non_degenerate": true,
+        "method": "port-anchored capability probe; wave evidence excludes the ports region so the two evidence kinds are independent",
+        "phases": {
+          "contract": "ADMIT",
+          "authored": "ADMIT"
+        }
       },
-      "notes": "Composed 2026-07-30 by agents/loop-compose/ run 2026-07-30-L001. Wave \u03b1 enumerated 45 candidate port bindings from the parents' real ports: blocks; Wave \u03b2 returned 16 COMPOSE / 8 CONFLICT / 21 ORTHOGONAL and bound 2 edges (audit-port\u2192problem-statement-port forward, constraints-port\u2192slice-map-port feedback). All 8 CONFLICTs were the resume-contract single-writer class, resolved by this loop owning one RECORD.md + one day-status.json + its own last_step vocabulary (C-001-004a). Known weak point tracked as C-J-022 (MUST_TEST): metric-gaming in Wave H."
+      "notes": "Composed 2026-07-30 by agents/loop-compose/ run 2026-07-30-L001. Wave α enumerated 45 candidate port bindings from the parents' real ports: blocks; Wave β returned 16 COMPOSE / 8 CONFLICT / 21 ORTHOGONAL and bound 2 edges (audit-port→problem-statement-port forward, constraints-port→slice-map-port feedback). All 8 CONFLICTs were the resume-contract single-writer class, resolved by this loop owning one RECORD.md + one day-status.json + its own last_step vocabulary (C-001-004a). Known weak point tracked as C-J-022 (MUST_TEST): metric-gaming in Wave H. Review round 1 (CodeRabbit, PR #105): 8 valid findings fixed. The delta-test's two-evidence rule was tightened so wave evidence cannot come from the ports block (verdict survived at 8/8); the gate's ancestry conjunct is no longer skippable; resume now resolves the veto path's sub-state labels instead of silently replaying the cycle. bin/selftest.py added: 13 negative controls proving every conjunct can fail.",
+      "gates": {
+        "delta_test": "agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/gamma/delta_test.py",
+        "canary": "agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/epsilon/canary_driver.py",
+        "kill_resume_oracle": "agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/epsilon/kill_resume_oracle.py",
+        "gate_negative_controls": "agents/cdreview-brainstorm-join/bin/selftest.py"
+      }
     }
   ]
 }

@@ -10,12 +10,13 @@
     "unit": "seconds"
   },
   "runs": [
-    0.010694,
-    0.009937,
-    0.009969
+    0.011182,
+    0.011372,
+    0.010859
   ],
-  "value": 0.009969,
-  "stdev": 0.000428,
-  "git_sha": "a773581d7c33d7710058467f7e2e334e84a07ba7",
-  "captured_at": "2026-07-30T07:01:34Z"
+  "value": 0.011182,
+  "stdev": 0.000259,
+  "git_sha": "3c123fa450d94ac8968c5b913afd6851e6b80746",
+  "git_dir": "/agent/workspace/repo",
+  "captured_at": "2026-07-30T07:35:01Z"
 }

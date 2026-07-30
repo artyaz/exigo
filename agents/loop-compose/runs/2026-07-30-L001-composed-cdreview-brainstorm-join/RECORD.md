@@ -2,7 +2,9 @@
 
 ## Status
 
-`complete` — composed loop authored, ε canary PASSED, archived.
+`complete` — composed loop authored, ε canary PASSED, archived. **Review round 1
+applied** (CodeRabbit on PR #105): 8 valid findings fixed, 1 partially valid, all
+gates re-run green. See "Review round 1" below.
 
 ## Goal this run
 
@@ -33,7 +35,7 @@ stop condition: 1 composed loop passes ε. Met.
 | **β** Verdict | **16 COMPOSE / 8 CONFLICT / 21 ORTHOGONAL**. 5 COMPOSE edges semantically admissible, 2 PRIMARY. All 8 CONFLICTs were one class, resolved without refuse-to-ship | [`beta/verdicts.md`](./beta/verdicts.md) |
 | **γ** Delta-test | Port-anchored capability probe: composed **8/8**, cd-review **2/8**, brainstorm **2/8**. 4 classes absent from **both** parents. Verdict **ADMIT** | [`gamma/`](./gamma/) |
 | **δ** Author | Wrote `LOOP.md` (22 sections + the header `ports:` block, each paired with exactly one of the contract's 23 constraints — no orphans either way), `README.md`, `EVIDENCE-LENS.md`, `bin/measure.py`, `bin/gate.py`, archive + runs skeletons, registry sidecar | [`agents/cdreview-brainstorm-join/`](../../../cdreview-brainstorm-join/) |
-| **ε** Ship-gate | Sealed canary on the fixed corpus entry "dedupe a list". Terminal `state=complete`. Kill-and-resume oracle: **4/4 SUCCESS**. Verdict **PASS**, 0 re-runs | [`epsilon/canary/verdict.md`](./epsilon/canary/verdict.md) |
+| **ε** Ship-gate | Sealed canary on the fixed corpus entry "dedupe a list". Terminal `state=complete`, all 8 gate conjuncts genuinely evaluated. Kill-and-resume oracle: **8/8 SUCCESS** (4 fixed sub-state regressions + 4 random). Verdict **PASS**, 0 re-runs | [`epsilon/canary/verdict.md`](./epsilon/canary/verdict.md) |
 | **Archive** | Appended `CM-001` to the composition manifest; appended the loop to the inter-loop catalog | [`archive/`](../../archive/) |
 
 ## The composition in one table
@@ -83,7 +85,8 @@ feedback:  brainstorm.constraints-port ──digest──▶  cd-review.slice-ma
 | β composition verdict | COMPOSE on 2 bound edges; CONFLICT resolved by namespace |
 | γ delta-test (contract) | **ADMIT** — 8/8 vs 2/8 vs 2/8, non-degenerate |
 | γ delta-test (authored) | **ADMIT** — δ delivered the promised interface |
-| ε canary | **PASS** — terminal `complete`, 4/4 cold resumes |
+| ε canary | **PASS** — terminal `complete`, 8/8 cold resumes, 8/8 conjuncts evaluated |
+| Gate negative controls | **PASS** — 13 conjunct-failure cases + positive control |
 | Loop-acceptance | **FORGE** |
 
 ## Valuable notes
@@ -98,12 +101,12 @@ liked.
 
 **The canary earned its keep.** It did not merely confirm the happy path — it drove
 a second pack (`P-002`) that was written, green, and approved by all four
-inherited lenses, and watched the Evidence Gate refuse it on a +1322% metric
+inherited lenses, and watched the Evidence Gate refuse it on a +1396% metric
 regression, revert it, and continue. That is the composed capability, executed
 rather than described.
 
-**The oracle found two real bugs**, both in the resume contract rather than the
-composition:
+**Three resume-contract bugs were found, none in the composition itself.** Two by
+the oracle, one by code review afterwards:
 
 1. Resume was skipping the in-flight step. Since status is written *before* the
    side effect, a crash mid-effect leaves that step recorded but unfinished —
@@ -111,8 +114,15 @@ composition:
 2. Replaying the gate double-recorded the refutation, which would have
    double-counted toward the gate-veto-storm stop condition. `bin/gate.py` now
    dedupes on `(pack_id, hypothesis_id, failed_conjunct)`.
+3. Sub-state labels on the veto path (`ship_blocked:`, `reverted:`) mapped to no
+   declared step, so resume silently replayed the whole cycle. Found in review —
+   see "Review round 1".
 
-A passing oracle that found nothing would have been weaker evidence.
+A passing oracle that found nothing would have been weaker evidence. But note the
+sharper lesson from #3: **the oracle passed while that bug was live.** Random kill
+points that all land on harmlessly-replayable steps, plus a pass criterion that
+compares final states, will certify a loop that silently redoes its entire cycle.
+Reading the code caught what the harness did not model.
 
 **Where the new loop is weakest**, recorded honestly rather than smoothed over:
 the whole edifice rests on the honesty of the metric declared in Wave H. A
@@ -148,6 +158,70 @@ catch a deliberately gamed metric. Carried as `C-J-022` (`MUST_TEST`).
   a shared `agents/loop-compose/bin/` so future compositions reuse them instead
   of re-deriving. Left in the run root this cycle to avoid mutating the loop
   being executed.
+
+## Review round 1 — CodeRabbit on PR #105
+
+Nine findings, each verified against the code before acting. **Eight valid, one
+partially valid.** Two of them were substantive enough to change what the ship-gate
+actually proves.
+
+### The two that mattered
+
+**The delta-test's two-evidence rule was not independent.** Wave evidence was
+scanned over the whole document including the `ports:` region, so a port
+`description:` string could satisfy both conjuncts. `verified_citation` and
+`refutation_veto` were each citing a port declaration for *both* kinds of evidence
+— no wave evidence at all. The interface region is now excluded from wave scanning.
+Re-running under the stricter rule **left the verdict at 8/8**, with all four
+affected citations relocating to genuine body evidence. The conclusion survived a
+harder test, which is the only reason it is worth stating.
+
+**Resume silently replayed the entire cycle after a gate veto.** The veto path
+persists `ship_blocked:<pack>:<reason>` then `reverted:<pack>`; neither reduced to a
+`STEPS` entry, so the skip-set came back empty and everything re-ran from `init`.
+Measured damage: duplicated `RECORD.md` header, re-appended gate lines, and
+`.r2` re-measures with `remeasure_reason: "unspecified"` — which this loop's own L6
+lens flags as **P1**. The bug made the loop emit artifacts its own review lens would
+reject.
+
+**And the ε canary had already passed with that bug live.** Its four random kill
+points all landed on steps whose replay was harmless, and its pass criterion
+compared *final states* — which a full replay reproduces correctly. The oracle was
+measuring convergence, not resumption. That is the most useful thing this review
+round produced: evidence that a green gate is only as strong as what it models.
+
+### All nine, with disposition
+
+| # | Finding | Sev | Disposition |
+|---|---------|-----|-------------|
+| 1 | Wave D verdict parsed by leftmost match anywhere in the file — can fail **open** | Major | **Fixed.** Anchored to a labelled verdict (inline field or `## Verdict` heading), last match wins, absent verdict fails **closed**. Two regression cases pin it. |
+| 2 | Duplicated, brittle measurement-record selection | Major | **Partially valid, fixed.** The claimed `H-1` vs `M-H-10-before.json` prefix collision is **not real** — `base` includes the phase suffix, so `startswith` returns False (tested). The unguarded `re.search(...).group(1)` `AttributeError` on a stray filename **is** real. Extracted one exact-shape selector in `measure.py`, imported by `gate.py`, so the two can never disagree. |
+| 3 | `json` I/O without `encoding="utf-8"`; `.md` writers also leak handles | Minor | **Fixed** across `enumerate_bindings.py`, `render_docs.py`, `render_verdict.py`. These emit `✅ ❌ γ ε ⋈`, so a non-UTF-8 locale would have raised mid-write. |
+| 4 | `budget_exhausted` immediately overwritten by generic `fatal_blocked` | Minor | **Fixed.** Specific terminal states are preserved — the two have opposite launcher actions (re-wake vs never-retry, cd-review §10.5). Verified with a `--budget-seconds 0` run. |
+| 5 | Resume label matching misses `reverted:` / `ship_blocked:` | Major | **Fixed.** `SUBSTATE_OWNER` map, unmappable labels now fail loudly instead of restarting, `init` header made idempotent, and the four veto-path labels are now **fixed** kill points via a new `--kill-after-status` mode. |
+| 6 | Ancestry conjunct reported PASS while skipped | Major | **Fixed by deletion.** `--skip-git-ancestry` is gone, not merely unused. Baselines record their `git_dir`; the gate verifies ancestry against a real commit in a real tree. `selftest.py` proves the conjunct can fail. |
+| 7 | `all_trials_resumed` vacuously true on zero trials | Major | **Fixed.** Added `trials_executed`, `all_substate_labels_fired`, and hard failures for an empty vocabulary or candidate set. The oracle can no longer report PASS having tested nothing. |
+| 8 | Port-evidence line numbers off by one | Minor | **Fixed.** Body starts one line after the fence; verified `audit-port` now reports L21 (was L20). |
+| 9 | Wave evidence satisfiable by the ports block itself | Major | **Fixed** — see above. Also tightened `refutation_veto`, whose bare `veto` alternative matched any prose. |
+
+### New asset from this round
+
+[`agents/cdreview-brainstorm-join/bin/selftest.py`](../../../cdreview-brainstorm-join/bin/selftest.py)
+— 13 negative controls plus a positive control and a record-selector test. Every
+gate conjunct is driven to failure on purpose, because a gate whose conjuncts have
+never been observed to fail is a claim rather than a test. Three cases exist
+specifically to pin the fail-open bugs from findings 1 and 6 so they cannot return.
+
+### Gates after the round
+
+| Gate | Result |
+|------|--------|
+| α/β enumeration | 45 candidates, 16/8/21 — unchanged |
+| γ delta-test (contract) | **ADMIT** 8/8 vs 2/8 vs 2/8 |
+| γ delta-test (authored) | **ADMIT** 8/8 — now under the independence rule |
+| Gate negative controls | **PASS** 13/13 + positive control |
+| ε canary | **PASS** — 8/8 conjuncts genuinely evaluated, none skipped |
+| ε kill/resume oracle | **PASS** 8/8 trials (4 fixed + 4 random), 9 criteria |
 
 ## PRs / commits
 
