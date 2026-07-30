@@ -1,0 +1,22 @@
+{
+  "hypothesis_id": "H-001",
+  "pack_id": "P-001",
+  "phase": "after",
+  "metric": {
+    "name": "wall_seconds",
+    "command": "/usr/bin/python3 /agent/workspace/repo/agents/loop-compose/runs/2026-07-30-L001-composed-cdreview-brainstorm-join/epsilon/canary/workspace/dedupe.py 4000",
+    "target": null,
+    "direction": "lower_is_better",
+    "unit": "seconds"
+  },
+  "runs": [
+    0.012739,
+    0.011776,
+    0.010511
+  ],
+  "value": 0.011776,
+  "stdev": 0.001117,
+  "git_sha": "3c123fa450d94ac8968c5b913afd6851e6b80746",
+  "git_dir": "/agent/workspace/repo",
+  "captured_at": "2026-07-30T07:35:01Z"
+}
