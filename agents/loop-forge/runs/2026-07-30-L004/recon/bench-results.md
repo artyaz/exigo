@@ -39,3 +39,38 @@ There is **no script-evaluation tool** in the browser surface (no
 - Hit-target geometry has the same shape: derive from CSS, corroborate visually.
 - This is exactly where a UX loop is tempted to narrate a number it never
   measured. It is the single most important thing for the Adversary to hunt.
+
+---
+
+## Independent corroboration: SonarCloud flagged the planted defects
+
+Unplanned, and worth recording. When this run was opened as PR #107, SonarCloud
+scanned `fixtures/planted.html` as if it were product code and raised **2 bugs** —
+both of them planted defects from the table above:
+
+| Sonar finding | Severity | Bench row |
+|---|---|---|
+| `planted.html:14` — "Add an `id` attribute to this input field and associate it with a label." | MAJOR | **#5** (input with no `<label>`) |
+| `planted.html:16` — "Add a `onKeyDown\|onKeyUp` attribute to this `<div>` tag." | MINOR | **#7** (`<div onclick>` as a button) |
+
+Two things follow.
+
+**1. The fixtures are realistic.** An independent, non-LLM static analyser
+recognised the same defects the bench plants. That is external evidence the
+planted arm is not a strawman built to be easy.
+
+**2. It sharpens bench row #5.** The bench scored #5 as only *partial*, because
+`BrowserObserve` reported "textbox with accessible name Search" — the
+`placeholder` supplies an accessible name and masks the missing `<label>`. Sonar,
+reading the source rather than the accessibility tree, caught it outright at
+MAJOR. This is precisely the DOM-vs-a11y-tree divergence that **AC-03**
+(cross-check, never substitute) exists to exploit: the a11y tree said "named",
+the source said "unlabelled", and the *disagreement* is the finding. Static
+source analysis is the stronger detector for this class, and the authored loop's
+wave μ is repo-first for exactly this reason.
+
+**Consequence for CI:** the fixtures are excluded from SonarCloud analysis via
+`.sonarcloud.properties` (`sonar.exclusions=agents/**/recon/fixtures/**`). The
+defects must stay exactly where they are — they are the measurement instrument —
+but they must not be scored as product code, or the quality gate fails forever on
+defects that are the point.

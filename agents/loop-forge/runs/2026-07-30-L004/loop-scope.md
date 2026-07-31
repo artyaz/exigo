@@ -13,7 +13,7 @@ Wave α subagent prompt.
 | RUN_ROOT | `agents/loop-forge/runs/2026-07-30-L004` |
 | Cycle type | scout |
 | Harness mode | single-agent (no CLI peer process; launcher + loop-scope roles in one session, waves as in-process subagents) |
-| `remaining_extraction_depth` | 3 for the authored loop (it is a normal ship target, not a mid-task extraction, so §6.2's parent−1 rule does not apply) |
+| `remaining_extraction_depth` | **2** for the authored loop — `min(parent depths) − 1 = min(3, 3) − 1`. **Corrected after review:** this brief originally claimed 3 on the reasoning that a normal ship target is not a mid-task extraction so §6.2's parent−1 rule does not apply. That was wrong — `cdreview-brainstorm-join` composes the identical parents and derives 2, so the decrement applies to composition, not only to extraction. |
 | Token target / kill-switch | 350,000 / 380,000 (see §6 — this estimate is known-low) |
 
 ## 2. Inherited constraints

@@ -5,7 +5,7 @@
 loop_id: ux-review
 parent_loops: [cd-review, brainstorm]
 mutation_operator: compose
-remaining_extraction_depth: 3
+remaining_extraction_depth: 2
 ports:
   inputs:
     - name: surface-manifest-port
@@ -329,7 +329,9 @@ Adapted from cd-review / brainstorm / loop-forge §12.
   exit-code gate, RECORD + day-status resume contract), `brainstorm` (persona
   diversity, 3-state verdicts, decay-scored constraint archive).
 - **Mutation operator:** `compose`.
-- **`remaining_extraction_depth`:** 3.
+- **`remaining_extraction_depth`:** 2 — derived, not chosen: `min(parent depths) − 1 = min(3, 3) − 1 = 2`.
+  Matches `cdreview-brainstorm-join`, which composes the same two parents. `loop-forge` authored this loop but
+  is not a lineage parent, so it does not further decrement.
 - **no-self-composition:** `ux-review` may not compose with itself.
 - **no-parent-mutation:** this loop must never edit `cd-review`, `brainstorm` or
   `loop-forge`. It borrows their patterns; it does not modify them.

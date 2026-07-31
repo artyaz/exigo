@@ -8,7 +8,7 @@
   "verdicts_pending": 0,
   "extraction_queue_size": 0,
   "next_cycle_constraints_extracted": true,
-  "tokens_used": 0,
+  "tokens_used": 547404,
   "tokens_budget": 380000,
   "tokens_target": 350000,
   "alladvance_redispatch_fired": false,
@@ -17,5 +17,6 @@
   "harness_mode": "single-agent",
   "target_loop": "agents/ux-review",
   "remaining_extraction_depth": 3,
-  "updated_at": "2026-07-30T15:12:00Z"
+  "updated_at": "2026-07-30T15:12:00Z",
+  "tokens_accounting": "estimate. Measured subagent totals: omega 108265, alpha 167885, beta 151254 = 427404. Orchestrator context (probes, browser calls, consolidation, delta authoring, epsilon gate) is not instrumented in this harness and is estimated at ~120000. Reported as an estimate, not a measurement."
 }

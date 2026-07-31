@@ -16,7 +16,7 @@
    "inconclusive_count": 1,
    "tokens_used_estimate": 350000,
    "status": "complete",
-   "stop_reason": "goal-anchored-met (\u22653 ADVANCE ideas + draft LOOP.md)"
+   "stop_reason": "goal-anchored-met (≥3 ADVANCE ideas + draft LOOP.md)"
   },
   {
    "id": "cycle-004",
@@ -59,7 +59,9 @@
    ],
    "canary_verdict": "PASS 11/11 (sealed structural)",
    "constraints_created": 11,
-   "notes": "Authored agents/ux-review/. Key measured findings: remote browser cannot reach sandbox localhost; publish bridge works but outer shareUrl wraps artifact in an iframe with injected chrome; UnpublishFile does NOT revoke the inner URL (publish is irreversible); no script-eval tool so computed contrast/geometry unobtainable. Deviations: alpha N=5 not 10 (s2 oblique rotation dropped), gamma and citation-verify skipped -- all budget-driven and recorded in RECORD.md."
+   "notes": "Authored agents/ux-review/. Key measured findings: remote browser cannot reach sandbox localhost; publish bridge works but outer shareUrl wraps artifact in an iframe with injected chrome; UnpublishFile does NOT revoke the inner URL (publish is irreversible); no script-eval tool so computed contrast/geometry unobtainable. Deviations: alpha N=5 not 10 (s2 oblique rotation dropped), gamma and citation-verify skipped -- all budget-driven and recorded in RECORD.md.",
+   "tokens_used_estimate": 547404,
+   "tokens_accounting": "estimate. Measured subagent totals: omega 108265, alpha 167885, beta 151254 = 427404. Orchestrator context (probes, browser calls, consolidation, delta authoring, epsilon gate) is not instrumented in this harness and is estimated at ~120000. Reported as an estimate, not a measurement."
   }
  ]
 }

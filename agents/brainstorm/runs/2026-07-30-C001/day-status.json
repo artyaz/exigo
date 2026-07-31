@@ -3,7 +3,7 @@
   "cycle_id": "cycle-001",
   "cycle_type": "scout",
   "phase": "done",
-  "last_checkpoint": "cycle closed: gamma done, archives written, STRUCTURE-OUTLINE.md authored",
+  "last_checkpoint": "cycle closed: citation-verify, gamma-1/gamma-2 and archive update all completed",
   "shortlist_size": 5,
   "verdicts_pending": 0,
   "next_cycle_constraints_extracted": true,
@@ -13,7 +13,7 @@
   "alladvance_redispatch_fired": false,
   "blocked_reason": null,
   "harness_mode": "single-agent",
-  "residual_scope": "run citation-verify (LOOP.md 6.4) over R-001..R-005, apply confidence caps, then dispatch gamma-1 (claims ledger) and gamma-2 (constraints), then end-of-cycle archive update",
   "updated_at": "2026-07-30T14:18:00Z",
-  "rewake_count": 1
+  "rewake_count": 1,
+  "residual_scope": null
 }
