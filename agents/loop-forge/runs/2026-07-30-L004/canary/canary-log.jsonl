@@ -1,0 +1,11 @@
+{"check": "C1", "desc": "terminal states declared", "pass": true, "detail": "state enum includes complete + blocked", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C2", "desc": "authored artifact readable", "pass": true, "detail": "authored/LOOP.md 15867 chars", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C3", "desc": "no HITL verb-of-deferral", "pass": true, "detail": "matches=none", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C4", "desc": "day-status written before side effects", "pass": true, "detail": "§5 states day-status precedes every side effect, esp. publish", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C5", "desc": "C-001-can-02 typed ports block", "pass": true, "detail": "ports block present with inputs+outputs", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C6", "desc": "C-001-can-03 remaining_extraction_depth", "pass": true, "detail": "header carries depth 3", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C7", "desc": "C-001-can-04 own last_step_vocabulary", "pass": true, "detail": "declares own vocabulary, not cd-review's", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C8", "desc": "C-001-can-05 lineage block", "pass": true, "detail": "lineage forbids self-composition + parent mutation", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C9", "desc": "C-001-can-01 bench gates run", "pass": true, "detail": "both-arms bench gate present; clean-arm FP = bench failure", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C10", "desc": "§10.1 sections constraint-paired", "pass": true, "detail": "16 distinct constraint ids referenced", "at": "2026-07-30T14:51:29.814142Z"}
+{"check": "C11", "desc": "kill-and-resume oracle (killed at 'bridge_probed')", "pass": true, "detail": "'bridge_probed' is in declared vocabulary; day-status.last_step + RECORD 'Stopped at' is the declared contract", "at": "2026-07-30T14:51:29.814142Z"}

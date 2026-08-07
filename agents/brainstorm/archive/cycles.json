@@ -1,1 +1,34 @@
-{"cycles": [], "session_stop_condition": null, "session_stop_reason": null, "cycles_remaining": null}
+{
+ "cycles": [
+  {
+   "cycle_id": "cycle-001",
+   "cycle_num": 1,
+   "run_root": "agents/brainstorm/runs/2026-07-30-C001",
+   "started_at": "2026-07-30T11:24:00Z",
+   "ended_at": "2026-07-30T14:06:11.541004Z",
+   "status": "complete",
+   "cycle_type": "scout",
+   "harness_mode": "single-agent",
+   "rewake_count": 1,
+   "problem": "How should Exigo structure an autonomous UX design/review loop?",
+   "ideas_generated": 65,
+   "shortlist_size": 5,
+   "verdicts": {
+    "advance": 0,
+    "refute": 3,
+    "inconclusive": 2
+   },
+   "constraints_created": 7,
+   "citations": {
+    "checked": 22,
+    "verified": 21,
+    "refuted": 1
+   },
+   "alladvance_redispatch_fired": false,
+   "notes": "First real brainstorm cycle. Zero ADVANCE: three mechanisms refuted on fetched external evidence, two inconclusive. Budget wall hit pre-gamma; resumed once by launcher re-wake."
+  }
+ ],
+ "session_stop_condition": "outline the structure of the UX design/review loop",
+ "session_stop_reason": "goal-anchored-partial: 0 ADVANCE, so the structure outline is evidence-constrained rather than evidence-backed; see RECORD.md",
+ "cycles_remaining": null
+}

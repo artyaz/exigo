@@ -1,0 +1,19 @@
+{
+  "state": "complete",
+  "cycle_id": "cycle-001",
+  "cycle_type": "scout",
+  "phase": "done",
+  "last_checkpoint": "cycle closed: citation-verify, gamma-1/gamma-2 and archive update all completed",
+  "shortlist_size": 5,
+  "verdicts_pending": 0,
+  "next_cycle_constraints_extracted": true,
+  "tokens_used": 790000,
+  "tokens_budget": 380000,
+  "tokens_target": 350000,
+  "alladvance_redispatch_fired": false,
+  "blocked_reason": null,
+  "harness_mode": "single-agent",
+  "updated_at": "2026-07-30T14:18:00Z",
+  "rewake_count": 1,
+  "residual_scope": null
+}
