@@ -7,15 +7,12 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-
-const RUN = process.argv[2] ?? "agents/ux-review/runs/2026-08-07-U001";
-const plantedPath = path.join(RUN, "bench/planted.html");
-const cleanPath = path.join(RUN, "bench/clean.html");
+import { fileURLToPath } from "node:url";
 
 /** @typedef {{ id: number, name: string, class: string, detect: (html: string) => 'hit'|'miss'|'skip' }} Rule */
 
 /** @type {Rule[]} */
-const RULES = [
+export const RULES = [
   {
     id: 1,
     name: "text at ~1.9:1 contrast (.lowcontrast)",
@@ -35,7 +32,9 @@ const RULES = [
     detect: (html) => {
       const headings = [...html.matchAll(/<h([1-6])\b/gi)].map((m) => Number(m[1]));
       for (let i = 1; i < headings.length; i++) {
-        if (headings[i] > headings[i - 1] + 1) return "hit";
+        const curr = headings[i];
+        const prev = headings[i - 1];
+        if (curr !== undefined && prev !== undefined && curr > prev + 1) return "hit";
       }
       return "miss";
     },
@@ -73,11 +72,12 @@ const RULES = [
         // wrapping <label>…<input>…</label> — only the label that contains THIS input
         const before = html.slice(0, inputIndex);
         const opens = [...before.matchAll(/<label\b[^>]*>/gi)];
-        const openIdx = opens.length > 0 ? (opens[opens.length - 1].index ?? -1) : -1;
+        const lastOpen = opens[opens.length - 1];
+        const openIdx = lastOpen ? (lastOpen.index ?? -1) : -1;
         if (openIdx !== -1) {
           const closes = [...before.matchAll(/<\/label\s*>/gi)];
-          const closeBefore =
-            closes.length > 0 ? (closes[closes.length - 1].index ?? -1) : -1;
+          const lastClose = closes[closes.length - 1];
+          const closeBefore = lastClose ? (lastClose.index ?? -1) : -1;
           if (closeBefore < openIdx) {
             const afterOpen = html.slice(openIdx);
             const closeMatch = /<\/label\s*>/i.exec(afterOpen);
@@ -96,6 +96,7 @@ const RULES = [
     class: "MECHANICAL-CSS",
     detect: (html) => {
       // Derive from declared CSS only (AC-02). Flag if width OR height is under 24px.
+      /** @param {string} block */
       const under24 = (block) => {
         const dimensions = [...block.matchAll(
           /(?:^|[;{\s])(width|height)\s*:\s*(\d+(?:\.\d+)?)px\b/gi,
@@ -129,7 +130,12 @@ const RULES = [
   },
 ];
 
-function runArm(label, html, expectFindings) {
+/**
+ * @param {string} label
+ * @param {string} html
+ * @param {boolean} expectFindings
+ */
+export function runArm(label, html, expectFindings) {
   /** @type {Array<{id:number,name:string,class:string,result:string}>} */
   const rows = [];
   let hits = 0;
@@ -142,41 +148,52 @@ function runArm(label, html, expectFindings) {
     else if (result === "miss") misses++;
     else skips++;
   }
-  // For planted arm: every non-skip must be hit. Partial=miss.
-  // For clean arm: every non-skip must be miss (zero hits = zero FP).
   let pass;
   if (expectFindings) {
-    const required = RULES.filter((r) => r.detect(html) !== "skip" || r.class.startsWith("MECHANICAL") || r.class === "A11Y-TREE");
-    // Re-evaluate: skips stay skip; required mechanical/a11y must hit.
     const mech = rows.filter((r) => r.class !== "PERCEPTUAL-PIXELS");
     const mechMisses = mech.filter((r) => r.result === "miss");
     pass = mechMisses.length === 0 && mech.every((r) => r.result === "hit");
-    void required;
   } else {
-    pass = hits === 0; // clean arm: any hit is a false positive
+    pass = hits === 0;
   }
   return { label, hits, misses, skips, false_positives: expectFindings ? 0 : hits, pass, rows };
 }
 
-const planted = fs.readFileSync(plantedPath, "utf8");
-const clean = fs.readFileSync(cleanPath, "utf8");
+/**
+ * @param {string} runRoot
+ */
+export function runBench(runRoot) {
+  const plantedPath = path.join(runRoot, "bench/planted.html");
+  const cleanPath = path.join(runRoot, "bench/clean.html");
+  const planted = fs.readFileSync(plantedPath, "utf8");
+  const clean = fs.readFileSync(cleanPath, "utf8");
+  const plantedArm = runArm("planted", planted, true);
+  const cleanArm = runArm("clean", clean, false);
+  return {
+    generated_at: new Date().toISOString(),
+    mode: "static-source-only",
+    bridge: "absent",
+    note: "PERCEPTUAL-PIXELS rows skipped (AC-04). Mechanical + A11Y-text rules run from HTML source. A clean-arm hit is a bench failure.",
+    planted: plantedArm,
+    clean: cleanArm,
+    bench_pass: plantedArm.pass && cleanArm.pass,
+    bench_planted_pass: plantedArm.pass,
+    bench_clean_fp_count: cleanArm.false_positives,
+  };
+}
 
-const plantedArm = runArm("planted", planted, true);
-const cleanArm = runArm("clean", clean, false);
-
-const report = {
-  generated_at: new Date().toISOString(),
-  mode: "static-source-only",
-  bridge: "absent",
-  note: "PERCEPTUAL-PIXELS rows skipped (AC-04). Mechanical + A11Y-text rules run from HTML source. A clean-arm hit is a bench failure.",
-  planted: plantedArm,
-  clean: cleanArm,
-  bench_pass: plantedArm.pass && cleanArm.pass,
-  bench_planted_pass: plantedArm.pass,
-  bench_clean_fp_count: cleanArm.false_positives,
-};
-
-const out = path.join(RUN, "bench/report.json");
-fs.writeFileSync(out, JSON.stringify(report, null, 2) + "\n");
-console.log(JSON.stringify({ bench_pass: report.bench_pass, planted_pass: plantedArm.pass, clean_fp: cleanArm.false_positives, planted_hits: plantedArm.hits, planted_skips: plantedArm.skips }, null, 2));
-process.exit(report.bench_pass ? 0 : 1);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  const RUN = process.argv[2] ?? "agents/ux-review/runs/2026-08-07-U001";
+  const report = runBench(RUN);
+  const out = path.join(RUN, "bench/report.json");
+  fs.writeFileSync(out, JSON.stringify(report, null, 2) + "\n");
+  console.log(JSON.stringify({
+    bench_pass: report.bench_pass,
+    planted_pass: report.planted.pass,
+    clean_fp: report.clean.false_positives,
+    planted_hits: report.planted.hits,
+    planted_skips: report.planted.skips,
+  }, null, 2));
+  process.exit(report.bench_pass ? 0 : 1);
+}
