@@ -1,0 +1,2 @@
+{"constraint_id":"U-001-001","run_id":"ux-001","type":"MUST_RESPECT","text":"When render-bridge-port is absent, wave π must abstain and must not author PERCEPTUAL-PIXELS findings.","decay_score":1.0,"created_at":"2026-08-07T21:43:00Z"}
+{"constraint_id":"U-001-002","run_id":"ux-001","type":"MUST_TEST","text":"Re-run planted/clean bench through the full publish→inner-URL→Observe path once PublishFilePublicly is available; confirm static arm still agrees.","decay_score":1.0,"created_at":"2026-08-07T21:43:00Z"}

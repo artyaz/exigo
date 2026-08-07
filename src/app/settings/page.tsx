@@ -9,17 +9,17 @@ import { getAiSettings, saveAiSettings, type AiSettingsView } from "../actions/a
 const CSS = `
 .st{ min-height:100vh; background:var(--neutral-950); color:var(--white-80); font-family:var(--font-sans); }
 .st__head{ display:flex; align-items:baseline; gap:14px; padding:24px 28px 14px; border-bottom:1px solid var(--border-faint); }
-.st__title{ font-size:18px; font-weight:600; color:#fff; letter-spacing:var(--tracking-snug); }
-.st__sub{ font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--white-30); }
+.st__title{ font-size:18px; font-weight:600; color:#fff; letter-spacing:var(--tracking-snug); margin:0; }
+.st__sub{ font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--white-60); }
 .st__body{ max-width:560px; padding:26px 28px; display:flex; flex-direction:column; gap:20px; }
 .st__group{ display:flex; flex-direction:column; gap:7px; }
-.st__label{ font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--white-40); }
-.st__hint{ font-size:12px; color:var(--white-40); line-height:1.5; }
+.st__label{ font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--white-60); }
+.st__hint{ font-size:12px; color:var(--white-60); line-height:1.5; }
 .st__radio{ display:flex; gap:10px; }
-.st__opt{ flex:1; padding:12px 14px; border-radius:var(--radius-lg); background:var(--white-03); border:1px solid var(--border); cursor:pointer; transition:all 180ms var(--ease-spring); }
+.st__opt{ flex:1; padding:12px 14px; border-radius:var(--radius-lg); background:var(--white-03); border:1px solid var(--border); cursor:pointer; transition:all 180ms var(--ease-spring); text-align:left; color:inherit; font:inherit; }
 .st__opt--on{ background:rgb(52 211 153 / .1); border-color:rgb(52 211 153 / .4); }
 .st__opt-t{ font-size:13.5px; color:#fff; font-weight:500; }
-.st__opt-d{ font-size:11.5px; color:var(--white-40); margin-top:3px; line-height:1.45; }
+.st__opt-d{ font-size:11.5px; color:var(--white-60); margin-top:3px; line-height:1.45; }
 .st__input{ font-family:var(--font-mono); font-size:13px; color:var(--white-85); background:var(--surface-sunken); border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px 13px; outline:none; }
 .st__input:focus{ border-color:rgb(52 211 153 / .4); box-shadow:0 0 0 2px rgb(52 211 153 / .15); }
 .st__row{ display:flex; align-items:center; gap:10px; }
@@ -93,7 +93,7 @@ export default function SettingsPage(): React.JSX.Element {
   return (
     <div className="st">
       <div className="st__head">
-        <span className="st__title">Settings</span>
+        <h1 className="st__title">Settings</h1>
         <span className="st__sub">AI provider</span>
       </div>
       <div className="st__body">
@@ -102,48 +102,37 @@ export default function SettingsPage(): React.JSX.Element {
         ) : (
           <>
             <div className="st__group">
-              <span className="st__label">Provider</span>
-              <div className="st__radio" role="radiogroup" aria-label="Provider">
-                <div
+              <span className="st__label" id="st-provider-label">Provider</span>
+              <div className="st__radio" role="radiogroup" aria-labelledby="st-provider-label">
+                <button
+                  type="button"
                   className={`st__opt${provider === "gemini" ? " st__opt--on" : ""}`}
                   role="radio"
-                  tabIndex={0}
                   aria-checked={provider === "gemini"}
                   onClick={() => setProvider("gemini")}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setProvider("gemini");
-                    }
-                  }}
                 >
                   <div className="st__opt-t">Default (Gemini)</div>
                   <div className="st__opt-d">Uses the app&apos;s Google key. No setup.</div>
-                </div>
-                <div
+                </button>
+                <button
+                  type="button"
                   className={`st__opt${provider === "openai" ? " st__opt--on" : ""}`}
                   role="radio"
-                  tabIndex={0}
                   aria-checked={provider === "openai"}
                   onClick={() => setProvider("openai")}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setProvider("openai");
-                    }
-                  }}
                 >
                   <div className="st__opt-t">Custom endpoint</div>
                   <div className="st__opt-d">Any OpenAI-compatible API (OpenAI, Together, Groq, local…).</div>
-                </div>
+                </button>
               </div>
             </div>
 
             {provider === "openai" && (
               <>
                 <div className="st__group">
-                  <span className="st__label">Base URL</span>
+                  <label className="st__label" htmlFor="st-base-url">Base URL</label>
                   <input
+                    id="st-base-url"
                     className="st__input"
                     placeholder="https://api.openai.com/v1"
                     value={baseUrl}
@@ -151,9 +140,10 @@ export default function SettingsPage(): React.JSX.Element {
                   />
                 </div>
                 <div className="st__group">
-                  <span className="st__label">API key</span>
+                  <label className="st__label" htmlFor="st-api-key">API key</label>
                   <div className="st__row">
                     <input
+                      id="st-api-key"
                       className="st__input"
                       style={{ flex: 1 }}
                       type="password"
@@ -169,8 +159,9 @@ export default function SettingsPage(): React.JSX.Element {
             )}
 
             <div className="st__group">
-              <span className="st__label">Model</span>
+              <label className="st__label" htmlFor="st-model">Model</label>
               <input
+                id="st-model"
                 className="st__input"
                 placeholder={provider === "gemini" ? "gemini-2.0-flash (default)" : "gpt-4o-mini"}
                 value={model}

@@ -10,14 +10,14 @@ import { PRESETS } from "./presets";
 const CSS = `
 .pg{ min-height:100vh; background:var(--neutral-950); color:var(--white-80); font-family:var(--font-sans); }
 .pg__head{ display:flex; align-items:baseline; gap:14px; padding:24px 28px 14px; border-bottom:1px solid var(--border-faint); }
-.pg__title{ font-size:18px; font-weight:600; color:#fff; letter-spacing:var(--tracking-snug); }
-.pg__sub{ font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--white-30); }
+.pg__title{ font-size:18px; font-weight:600; color:#fff; letter-spacing:var(--tracking-snug); margin:0; }
+.pg__sub{ font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--white-60); }
 .pg__grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0; min-height:calc(100vh - 64px); }
 @media (max-width:900px){ .pg__grid{ grid-template-columns:1fr; } }
 .pg__pane{ padding:18px 22px; display:flex; flex-direction:column; gap:12px; min-width:0; }
 .pg__pane--edit{ border-right:1px solid var(--border-faint); }
 .pg__chips{ display:flex; flex-wrap:wrap; gap:7px; }
-.pg__chip{ font-family:var(--font-mono); font-size:11px; letter-spacing:.08em; padding:5px 11px; border-radius:99px; background:var(--white-03); border:1px solid var(--border); color:var(--white-60); cursor:pointer; transition:all 200ms var(--ease-spring); }
+.pg__chip{ font-family:var(--font-mono); font-size:11px; letter-spacing:.08em; padding:5px 11px; min-height:24px; min-width:24px; border-radius:99px; background:var(--white-03); border:1px solid var(--border); color:var(--white-60); cursor:pointer; transition:all 200ms var(--ease-spring); }
 .pg__chip:hover{ background:var(--white-08); color:#fff; }
 .pg__chip--on{ background:rgb(52 211 153 / .12); border-color:rgb(52 211 153 / .4); color:var(--emerald-400); }
 .pg__editor{ flex:1; min-height:320px; width:100%; resize:vertical; font-family:var(--font-mono); font-size:12.5px; line-height:1.65; tab-size:2; color:var(--white-85); background:var(--surface-sunken); border:1px solid var(--border); border-radius:var(--radius-xl); padding:14px 16px; outline:none; white-space:pre; overflow:auto; }
@@ -78,7 +78,7 @@ export default function PlaygroundPage(): React.JSX.Element {
   return (
     <div className="pg">
       <div className="pg__head">
-        <span className="pg__title">Exigo Playground</span>
+        <h1 className="pg__title">Exigo Playground</h1>
         <span className="pg__sub">Reactive VM · live spec editor</span>
       </div>
       <div className="pg__grid">

@@ -1,0 +1,125 @@
+{
+  "generated_at": "2026-08-07T21:37:32.370Z",
+  "mode": "static-source-only",
+  "bridge": "absent",
+  "note": "PERCEPTUAL-PIXELS rows skipped (AC-04). Mechanical + A11Y-text rules run from HTML source. A clean-arm hit is a bench failure.",
+  "planted": {
+    "label": "planted",
+    "hits": 6,
+    "misses": 0,
+    "skips": 2,
+    "false_positives": 0,
+    "pass": true,
+    "rows": [
+      {
+        "id": 1,
+        "name": "text at ~1.9:1 contrast (.lowcontrast)",
+        "class": "PERCEPTUAL-PIXELS",
+        "result": "skip"
+      },
+      {
+        "id": 2,
+        "name": "text at ~1.1:1 contrast (.ghost)",
+        "class": "PERCEPTUAL-PIXELS",
+        "result": "skip"
+      },
+      {
+        "id": 3,
+        "name": "heading order h1 → h4 skip",
+        "class": "MECHANICAL-DOM",
+        "result": "hit"
+      },
+      {
+        "id": 4,
+        "name": "<img> with no alt",
+        "class": "MECHANICAL-DOM",
+        "result": "hit"
+      },
+      {
+        "id": 5,
+        "name": "<input> with no <label for> / aria-label",
+        "class": "MECHANICAL-DOM",
+        "result": "hit"
+      },
+      {
+        "id": 6,
+        "name": "hit target < 24px (.tiny 14px)",
+        "class": "MECHANICAL-CSS",
+        "result": "hit"
+      },
+      {
+        "id": 7,
+        "name": "<div onclick> as button",
+        "class": "MECHANICAL-DOM",
+        "result": "hit"
+      },
+      {
+        "id": 8,
+        "name": "non-descriptive link \"click here\"",
+        "class": "A11Y-TREE",
+        "result": "hit"
+      }
+    ]
+  },
+  "clean": {
+    "label": "clean",
+    "hits": 0,
+    "misses": 6,
+    "skips": 2,
+    "false_positives": 0,
+    "pass": true,
+    "rows": [
+      {
+        "id": 1,
+        "name": "text at ~1.9:1 contrast (.lowcontrast)",
+        "class": "PERCEPTUAL-PIXELS",
+        "result": "skip"
+      },
+      {
+        "id": 2,
+        "name": "text at ~1.1:1 contrast (.ghost)",
+        "class": "PERCEPTUAL-PIXELS",
+        "result": "skip"
+      },
+      {
+        "id": 3,
+        "name": "heading order h1 → h4 skip",
+        "class": "MECHANICAL-DOM",
+        "result": "miss"
+      },
+      {
+        "id": 4,
+        "name": "<img> with no alt",
+        "class": "MECHANICAL-DOM",
+        "result": "miss"
+      },
+      {
+        "id": 5,
+        "name": "<input> with no <label for> / aria-label",
+        "class": "MECHANICAL-DOM",
+        "result": "miss"
+      },
+      {
+        "id": 6,
+        "name": "hit target < 24px (.tiny 14px)",
+        "class": "MECHANICAL-CSS",
+        "result": "miss"
+      },
+      {
+        "id": 7,
+        "name": "<div onclick> as button",
+        "class": "MECHANICAL-DOM",
+        "result": "miss"
+      },
+      {
+        "id": 8,
+        "name": "non-descriptive link \"click here\"",
+        "class": "A11Y-TREE",
+        "result": "miss"
+      }
+    ]
+  },
+  "bench_pass": true,
+  "bench_planted_pass": true,
+  "bench_clean_fp_count": 0
+}

@@ -312,10 +312,15 @@ function PricingCards({
                                         handleCheckout(action.slug);
                                     }}
                                     disabled={loadingSlug !== null}
+                                    aria-label="Switch to this plan"
+                                    aria-busy={action.isLoading}
                                     className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-neutral-200 spring-interact disabled:opacity-50"
                                 >
                                     {action.isLoading ? (
-                                        <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                                        <>
+                                            <Loader2 className="mx-auto h-4 w-4 animate-spin" aria-hidden="true" />
+                                            <span className="sr-only">Switch to this plan</span>
+                                        </>
                                     ) : (
                                         "Switch to this plan"
                                     )}
