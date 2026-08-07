@@ -1,0 +1,15 @@
+{
+  "state": "complete",
+  "run_id": "ux-001",
+  "phase": "done",
+  "last_step": "scope_complete",
+  "surfaces_pending": 0,
+  "published_artifacts_used": 0,
+  "published_artifacts_cap": 3,
+  "bench_planted_pass": true,
+  "bench_clean_fp_count": 0,
+  "gate_verdict": "PASS",
+  "blocked_reason": null,
+  "render_bridge": "absent",
+  "updated_at": "2026-08-07T21:43:00Z"
+}

@@ -1,0 +1,168 @@
+{
+  "generated_at": "2026-08-07T21:35:28.790Z",
+  "repo_root": "/workspace",
+  "run_id": "ux-001",
+  "routes": [
+    {
+      "route": "/",
+      "page_file": "src/app/page.tsx",
+      "components": [],
+      "declared_states": ["default"],
+      "auth_gated": false,
+      "admit": true,
+      "admit_reason": "U001 admit: public marketing home",
+      "audit_files": ["src/app/page.tsx"]
+    },
+    {
+      "route": "/pricing",
+      "page_file": "src/app/pricing/page.tsx",
+      "components": [],
+      "declared_states": ["default", "loading", "signed_out", "signed_in"],
+      "auth_gated": false,
+      "admit": true,
+      "admit_reason": "U001 admit: public marketing/billing surface",
+      "audit_files": ["src/app/pricing/page.tsx"]
+    },
+    {
+      "route": "/settings",
+      "page_file": "src/app/settings/page.tsx",
+      "components": [],
+      "declared_states": ["default", "loading", "error"],
+      "auth_gated": true,
+      "admit": true,
+      "admit_reason": "U001 admit: settings AI provider form",
+      "audit_files": ["src/app/settings/page.tsx"]
+    },
+    {
+      "route": "/sign-in",
+      "page_file": "src/app/sign-in/[[...sign-in]]/page.tsx",
+      "components": ["src/app/_components/auth-ui.tsx", "src/app/_components/legal-ui.tsx"],
+      "declared_states": ["default", "loading", "error"],
+      "auth_gated": false,
+      "admit": true,
+      "admit_reason": "U001 admit: public auth surface",
+      "audit_files": [
+        "src/app/sign-in/[[...sign-in]]/page.tsx",
+        "src/app/_components/auth-ui.tsx",
+        "src/app/_components/legal-ui.tsx"
+      ]
+    },
+    {
+      "route": "/sign-up",
+      "page_file": "src/app/sign-up/[[...sign-up]]/page.tsx",
+      "components": ["src/app/_components/auth-ui.tsx", "src/app/_components/legal-ui.tsx"],
+      "declared_states": ["default", "loading", "error", "pending_verification"],
+      "auth_gated": false,
+      "admit": true,
+      "admit_reason": "U001 admit: public auth surface",
+      "audit_files": [
+        "src/app/sign-up/[[...sign-up]]/page.tsx",
+        "src/app/_components/auth-ui.tsx",
+        "src/app/_components/legal-ui.tsx"
+      ]
+    },
+    {
+      "route": "/terms",
+      "page_file": "src/app/terms/page.tsx",
+      "components": [],
+      "declared_states": ["default"],
+      "auth_gated": false,
+      "admit": true,
+      "admit_reason": "U001 admit: public legal surface",
+      "audit_files": ["src/app/terms/page.tsx"]
+    },
+    {
+      "route": "/playground",
+      "page_file": "src/app/playground/page.tsx",
+      "components": ["src/app/_components/exercises/index.ts"],
+      "declared_states": ["default", "error", "empty"],
+      "auth_gated": true,
+      "admit": true,
+      "admit_reason": "U001 admit: playground editor shell",
+      "audit_files": [
+        "src/app/playground/page.tsx",
+        "src/app/_components/exercises/ReactiveExercise.tsx"
+      ]
+    },
+    {
+      "route": "/spaces",
+      "page_file": "src/app/spaces/page.tsx",
+      "components": ["src/app/_components/legal-ui.tsx"],
+      "declared_states": ["default", "loading", "error", "empty", "signed_out"],
+      "auth_gated": true,
+      "admit": true,
+      "admit_reason": "U001 admit: spaces list/create shell",
+      "audit_files": ["src/app/spaces/page.tsx", "src/app/_components/legal-ui.tsx"]
+    },
+    {
+      "route": "/sso-callback",
+      "page_file": "src/app/sso-callback/page.tsx",
+      "admit": false,
+      "admit_reason": "OAuth callback plumbing only"
+    },
+    {
+      "route": "/checkout",
+      "page_file": "src/app/checkout/page.tsx",
+      "admit": false,
+      "admit_reason": "Payment flow deferred"
+    },
+    {
+      "route": "/knowledge-nodes",
+      "page_file": "src/app/knowledge-nodes/page.tsx",
+      "admit": false,
+      "admit_reason": "Deferred"
+    },
+    {
+      "route": "/tests",
+      "page_file": "src/app/tests/page.tsx",
+      "admit": false,
+      "admit_reason": "Data-coupled list deferred"
+    },
+    {
+      "route": "/spaces/[spaceId]",
+      "page_file": "src/app/spaces/[spaceId]/page.tsx",
+      "admit": false,
+      "admit_reason": "Deeply data-coupled"
+    },
+    {
+      "route": "/spaces/[spaceId]/learn/[courseId]",
+      "page_file": "src/app/spaces/[spaceId]/learn/[courseId]/page.tsx",
+      "admit": false,
+      "admit_reason": "Deeply data-coupled"
+    },
+    {
+      "route": "/tests/[testId]",
+      "page_file": "src/app/tests/[testId]/page.tsx",
+      "admit": false,
+      "admit_reason": "Deeply data-coupled"
+    },
+    {
+      "route": "/playground/generate",
+      "page_file": "src/app/playground/generate/page.tsx",
+      "admit": false,
+      "admit_reason": "Sub-route deferred"
+    },
+    {
+      "route": "/playground/collection",
+      "page_file": "src/app/playground/collection/page.tsx",
+      "admit": false,
+      "admit_reason": "Sub-route deferred"
+    },
+    {
+      "route": "/playground/atlas",
+      "page_file": "src/app/playground/atlas/page.tsx",
+      "admit": false,
+      "admit_reason": "Sub-route deferred"
+    }
+  ],
+  "admitted_surfaces": [
+    "home.default",
+    "pricing.default",
+    "settings.default",
+    "sign-in.default",
+    "sign-up.default",
+    "terms.default",
+    "playground.default",
+    "spaces.default"
+  ]
+}

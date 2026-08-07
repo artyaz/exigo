@@ -119,8 +119,10 @@ export default function SpacesPage() {
                                 <div className="relative flex-1 group">
                                     <input
                                         ref={searchInputRef}
+                                        id="space-name"
                                         type="text"
                                         placeholder="E.g., Biology 101, JavaScript Basics..."
+                                        aria-label="Space name"
                                         className="w-full bg-neutral-950 border border-white/10 rounded-xl px-4 py-3 focus-ring spring-interact text-sm text-primary placeholder:text-neutral-600"
                                         value={newSpaceName}
                                         onChange={(e) => setNewSpaceName(e.target.value)}
@@ -132,10 +134,12 @@ export default function SpacesPage() {
                                 <button
                                     disabled={isCreating || !newSpaceName.trim()}
                                     type="submit"
+                                    aria-label="Create Space"
+                                    aria-busy={isCreating}
                                     className="bg-white text-black font-medium px-6 py-3 rounded-xl spring-interact flex items-center gap-2 disabled:opacity-50 text-sm hover:opacity-90"
                                 >
-                                    {isCreating ? <Loader2 className="animate-spin w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                                    <span className="hidden md:inline">Create Space</span>
+                                    {isCreating ? <Loader2 className="animate-spin w-4 h-4" aria-hidden="true" /> : <Plus className="w-4 h-4" aria-hidden="true" />}
+                                    <span className="sr-only md:not-sr-only md:inline">Create Space</span>
                                 </button>
                             </form>
                             {error && (

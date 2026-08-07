@@ -1,0 +1,74 @@
+{
+  "run_id": "ux-001",
+  "authored_by": "epsilon",
+  "proposer_write_path": false,
+  "generated_at": "2026-08-07T21:50:00Z",
+  "objective_signals": {
+    "npm_run_check": { "exit_code": 0, "note": "lint warnings pre-existing elsewhere; no new errors" },
+    "npm_run_test": { "exit_code": 0, "passed": 280, "failed": 0 },
+    "npm_run_test_coverage": {
+      "exit_code": 0,
+      "passed": 280,
+      "failed": 0,
+      "lines_pct": 27.52,
+      "statements_pct": 27.82,
+      "functions_pct": 27.1,
+      "branches_pct": 25.27,
+      "note": "CI command per AGENTS.md; no coverage threshold gate in vitest config"
+    }
+  },
+  "bench": {
+    "mode": "static-source-only",
+    "bridge": "absent",
+    "planted_pass": true,
+    "clean_fp_count": 0,
+    "perceptual_rows": "skipped-ac04",
+    "revalidated_after_coderabbit": true
+  },
+  "twin_compare": {
+    "method": "source-diff against known-good patterns from bench/clean.html + LOOP evidence classes",
+    "surfaces_scored": [
+      {
+        "surface": "settings.default",
+        "before_defects": ["unlabeled-inputs", "div-radio", "low-contrast-sub", "missing-h1"],
+        "after_matches_twin": true,
+        "notes": "labels+ids, native radio inputs in fieldset, white-60 chrome, h1 title"
+      },
+      {
+        "surface": "auth AuthInput/Submit",
+        "before_defects": ["placeholder-only-name", "loading-empty-name", "divider-contrast"],
+        "after_matches_twin": true,
+        "notes": "aria-label, aria-busy+sr-only, text-secondary"
+      },
+      {
+        "surface": "spaces.default",
+        "before_defects": ["unlabeled-input", "mobile-empty-btn-name"],
+        "after_matches_twin": true
+      },
+      {
+        "surface": "playground.default",
+        "before_defects": ["missing-h1", "chip-hit-21px"],
+        "after_matches_twin": true
+      },
+      {
+        "surface": "pricing.default",
+        "before_defects": ["loading-cta-empty-name"],
+        "after_matches_twin": true,
+        "notes": "aria-label includes plan.name"
+      }
+    ],
+    "indistinguishable_failure": false
+  },
+  "perceptual": {
+    "status": "abstained",
+    "reason": "render-bridge-port absent (AC-04)"
+  },
+  "coderabbit_round": 2,
+  "coderabbit_findings_addressed": 8,
+  "verdict": "PASS",
+  "residuals": [
+    "AC-04 perceptual pass deferred until PublishFilePublicly/BrowserObserve available",
+    "BR-001 focus/keyboard publish pass not executed",
+    "AC-02 numeric honesty still MUST_TEST (no script-eval tool)"
+  ]
+}

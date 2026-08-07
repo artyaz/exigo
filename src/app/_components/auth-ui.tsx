@@ -75,7 +75,7 @@ export function AuthDivider({ text }: { text: string }) {
                 <div className="w-full border-t border-white/10"></div>
             </div>
             <div className="relative flex justify-center text-xs">
-                <span className="bg-neutral-950 px-4 text-tertiary uppercase tracking-widest">{text}</span>
+                <span className="bg-neutral-950 px-4 text-secondary uppercase tracking-widest">{text}</span>
             </div>
         </div>
     );
@@ -110,7 +110,9 @@ export function AuthInput({
     icon: Icon,
     className = "",
     maxLength,
-    inputMode
+    inputMode,
+    id,
+    "aria-label": ariaLabel,
 }: {
     type: string;
     placeholder: string;
@@ -120,15 +122,19 @@ export function AuthInput({
     className?: string;
     maxLength?: number;
     inputMode?: "text" | "numeric" | "tel" | "search" | "email" | "url" | "none" | "decimal";
+    id?: string;
+    "aria-label"?: string;
 }) {
     return (
         <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-white transition-colors">
-                <Icon className="h-4 w-4" />
+                <Icon className="h-4 w-4" aria-hidden="true" />
             </div>
             <input
+                id={id}
                 type={type}
                 placeholder={placeholder}
+                aria-label={ariaLabel ?? placeholder}
                 value={value}
                 onChange={onChange}
                 required
@@ -151,10 +157,14 @@ export function AuthSubmitButton({ isLoading, children }: { isLoading: boolean, 
         <button
             type="submit"
             disabled={isLoading}
+            aria-busy={isLoading}
             className="w-full flex items-center justify-center gap-2 bg-white text-black px-4 py-2.5 rounded-xl font-medium spring-interact disabled:opacity-50 disabled:pointer-events-none text-sm hover:opacity-90 transition-opacity"
         >
             {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    <span className="sr-only">{children}</span>
+                </>
             ) : children}
         </button>
     );

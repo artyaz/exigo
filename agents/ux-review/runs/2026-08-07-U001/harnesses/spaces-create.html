@@ -1,0 +1,109 @@
+<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><title>spaces-create harness</title><style>/* ═══════════════════════════════════════════════════════════════
+   EXIGO DESIGN TOKENS
+   Ported from the Exigo Design System bundle. The exercise runtime
+   and every playful widget reference these CSS variables, so they
+   must be globally available. Dark-only; hierarchy is white-on-black
+   opacity plus a single emerald accent and four highlighter inks.
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  /* fonts (sans/mono wired from next/font variables) */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* base neutrals */
+  --black: #000000;
+  --white: #ffffff;
+  --neutral-950: #0a0a0a;
+  --neutral-900: #171717;
+  --neutral-800: #262626;
+  --neutral-700: #404040;
+  --neutral-600: #525252;
+  --neutral-500: #737373;
+  --neutral-400: #a3a3a3;
+  --neutral-300: #d4d4d4;
+
+  /* white-on-black opacity ladder */
+  --white-90: rgba(255, 255, 255, 0.9);
+  --white-85: rgba(255, 255, 255, 0.85);
+  --white-80: rgba(255, 255, 255, 0.8);
+  --white-70: rgba(255, 255, 255, 0.7);
+  --white-60: rgba(255, 255, 255, 0.6);
+  --white-50: rgba(255, 255, 255, 0.5);
+  --white-40: rgba(255, 255, 255, 0.4);
+  --white-30: rgba(255, 255, 255, 0.3);
+  --white-25: rgba(255, 255, 255, 0.25);
+  --white-20: rgba(255, 255, 255, 0.2);
+  --white-15: rgba(255, 255, 255, 0.15);
+  --white-10: rgba(255, 255, 255, 0.1);
+  --white-08: rgba(255, 255, 255, 0.08);
+  --white-06: rgba(255, 255, 255, 0.06);
+  --white-05: rgba(255, 255, 255, 0.05);
+  --white-03: rgba(255, 255, 255, 0.03);
+  --white-02: rgba(255, 255, 255, 0.02);
+
+  /* emerald accent */
+  --emerald-300: #6ee7b7;
+  --emerald-400: #34d399;
+  --emerald-500: #10b981;
+  --emerald-600: #059669;
+
+  /* status */
+  --rose-400: #fb7185;
+  --rose-500: #f43f5e;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --red-500: #ef4444;
+  --blue-300: #93c5fd;
+  --blue-400: #60a5fa;
+  --violet-100: #ede9fe;
+
+  /* highlighter inks (rgb triplets for rgb(var(--ink) / a)) */
+  --ink-amber: 254 240 138;
+  --ink-azure: 191 219 254;
+  --ink-violet: 249 168 212;
+  --ink-emerald: 187 247 208;
+
+  /* surfaces */
+  --surface-raised: var(--neutral-900);
+  --surface-sunken: var(--neutral-950);
+  --surface-glass: rgba(10, 10, 10, 0.4);
+
+  /* borders */
+  --border: var(--white-10);
+  --border-soft: var(--white-08);
+  --border-faint: var(--white-06);
+  --border-strong: var(--white-15);
+
+  /* radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* shadows */
+  --shadow-card: 0 2px 12px -4px rgba(0, 0, 0, 0.8);
+  --shadow-soft: 0 2px 14px -6px rgba(0, 0, 0, 0.9);
+  --shadow-raised: 0 4px 24px -8px rgba(0, 0, 0, 0.5);
+  --shadow-deep: 0 8px 32px -12px rgba(0, 0, 0, 0.8);
+
+  /* blur / grid */
+  --blur-card: 24px;
+  --grid-line: rgba(255, 255, 255, 0.04);
+  --grid-size: 24px;
+
+  /* motion */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 300ms;
+  --press-scale: 0.98;
+
+  /* type tracking */
+  --tracking-snug: -0.01em;
+}
+</style></head><body style='background:var(--neutral-950);color:var(--white-80);padding:24px;font-family:system-ui'><main><h1>Your Spaces</h1>
+<label for="space-name">Space name</label>
+<input id="space-name" aria-label="Space name" placeholder="Biology 101">
+<button type="submit" aria-label="Create Space">Create Space</button></main></body></html>
