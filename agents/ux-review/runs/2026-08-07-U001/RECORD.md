@@ -71,5 +71,16 @@ Addressed all 6 findings:
 5. Pricing CTA `aria-label` includes `plan.name`
 6. Settings provider control uses native `<input type="radio">` in a fieldset
 
+## CodeRabbit round 2
+Addressed 2 follow-ups on `scripts/ux-bench-static.mjs`:
+1. Case-insensitive `<label\b>` / `</label>` matching (no `<labelled>` false open)
+2. Hit-target parser matches only bare `width`/`height` at declaration boundaries (ignores `min-width`) and allows decimal px
+
+## CodeRabbit round 3
+Skipped — CodeRabbit reported **Review rate limited** on subsequent pushes; no further inline findings beyond round 2.
+
+## SonarCloud
+Initial gate failed (planted fixtures + path traversal). Fixed by excluding bench/harness paths from analysis, covering the bench with unit tests, and validating run-root paths stay in-repo. **Quality Gate passed.**
+
 ## Stopped at
-scope_complete — cycle closed after CodeRabbit round 1. `state=complete`.
+scope_complete — cycle closed after CodeRabbit r1–r2 + Sonar green. `state=complete`.
