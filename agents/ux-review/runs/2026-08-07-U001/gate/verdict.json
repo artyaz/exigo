@@ -2,17 +2,28 @@
   "run_id": "ux-001",
   "authored_by": "epsilon",
   "proposer_write_path": false,
-  "generated_at": "2026-08-07T21:43:00Z",
+  "generated_at": "2026-08-07T21:50:00Z",
   "objective_signals": {
     "npm_run_check": { "exit_code": 0, "note": "lint warnings pre-existing elsewhere; no new errors" },
-    "npm_run_test": { "exit_code": 0, "passed": 280, "failed": 0 }
+    "npm_run_test": { "exit_code": 0, "passed": 280, "failed": 0 },
+    "npm_run_test_coverage": {
+      "exit_code": 0,
+      "passed": 280,
+      "failed": 0,
+      "lines_pct": 27.52,
+      "statements_pct": 27.82,
+      "functions_pct": 27.1,
+      "branches_pct": 25.27,
+      "note": "CI command per AGENTS.md; no coverage threshold gate in vitest config"
+    }
   },
   "bench": {
     "mode": "static-source-only",
     "bridge": "absent",
     "planted_pass": true,
     "clean_fp_count": 0,
-    "perceptual_rows": "skipped-ac04"
+    "perceptual_rows": "skipped-ac04",
+    "revalidated_after_coderabbit": true
   },
   "twin_compare": {
     "method": "source-diff against known-good patterns from bench/clean.html + LOOP evidence classes",
@@ -21,7 +32,7 @@
         "surface": "settings.default",
         "before_defects": ["unlabeled-inputs", "div-radio", "low-contrast-sub", "missing-h1"],
         "after_matches_twin": true,
-        "notes": "labels+ids, button radios, white-60 chrome, h1 title"
+        "notes": "labels+ids, native radio inputs in fieldset, white-60 chrome, h1 title"
       },
       {
         "surface": "auth AuthInput/Submit",
@@ -42,7 +53,8 @@
       {
         "surface": "pricing.default",
         "before_defects": ["loading-cta-empty-name"],
-        "after_matches_twin": true
+        "after_matches_twin": true,
+        "notes": "aria-label includes plan.name"
       }
     ],
     "indistinguishable_failure": false
@@ -51,6 +63,8 @@
     "status": "abstained",
     "reason": "render-bridge-port absent (AC-04)"
   },
+  "coderabbit_round": 1,
+  "coderabbit_findings_addressed": 6,
   "verdict": "PASS",
   "residuals": [
     "AC-04 perceptual pass deferred until PublishFilePublicly/BrowserObserve available",

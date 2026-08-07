@@ -61,6 +61,7 @@ const RULES = [
       const inputs = [...html.matchAll(/<input\b([^>]*)>/gi)];
       for (const m of inputs) {
         const attrs = m[1] ?? "";
+        const inputIndex = m.index ?? 0;
         if (/\btype\s*=\s*["']hidden["']/i.test(attrs)) continue;
         if (/\baria-label\s*=/i.test(attrs) || /\baria-labelledby\s*=/i.test(attrs)) continue;
         const idMatch = attrs.match(/\bid\s*=\s*["']([^"']+)["']/i);
@@ -69,8 +70,18 @@ const RULES = [
           const labelRe = new RegExp(`<label\\b[^>]*\\bfor\\s*=\\s*["']${id}["']`, "i");
           if (labelRe.test(html)) continue;
         }
-        // wrapping <label>…<input>…</label> — coarse check
-        if (/<label\b[^>]*>[^<]*<input\b/i.test(html)) continue;
+        // wrapping <label>…<input>…</label> — only the label that contains THIS input
+        const before = html.slice(0, inputIndex);
+        const openIdx = before.lastIndexOf("<label");
+        if (openIdx !== -1) {
+          const closeBefore = before.lastIndexOf("</label>");
+          if (closeBefore < openIdx) {
+            const afterOpen = html.slice(openIdx);
+            const closeAfterRel = afterOpen.search(/<\/label>/i);
+            const inputEnd = inputIndex + m[0].length;
+            if (closeAfterRel !== -1 && openIdx + closeAfterRel > inputEnd) continue;
+          }
+        }
         return "hit";
       }
       return "miss";
@@ -81,11 +92,18 @@ const RULES = [
     name: "hit target < 24px (.tiny 14px)",
     class: "MECHANICAL-CSS",
     detect: (html) => {
-      // Derive from declared CSS only (AC-02). Flag width/height under 24px.
-      const tinyClass = /\.tiny\s*\{[^}]*width\s*:\s*(\d+)px/i.exec(html);
-      if (tinyClass && Number(tinyClass[1]) < 24) return "hit";
-      const inline = /style\s*=\s*["'][^"']*width\s*:\s*(\d+)px/i.exec(html);
-      if (inline && Number(inline[1]) < 24) return "hit";
+      // Derive from declared CSS only (AC-02). Flag if width OR height is under 24px.
+      const under24 = (block) => {
+        const w = /width\s*:\s*(\d+)px/i.exec(block);
+        const h = /height\s*:\s*(\d+)px/i.exec(block);
+        return (w && Number(w[1]) < 24) || (h && Number(h[1]) < 24);
+      };
+      const tinyClass = /\.tiny\s*\{([^}]*)\}/i.exec(html);
+      if (tinyClass && under24(tinyClass[1] ?? "")) return "hit";
+      const inlines = [...html.matchAll(/style\s*=\s*["']([^"']*)["']/gi)];
+      for (const m of inlines) {
+        if (under24(m[1] ?? "")) return "hit";
+      }
       return "miss";
     },
   },

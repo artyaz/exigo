@@ -62,5 +62,14 @@ mechanical fixes gated by objective exit codes + twin comparison.
 - Focus/keyboard BR-001 publish pass not run
 - AC-02 still MUST_TEST
 
+## CodeRabbit round 1 (PR #108)
+Addressed all 6 findings:
+1. Gate now records `npm run test:coverage` (280/280, ~27.5% lines)
+2. Auth harness defines `.sr-only`
+3. Bench wrapping-label check is per-input
+4. Bench hit-target checks width OR height
+5. Pricing CTA `aria-label` includes `plan.name`
+6. Settings provider control uses native `<input type="radio">` in a fieldset
+
 ## Stopped at
-scope_complete — cycle closed. `state=complete`.
+scope_complete — cycle closed after CodeRabbit round 1. `state=complete`.

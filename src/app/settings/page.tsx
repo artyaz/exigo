@@ -16,8 +16,9 @@ const CSS = `
 .st__label{ font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--white-60); }
 .st__hint{ font-size:12px; color:var(--white-60); line-height:1.5; }
 .st__radio{ display:flex; gap:10px; }
-.st__opt{ flex:1; padding:12px 14px; border-radius:var(--radius-lg); background:var(--white-03); border:1px solid var(--border); cursor:pointer; transition:all 180ms var(--ease-spring); text-align:left; color:inherit; font:inherit; }
-.st__opt--on{ background:rgb(52 211 153 / .1); border-color:rgb(52 211 153 / .4); }
+.st__opt{ flex:1; padding:12px 14px; border-radius:var(--radius-lg); background:var(--white-03); border:1px solid var(--border); cursor:pointer; transition:all 180ms var(--ease-spring); text-align:left; color:inherit; font:inherit; display:block; }
+.st__opt:has(input:checked), .st__opt--on{ background:rgb(52 211 153 / .1); border-color:rgb(52 211 153 / .4); }
+.st__opt input{ position:absolute; opacity:0; width:1px; height:1px; margin:-1px; clip:rect(0,0,0,0); }
 .st__opt-t{ font-size:13.5px; color:#fff; font-weight:500; }
 .st__opt-d{ font-size:11.5px; color:var(--white-60); margin-top:3px; line-height:1.45; }
 .st__input{ font-family:var(--font-mono); font-size:13px; color:var(--white-85); background:var(--surface-sunken); border:1px solid var(--border); border-radius:var(--radius-lg); padding:10px 13px; outline:none; }
@@ -101,31 +102,33 @@ export default function SettingsPage(): React.JSX.Element {
           <div className="st__hint">Loading…</div>
         ) : (
           <>
-            <div className="st__group">
-              <span className="st__label" id="st-provider-label">Provider</span>
-              <div className="st__radio" role="radiogroup" aria-labelledby="st-provider-label">
-                <button
-                  type="button"
-                  className={`st__opt${provider === "gemini" ? " st__opt--on" : ""}`}
-                  role="radio"
-                  aria-checked={provider === "gemini"}
-                  onClick={() => setProvider("gemini")}
-                >
+            <fieldset className="st__group" style={{ border: "none", margin: 0, padding: 0 }}>
+              <legend className="st__label">Provider</legend>
+              <div className="st__radio">
+                <label className={`st__opt${provider === "gemini" ? " st__opt--on" : ""}`}>
+                  <input
+                    type="radio"
+                    name="st-provider"
+                    value="gemini"
+                    checked={provider === "gemini"}
+                    onChange={() => setProvider("gemini")}
+                  />
                   <div className="st__opt-t">Default (Gemini)</div>
                   <div className="st__opt-d">Uses the app&apos;s Google key. No setup.</div>
-                </button>
-                <button
-                  type="button"
-                  className={`st__opt${provider === "openai" ? " st__opt--on" : ""}`}
-                  role="radio"
-                  aria-checked={provider === "openai"}
-                  onClick={() => setProvider("openai")}
-                >
+                </label>
+                <label className={`st__opt${provider === "openai" ? " st__opt--on" : ""}`}>
+                  <input
+                    type="radio"
+                    name="st-provider"
+                    value="openai"
+                    checked={provider === "openai"}
+                    onChange={() => setProvider("openai")}
+                  />
                   <div className="st__opt-t">Custom endpoint</div>
                   <div className="st__opt-d">Any OpenAI-compatible API (OpenAI, Together, Groq, local…).</div>
-                </button>
+                </label>
               </div>
-            </div>
+            </fieldset>
 
             {provider === "openai" && (
               <>
