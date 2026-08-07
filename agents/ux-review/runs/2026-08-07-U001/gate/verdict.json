@@ -63,8 +63,8 @@
     "status": "abstained",
     "reason": "render-bridge-port absent (AC-04)"
   },
-  "coderabbit_round": 1,
-  "coderabbit_findings_addressed": 6,
+  "coderabbit_round": 2,
+  "coderabbit_findings_addressed": 8,
   "verdict": "PASS",
   "residuals": [
     "AC-04 perceptual pass deferred until PublishFilePublicly/BrowserObserve available",

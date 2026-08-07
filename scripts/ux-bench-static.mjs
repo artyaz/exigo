@@ -72,14 +72,17 @@ const RULES = [
         }
         // wrapping <label>…<input>…</label> — only the label that contains THIS input
         const before = html.slice(0, inputIndex);
-        const openIdx = before.lastIndexOf("<label");
+        const opens = [...before.matchAll(/<label\b[^>]*>/gi)];
+        const openIdx = opens.length > 0 ? (opens[opens.length - 1].index ?? -1) : -1;
         if (openIdx !== -1) {
-          const closeBefore = before.lastIndexOf("</label>");
+          const closes = [...before.matchAll(/<\/label\s*>/gi)];
+          const closeBefore =
+            closes.length > 0 ? (closes[closes.length - 1].index ?? -1) : -1;
           if (closeBefore < openIdx) {
             const afterOpen = html.slice(openIdx);
-            const closeAfterRel = afterOpen.search(/<\/label>/i);
+            const closeMatch = /<\/label\s*>/i.exec(afterOpen);
             const inputEnd = inputIndex + m[0].length;
-            if (closeAfterRel !== -1 && openIdx + closeAfterRel > inputEnd) continue;
+            if (closeMatch && openIdx + (closeMatch.index ?? 0) > inputEnd) continue;
           }
         }
         return "hit";
@@ -94,9 +97,10 @@ const RULES = [
     detect: (html) => {
       // Derive from declared CSS only (AC-02). Flag if width OR height is under 24px.
       const under24 = (block) => {
-        const w = /width\s*:\s*(\d+)px/i.exec(block);
-        const h = /height\s*:\s*(\d+)px/i.exec(block);
-        return (w && Number(w[1]) < 24) || (h && Number(h[1]) < 24);
+        const dimensions = [...block.matchAll(
+          /(?:^|[;{\s])(width|height)\s*:\s*(\d+(?:\.\d+)?)px\b/gi,
+        )];
+        return dimensions.some((match) => Number(match[2]) < 24);
       };
       const tinyClass = /\.tiny\s*\{([^}]*)\}/i.exec(html);
       if (tinyClass && under24(tinyClass[1] ?? "")) return "hit";
