@@ -83,4 +83,10 @@ describe("ux-bench-static rules", () => {
     expect(report.bench_pass).toBe(true);
     expect(report.bench_clean_fp_count).toBe(0);
   });
+
+  it("rejects run roots that escape the repo", async () => {
+    const { resolveSafeRunRoot } = await import("./ux-bench-static.mjs");
+    expect(() => resolveSafeRunRoot("../outside")).toThrow(/escapes/);
+    expect(() => resolveSafeRunRoot("")).toThrow(/non-empty/);
+  });
 });
